@@ -21,6 +21,19 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Added
 
+- **An analytics page.** A third view in the rail, one level below the portfolio
+  overview and above the run drill-down. Six tiles (stability score, pass rate of
+  the last run and its delta, flaky tests, what is failing now, runs analysed,
+  time in tests), failures grouped by the exception that raised them with the
+  tests behind each type, suite hotspots, ownership, where the run's time goes,
+  and a per-test verdict — stable, flaky, broken or quiet — with the shape of its
+  recent history. It reads the five most recent finished runs in full and caches
+  them; see [the architecture notes](docs/architecture.md#what-the-analytics-page-costs).
+- **A richer headline on the overview and the run page.** The health card leads
+  with the number of results, the donut and a strip of outcome counters covering
+  every status a test can end on, plus flaky and retried. On a run page those
+  counters are buttons: pressing one filters the test table below to that outcome
+  and scrolls to it.
 - **Data retention.** `test-hub prune` deletes runs older than a cutoff, everything
   under them, and the content-addressed artifact blobs left unreferenced as a
   result. `--older-than 90d|6m|2w|1y`, or `--before <date>`; `--dry-run` prints the

@@ -32,7 +32,7 @@ publish to it, and `curl` is a first-class client.
 | Light and dark themes | The dashboard follows your operating system until you flip the dark-mode switch at the foot of the navigation rail, then remembers your choice. Dark is a designed counterpart, not an inversion, and the status language stays identical in both. |
 | Run comparison | Every run is measured against the previous *comparable* run — same project, team, component, type, environment and branch — with newly failing, newly passing, still failing, added and removed tests called out. |
 | Flaky detection | Within a run (failed then passed on retry) and across runs (disagreeing with its own history). Both formulas are written down in [docs/metrics.md](docs/metrics.md) and implemented exactly once. |
-| Executive and engineering altitudes | A portfolio overview that is cheap enough to poll, kept deliberately separate from the run-level drill-down that is allowed to be large. |
+| Executive and engineering altitudes | A portfolio overview that is cheap enough to poll, kept deliberately separate from the run-level drill-down that is allowed to be large — with an analytics page between them that groups failures by the exception that raised them, ranks suites, owners and slow tests, and gives every test a verdict. |
 | Secure by default | Loopback-only binding, a refusal to serve an unauthenticated public interface, hashed API tokens, XML parsed with entities disabled, size limits, content-addressed artifacts, a restrictive CSP, and configurable secret redaction over everything it stores. |
 | No Node, no CDN | The frontend is hand-written CSS and JavaScript shipped inside the wheel. It loads nothing from the internet, which is what lets the offline export be a single file and the CSP be `default-src 'none'`. |
 | Retention you control | Clear runs past a cutoff — `12h`, `90d`, `6m`, an absolute date — along with everything under them and the artifact blobs left unreferenced. From the dashboard's Settings page, which previews exactly what would go before anything does, or with `test-hub prune`. A per-project floor keeps a dormant project from vanishing, and deleting needs an administrator token that is deliberately separate from the one CI publishes with. |
@@ -49,6 +49,13 @@ you are reading in.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.png">
   <img alt="Overview" src="docs/images/overview-light.png" width="800">
+</picture>
+
+**Analytics** — why the suite behaves the way it does: failures grouped by the exception that raised them, suite hotspots, ownership, where the time goes, and a verdict per test.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/analytics-dark.png">
+  <img alt="Analytics" src="docs/images/analytics-light.png" width="800">
 </picture>
 
 **Runs** — every run, filtered by project, team, component, type, branch and environment.

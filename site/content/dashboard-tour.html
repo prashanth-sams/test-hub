@@ -1,9 +1,11 @@
-<!--META {"title": "Dashboard tour", "eyebrow": "Start here", "description": "Every view in the Test Hub dashboard, what each number counts, and what the comparison panel is actually telling you.", "lede": "Four views, two altitudes. The overview answers how the portfolio is doing; the run and test pages answer why something went red. This walks each one, and says what a panel means rather than what it is called."} -->
+<!--META {"title": "Dashboard tour", "eyebrow": "Start here", "description": "Every view in the Test Hub dashboard, what each number counts, and what the comparison panel is actually telling you.", "lede": "Five views, three altitudes. The overview answers how the portfolio is doing, analytics answers what keeps going wrong, and the run and test pages answer why something went red. This walks each one, and says what a panel means rather than what it is called."} -->
 
 <h2 id="the-shell">The shell</h2>
 
-<p>Every view shares a top bar: the brand, <b>Overview</b> and <b>Runs</b>, a relative
-timestamp of the last refresh, a connection indicator, and the theme toggle.</p>
+<p>Every view shares a navigation rail — the brand, <b>Overview</b>, <b>Analytics</b> and
+<b>Runs</b>, with the dark-mode switch at its foot — and a top bar carrying a relative
+timestamp of the last refresh, a connection indicator and the settings menu. Below 860px
+the rail becomes a bar: a phone has no width to spare for a permanent column.</p>
 
 <p>The connection indicator has three states — <b>Connecting</b>, <b>Live</b> and
 <b>Reconnecting</b>. In live mode it reflects the Server-Sent Events stream: green and
@@ -14,7 +16,8 @@ past it, it refetches instead of quietly displaying stale numbers. In an offline
 there is nothing to connect to, so the indicator says so and the banner never appears.</p>
 
 <p>Every view is addressable. The routes are hash-based — <code>#/overview</code>,
-<code>#/runs</code>, <code>#/runs/&lt;uuid&gt;</code>, <code>#/tests/&lt;uuid&gt;</code> —
+<code>#/analytics</code>, <code>#/runs</code>, <code>#/runs/&lt;uuid&gt;</code>,
+<code>#/tests/&lt;uuid&gt;</code> —
 with filters carried in the query part, so "the failing integration runs on main for
 payments" is a link you can paste into an incident channel. Hash routing is not a
 stylistic choice: it is the only kind that survives being opened from
@@ -85,6 +88,56 @@ install</span>If every run in the workspace is older than the selected window, t
 says exactly that instead of rendering a blank state that looks like a fresh installation.
 The payload carries both <code>total_runs</code> (inside the window) and
 <code>total_runs_all_time</code> so the view can tell the two apart.</div>
+
+<h2 id="analytics">Analytics — what keeps going wrong</h2>
+
+<p>The overview says how the portfolio is doing. Analytics sits one level below it and
+answers the four questions that come immediately afterwards: <em>what</em> broke,
+<em>where</em>, <em>whose</em> it is, and what it costs.</p>
+
+<p>It reads the five most recent <em>finished</em> runs that match the filters, in full,
+plus the same overview payload the dashboard uses. In full is the point — failure taxonomy,
+ownership and per-test timings need every attempt of every test, and no summary carries
+those. Runs still in flight are skipped: half a run's failures classified as if they were
+all of them is a wrong answer, not a partial one. Finished runs cannot change, so their
+payloads are cached and a live update costs one overview request.</p>
+
+<h3 id="analytics-tiles">The tiles</h3>
+
+<p>Six numbers, each with the sentence that stops it being misread. <b>Stability score</b>
+is the pass rate less the share of executed tests that flaked — a suite where everything
+passes on the second attempt is not a healthy suite, and a pass rate alone says it is.
+<b>Pass rate, last run</b> carries its delta against the previous comparable run.
+<b>Flaky tests</b>, <b>failing in the last run</b>, <b>runs analysed</b> and <b>time in
+tests</b> complete the row.</p>
+
+<h3 id="analytics-taxonomy">Why runs fail</h3>
+
+<p>Failures grouped by the exception that raised them, ordered by weight, each with the
+tests behind it. Forty failures that are all one <code>AssertionError</code> in one fixture
+is one bug; forty spread over six exception types is six — and that distinction is the
+whole reason the card exists. A test that failed the same way in four of the five runs
+carries a multiplier rather than appearing four times, and a type containing something that
+was passing in the previous run is marked <b>new</b>. Failures the framework did not
+classify are filed as <em>Unclassified</em>, never under the test's own name, which would
+give every failure its own bucket and turn the taxonomy into a list.</p>
+
+<h3 id="analytics-where">Suites, owners and time</h3>
+
+<p><b>Suite hotspots</b> stacks failing results against everything else for the busiest
+suites. <b>Who owns what</b> is the same numbers per <code>owner</code>, with everything
+unclaimed counted honestly as unclaimed rather than hidden. <b>Where the time goes</b> sums
+each test's duration across those runs by its stable identity: a test that takes four
+seconds every run costs twenty seconds of the last five, and that — not its single worst
+appearance — is what decides whether it is worth fixing.</p>
+
+<h3 id="analytics-verdicts">What history says</h3>
+
+<p>The one card on the page that is about the window rather than the recent runs. Each test
+gets one cell per recent run, oldest on the left, and one of four words:
+<b>stable</b> (passed every time it ran), <b>flaky</b> (both passed and failed),
+<b>broken</b> (has not passed) and <b>quiet</b> (too few runs to say). The order is
+deliberate: a test that has never passed is not a flaky test, it is an unfinished one.</p>
 
 <h2 id="runs">Runs — the drill-down's front door</h2>
 

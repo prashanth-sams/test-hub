@@ -20,6 +20,7 @@
 
   var VIEWS = {
     overview: function () { return TestHub.views.overview; },
+    analytics: function () { return TestHub.views.analytics; },
     runs: function () { return TestHub.views.runs; },
     run: function () { return TestHub.views.run; },
     test: function () { return TestHub.views.test; },

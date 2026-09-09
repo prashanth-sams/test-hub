@@ -423,6 +423,87 @@ def test_the_api_is_left_alone(client: Any) -> None:
 # ------------------------------------------------------------------ retention
 
 
+def analytics_source() -> str:
+    return (WEB / "assets" / "js" / "52-view-analytics.js").read_text(encoding="utf-8")
+
+
+def store_source() -> str:
+    return (WEB / "assets" / "js" / "30-store.js").read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------ analytics
+
+
+def test_the_analytics_view_is_shipped_and_reachable() -> None:
+    """A view nobody can navigate to is dead weight in every export."""
+    assert "assets/js/52-view-analytics.js" in MANIFEST["js"]
+    assert 'data-route="analytics"' in INDEX_MARKUP, "the rail has no way into the view"
+    assert '"#/analytics"' in INDEX_MARKUP
+    assert "analytics: function ()" in (WEB / "assets" / "js" / "90-app.js").read_text(
+        encoding="utf-8"
+    ), "the router does not know the view"
+
+
+def test_analytics_reads_a_bounded_number_of_runs() -> None:
+    """The page needs whole run payloads, which is exactly why the count has to
+    be a constant somebody had to think about rather than a filter's leftovers.
+    """
+    source = store_source()
+    match = re.search(r"var ANALYTICS_RUNS = (\d+);", source)
+    assert match, "the run budget is not a named constant"
+    assert 1 <= int(match.group(1)) <= 8, "that is a lot of run payloads for one page"
+
+
+def test_analytics_never_classifies_a_run_that_is_still_going() -> None:
+    """Half a run's failures grouped as if they were all of them is a wrong
+    answer, not a partial one."""
+    source = store_source()
+    body = source[
+        source.index("function analyticsRunsFrom") : source.index("function loadAnalytics")
+    ]
+    assert "is_live" in body and "finished_at" in body
+
+
+def test_finished_run_details_are_cached_rather_than_refetched() -> None:
+    """A finished run cannot change, so a live update on this page must not cost
+    five payloads again."""
+    source = store_source()
+    assert "analyticsCache" in source
+    assert "if (resync) { analyticsCache = {}; }" in source, "a resync must empty the cache"
+
+
+def test_the_analytics_view_never_calls_fetch_itself() -> None:
+    """ADR-0001 D1 again: the same view has to work over a frozen snapshot."""
+    source = analytics_source()
+    assert "fetch(" not in source
+    assert "XMLHttpRequest" not in source
+
+
+def test_every_analytics_verdict_has_a_colour_and_an_explanation() -> None:
+    """Four words that look like a taxonomy have to behave like one: each is
+    styled, and each says what earned it."""
+    source = analytics_source()
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    for verdict in ("stable", "flaky", "broken"):
+        assert f"return '{verdict}';" in source, f"nothing ever returns {verdict}"
+        assert f'.verdict[data-verdict="{verdict}"]' in css, f"{verdict} has no colour"
+    hints = source[source.index("var VERDICT_HINTS") :]
+    for verdict in ("stable", "flaky", "broken", "quiet"):
+        assert f"{verdict}:" in hints, f"{verdict} carries no explanation"
+
+
+def test_the_run_counters_lead_somewhere() -> None:
+    """The counter and the list of tests behind it are the same question asked
+    twice; the counters on the run page answer it in one click."""
+    run_view = (WEB / "assets" / "js" / "60-view-run.js").read_text(encoding="utf-8")
+    assert "ui.statStrip" in run_view
+    assert "filterTestsByStatus" in run_view
+    components = components_source()
+    body = components[components.index("function statStrip") :]
+    body = body[: body.index("function streak")]
+    assert "!opts.onSelect || !value" in body, "a counter at zero must not be a button"
+
+
 def settings_view_source() -> str:
     return (WEB / "assets" / "js" / "70-view-settings.js").read_text(encoding="utf-8")
 

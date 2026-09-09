@@ -36,7 +36,7 @@
 
   function create(provider) {
     var bus = util.emitter();
-    var tokens = { overview: 0, runs: 0, run: 0, test: 0, facets: 0 };
+    var tokens = { overview: 0, runs: 0, run: 0, test: 0, analytics: 0, facets: 0 };
 
     var state = {
       providerKind: provider.kind,
@@ -51,9 +51,10 @@
       runs: null,
       run: null,
       test: null,
+      analytics: null,
       lastUpdated: null,
-      loading: { overview: false, runs: false, run: false, test: false },
-      errors: { overview: null, runs: null, run: null, test: null }
+      loading: { overview: false, runs: false, run: false, test: false, analytics: false },
+      errors: { overview: null, runs: null, run: null, test: null, analytics: null }
     };
 
     function emit(section) {
@@ -92,6 +93,9 @@
       if (head === 'tests') {
         return { name: 'runs', params: {}, query: parsed.query };
       }
+      if (head === 'analytics') {
+        return { name: 'analytics', params: {}, query: parsed.query };
+      }
       if (head === 'settings') {
         return { name: 'settings', params: {}, query: parsed.query };
       }
@@ -111,6 +115,8 @@
 
       if (route.name === 'overview') {
         loadOverview();
+      } else if (route.name === 'analytics') {
+        loadAnalytics();
       } else if (route.name === 'runs') {
         loadRuns();
       } else if (route.name === 'run') {
@@ -150,6 +156,8 @@
         segments = ['tests', route.params.testId];
       } else if (route.name === 'runs') {
         segments = ['runs'];
+      } else if (route.name === 'analytics') {
+        segments = ['analytics'];
       } else {
         segments = ['overview'];
       }
@@ -264,9 +272,103 @@
       });
     }
 
+    //: How many finished runs the analytics page reads in full. Five is the
+    //: number at which "what keeps breaking" stops being one run's luck, and
+    //: it is also the point past which a live server is being asked for real
+    //: work to draw one page. The snapshot provider answers all five from
+    //: memory; the API answers them in parallel.
+    var ANALYTICS_RUNS = 5;
+
+    /**
+     * The analytics page reads the portfolio overview and the newest finished
+     * runs that match the filters, in full.
+     *
+     * In full is the point: failure taxonomy, suite hotspots, ownership and the
+     * slowest tests all need every attempt of every test, and no summary
+     * carries those. Five runs rather than the window's worth of them, because
+     * the questions this page answers are about what the suite is doing *now*
+     * and the cost of asking is one payload per run.
+     *
+     * Live runs are skipped deliberately: half a run's failures classified as
+     * if they were all of them is a wrong answer, not a partial one.
+     */
+    function analyticsRunsFrom(overview) {
+      var candidates = (overview && overview.recent_runs) || [];
+      var chosen = [];
+      for (var i = 0; i < candidates.length && chosen.length < ANALYTICS_RUNS; i++) {
+        if (candidates[i].is_live || !candidates[i].finished_at) { continue; }
+        chosen.push(candidates[i]);
+      }
+      return chosen;
+    }
+
+    /**
+     * Finished runs do not change. Their details are immutable once the run has
+     * ended, which is what makes them safe to keep — and what turns a live
+     * update on this page from five requests into none. A resync empties it,
+     * because after a resync we know nothing, including whether those runs
+     * still exist.
+     */
+    var analyticsCache = {};
+    var ANALYTICS_CACHE_MAX = 20;
+
+    function cacheRun(detail) {
+      var keys = Object.keys(analyticsCache);
+      if (keys.length >= ANALYTICS_CACHE_MAX) { delete analyticsCache[keys[0]]; }
+      analyticsCache[String(detail.run.id)] = detail;
+      return detail;
+    }
+
+    function loadAnalytics() {
+      // The analytics section owns the loading state for the whole page: the
+      // overview it fetches is a dependency of this view, not a second view
+      // loading beside it, and two spinners for one page is one too many.
+      var token = begin('analytics');
+      return provider.getOverview(state.filters).then(function (overview) {
+        if (token !== tokens.analytics) { return null; }
+        state.overview = overview;
+        emit('overview');
+
+        var summaries = analyticsRunsFrom(overview);
+        if (!summaries.length) {
+          state.analytics = { summaries: [], runs: [], partial: false };
+          settle('analytics', token, null);
+          return null;
+        }
+        // One run that will not load must not cost the reader the other four,
+        // so every fetch resolves — to the detail, or to null — and the page
+        // says how many it is drawing.
+        return Promise.all(summaries.map(function (summary) {
+          var cached = analyticsCache[String(summary.id)];
+          if (cached) { return Promise.resolve(cached); }
+          return provider.getRun(summary.id).then(cacheRun, function (error) {
+            util.reportError('run ' + summary.id + ' did not load for analytics', error);
+            return null;
+          });
+        })).then(function (details) {
+          if (token !== tokens.analytics) { return null; }
+          var loaded = details.filter(Boolean);
+          state.analytics = {
+            summaries: summaries,
+            runs: loaded,
+            partial: loaded.length !== summaries.length
+          };
+          settle('analytics', token, loaded.length ? null : {
+            message: 'None of the recent runs could be loaded.',
+            code: 'analytics_unavailable'
+          });
+          return null;
+        });
+      }, function (error) {
+        settle('analytics', token, error);
+        return null;
+      });
+    }
+
     function reloadCurrent() {
       var route = state.route;
       if (route.name === 'overview') { return loadOverview(); }
+      if (route.name === 'analytics') { return loadAnalytics(); }
       if (route.name === 'runs') { return loadRuns(); }
       if (route.name === 'run') { return loadRun(route.params.runId, { keepPrevious: true }); }
       if (route.name === 'test') { return loadTest(route.params.testId, { keepPrevious: true }); }
@@ -287,6 +389,12 @@
       var resync = message.reason === 'resync';
       if (route.name === 'overview') {
         loadOverview();
+      } else if (route.name === 'analytics') {
+        // Cheap to repeat: the overview is one request and the finished runs it
+        // names are already cached, so a live update costs a run payload only
+        // when a run this page has never drawn appears.
+        if (resync) { analyticsCache = {}; }
+        loadAnalytics();
       } else if (route.name === 'runs') {
         loadRuns();
       } else if (route.name === 'run') {

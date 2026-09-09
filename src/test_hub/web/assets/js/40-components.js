@@ -38,7 +38,12 @@
     check: ['m5 12.8 4.4 4.4L19 7.6'],
     monitor: ['M4.5 4.8h15a1.5 1.5 0 0 1 1.5 1.5v8.4a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 14.7V6.3a1.5 1.5 0 0 1 1.5-1.5Z', 'M9 19.2h6M12 16.2v3'],
     grid: ['M4.2 4.2h6.2v6.2H4.2zM13.6 4.2h6.2v6.2h-6.2zM4.2 13.6h6.2v6.2H4.2zM13.6 13.6h6.2v6.2h-6.2z'],
-    list: ['M9 6.5h11M9 12h11M9 17.5h11', 'M4.6 6.5h.01M4.6 12h.01M4.6 17.5h.01']
+    list: ['M9 6.5h11M9 12h11M9 17.5h11', 'M4.6 6.5h.01M4.6 12h.01M4.6 17.5h.01'],
+    chart: ['M4 4.5v15h16', 'm7.5 15.2 3.6-4.6 3 2.4L20 6.6'],
+    bug: ['M9 7.4a3 3 0 0 1 6 0', 'M7.5 10.4h9v4.1a4.5 4.5 0 0 1-9 0Z', 'M4.6 12.2h2.9M16.5 12.2h2.9M5.6 7.2l2 1.6M18.4 7.2l-2 1.6M5.6 17.6l2-1.4M18.4 17.6l-2-1.4'],
+    users: ['M9.4 11.6a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Z', 'M3.6 19.6a5.8 5.8 0 0 1 11.6 0', 'M16.2 5.3a3.4 3.4 0 0 1 0 6.6', 'M17.6 14.5a5.6 5.6 0 0 1 2.8 5.1'],
+    bolt: ['M13.2 3.2 5.6 13.6h5.3l-.8 7.2 8.3-10.4h-5.3Z'],
+    layers: ['m12 3.6 8 4.2-8 4.2-8-4.2 8-4.2Z', 'm4 12.2 8 4.2 8-4.2', 'm4 16.4 8 4.2 8-4.2']
   };
 
   function icon(name, size) {
@@ -155,6 +160,9 @@
     if (spec.title || spec.actions || spec.hint) {
       var head = el('div', { className: 'card__head' }, [
         el('div', { className: 'row row--tight' }, [
+          // The icon is decorative: it repeats what the title already says, so
+          // it is aria-hidden and the heading keeps the whole accessible name.
+          spec.icon ? el('span', { className: 'card__icon' }, icon(spec.icon, 16)) : null,
           el('h2', { className: 'card__title', text: spec.title || '' }),
           spec.badge || null
         ]),
@@ -191,6 +199,146 @@
       el('div', { className: 'kpi__value', text: spec.value }),
       spec.meta ? el('div', { className: 'kpi__meta' }, spec.meta) : null
     ]);
+  }
+
+  /**
+   * The headline tile of the analytics page: one number, what it measures, and
+   * the sentence that stops it being misread. `tone` colours the top rule with
+   * the status language, so a score that is bad looks bad at a glance and a
+   * count that is merely a count does not.
+   */
+  function statTile(spec) {
+    return el('div', {
+      className: 'stat',
+      dataset: spec.tone ? { tone: spec.tone } : null
+    }, [
+      el('div', { className: 'stat__value' }, [
+        el('span', { text: spec.value }),
+        spec.delta === null || spec.delta === undefined
+          ? null
+          : deltaText(spec.delta, { unit: spec.deltaUnit || 'pct' })
+      ]),
+      el('div', { className: 'stat__label', text: spec.label }),
+      spec.hint ? el('div', { className: 'stat__hint', text: spec.hint }) : null
+    ]);
+  }
+
+  /**
+   * A proportion drawn as a bar. Always paired with the number it draws — the
+   * bar is the comparison between rows, never the value itself, which is why
+   * `label` is rendered as text next to it rather than inside it.
+   */
+  function meter(spec) {
+    var max = spec.max || 0;
+    var value = spec.value || 0;
+    var share = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+    var fill = el('span', { className: 'meter__fill', dataset: { status: spec.status || 'total' } });
+    fill.style.width = (share * 100).toFixed(2) + '%';
+    return el('span', {
+      className: 'meter',
+      attrs: { role: 'img', 'aria-label': spec.ariaLabel || (spec.label || String(value)) }
+    }, fill);
+  }
+
+  /** A short piece of evidence — usually a test name under a failure type. */
+  function chip(text, hash) {
+    if (hash) {
+      return el('a', { className: 'chip chip--link', text: text, attrs: { href: hash } });
+    }
+    return el('span', { className: 'chip', text: text });
+  }
+
+  /**
+   * What history says about one test. The four words are deliberate and
+   * exclusive: `stable` never failed, `flaky` disagreed with itself, `broken`
+   * has not passed, `quiet` did not run often enough for any of the three to
+   * mean anything.
+   */
+  function verdictBadge(verdict, title) {
+    return el('span', {
+      className: 'verdict',
+      dataset: { verdict: verdict },
+      text: verdict,
+      attrs: title ? { title: title } : null
+    });
+  }
+
+  /**
+   * The outcome counters, sized to be read across a room and clickable when the
+   * caller can say where each one leads. A status with no tests is still drawn:
+   * "0 failed" is the reassurance people come to the page for, and a strip that
+   * changes shape between runs cannot be compared with the one before it.
+   */
+  //: The outcomes a finished test can carry. `running`, `queued`, `cancelled`
+  //: and `unknown` are states, not outcomes, and a strip that lists them spends
+  //: a third of its width on zeroes.
+  var STRIP_STATUSES = ['passed', 'failed', 'error', 'skipped', 'xfailed', 'xpassed'];
+
+  function statStrip(counts, options) {
+    var opts = options || {};
+    var statuses = opts.statuses || STRIP_STATUSES;
+    var nodes = [];
+    var build = function (status, value) {
+      var label = util.statusLabel(status);
+      var children = [
+        el('span', { className: 'statstrip__value', text: util.formatNumber(value) }),
+        el('span', { className: 'statstrip__label', text: label })
+      ];
+      // A counter at zero has nothing behind it to show, so it stays a figure
+      // rather than becoming a button that does nothing when pressed.
+      if (!opts.onSelect || !value) {
+        return el('div', { className: 'statstrip__item', dataset: { status: status } }, children);
+      }
+      return el('button', {
+        className: 'statstrip__item',
+        dataset: { status: status },
+        attrs: { type: 'button', title: 'Show only the ' + label.toLowerCase() + ' tests' },
+        on: { click: function () { opts.onSelect(status); } }
+      }, children);
+    };
+    for (var i = 0; i < statuses.length; i++) {
+      var value = counts[statuses[i]] || 0;
+      if (!value && opts.hideEmpty) { continue; }
+      nodes.push(build(statuses[i], value));
+    }
+    // Flakiness and retries are properties of a test's attempts rather than
+    // outcomes it can end on, so they are counted separately and never
+    // clickable: there is no "the flaky ones" filter to jump to.
+    var extras = opts.extras || [];
+    for (var e = 0; e < extras.length; e++) {
+      nodes.push(el('div', {
+        className: 'statstrip__item',
+        dataset: { status: extras[e].status || 'unknown' },
+        attrs: extras[e].title ? { title: extras[e].title } : null
+      }, [
+        el('span', { className: 'statstrip__value', text: util.formatNumber(extras[e].value || 0) }),
+        el('span', { className: 'statstrip__label', text: extras[e].label })
+      ]));
+    }
+    return el('div', { className: 'statstrip' }, nodes);
+  }
+
+  /**
+   * One cell per run, oldest on the left: the shape of a test's recent history
+   * at the size of a word. Deliberately not a sparkline — the value being drawn
+   * is categorical (it passed, it did not), and a line implies a magnitude
+   * between two outcomes that has no meaning.
+   */
+  function streak(points, options) {
+    var opts = options || {};
+    var limit = opts.limit || 12;
+    var items = points.slice(-limit);
+    var cells = items.map(function (point) {
+      return el('span', {
+        className: 'streak__cell',
+        dataset: { status: point.status || 'unknown' },
+        attrs: { title: point.title || util.statusLabel(point.status) }
+      });
+    });
+    return el('span', {
+      className: 'streak',
+      attrs: { role: 'img', 'aria-label': opts.ariaLabel || (items.length + ' most recent runs') }
+    }, cells);
   }
 
   function kv(pairs) {
@@ -501,6 +649,29 @@
    * `sync(values, facets)` that edits the controls in place, and only replaces
    * a select's options when the facet list itself has changed.
    */
+  /**
+   * The portfolio filter bar's fields, in one place: the overview and the
+   * analytics page slice the same data by the same seven dimensions, and two
+   * copies of this list is two lists that drift.
+   */
+  function portfolioFields() {
+    return [
+      {
+        key: 'window_days', label: 'Window', type: 'segmented', defaultValue: '30',
+        options: [
+          { value: '7', label: '7d' }, { value: '14', label: '14d' },
+          { value: '30', label: '30d' }, { value: '90', label: '90d' }
+        ]
+      },
+      { key: 'project', label: 'Project' },
+      { key: 'team', label: 'Team' },
+      { key: 'component', label: 'Component' },
+      { key: 'test_type', label: 'Test type', facet: 'test_types' },
+      { key: 'environment', label: 'Environment' },
+      { key: 'branch', label: 'Branch', facet: 'branches' }
+    ];
+  }
+
   function filterPanel(spec) {
     var controls = {};
     var row = el('div', { className: 'filters__row' });
@@ -849,6 +1020,12 @@
     card: card,
     section: section,
     kpi: kpi,
+    statTile: statTile,
+    meter: meter,
+    chip: chip,
+    verdictBadge: verdictBadge,
+    statStrip: statStrip,
+    streak: streak,
     kv: kv,
     metaGrid: metaGrid,
     banner: banner,
@@ -860,6 +1037,7 @@
     pager: pager,
     selectField: selectField,
     filterPanel: filterPanel,
+    portfolioFields: portfolioFields,
     searchField: searchField,
     segmented: segmented
   };

@@ -910,6 +910,231 @@ table.sr-only,
 .legend__swatch[data-status="line-alt"] { background: var(--chart-line-alt); }
 
 /* ====================================================================== */
+/* Analytics — tiles, meters, chips, verdicts, streaks                     */
+/* ====================================================================== */
+
+/* A stat tile is a KPI that has to argue for itself: the number, what it
+ * measures, and the sentence that stops it being misread. The rule is on top
+ * rather than down the side so a row of them reads as one instrument panel. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--sp-3);
+}
+.stat {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.stat::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--border-strong);
+}
+.stat[data-tone="passed"]::before { background: var(--status-passed); }
+.stat[data-tone="failed"]::before { background: var(--status-failed); }
+.stat[data-tone="skipped"]::before { background: var(--status-skipped); }
+.stat[data-tone="xpassed"]::before { background: var(--status-xpassed); }
+.stat__value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: 30px;
+  line-height: 1.1;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.stat__label {
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.stat__hint { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+
+/* The meter is a comparison between rows, never the value itself — which is
+ * why it is never the only thing in its cell. */
+.meter {
+  display: inline-block;
+  width: 78px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.meter__fill { display: block; height: 100%; background: var(--accent); }
+.meter__fill[data-status="passed"] { background: var(--status-passed); }
+.meter__fill[data-status="failed"] { background: var(--status-failed); }
+.meter__fill[data-status="error"] { background: var(--status-error); }
+.meter__fill[data-status="skipped"] { background: var(--status-skipped); }
+.meter__fill[data-status="xpassed"] { background: var(--status-xpassed); }
+.meter__fill[data-status="running"] { background: var(--status-running); }
+.cell-metric { justify-content: flex-end; gap: var(--sp-2); }
+/* A name column that cannot push the columns beside it off the card. Two of
+   these tables sit in a half-width card next to three more columns, and a test
+   name is as long as whoever wrote it felt like making it. */
+.cell-name { max-width: 220px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip--link { text-decoration: none; }
+.chip--link:hover { border-color: var(--accent-border); color: var(--accent-ink); background: var(--accent-soft); }
+
+/* Four words, four colours, one meaning each — see `verdictFor` in the
+ * analytics view for what earns which. */
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+  background: var(--status-unknown-soft);
+  color: var(--status-unknown);
+}
+.verdict[data-verdict="stable"] { background: var(--status-passed-soft); color: var(--status-passed); }
+.verdict[data-verdict="flaky"] { background: var(--status-xpassed-soft); color: var(--status-xpassed); }
+.verdict[data-verdict="broken"] { background: var(--status-failed-soft); color: var(--status-failed); }
+.verdict[data-verdict="new"] { background: var(--status-failed-soft); color: var(--status-failed); }
+
+/* One cell per run, oldest on the left. */
+.streak { display: inline-flex; gap: 2px; align-items: center; }
+.streak__cell {
+  width: 8px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--status-unknown);
+}
+.streak__cell[data-status="passed"] { background: var(--status-passed); }
+.streak__cell[data-status="failed"] { background: var(--status-failed); }
+.streak__cell[data-status="error"] { background: var(--status-error); }
+.streak__cell[data-status="skipped"] { background: var(--status-skipped); }
+.streak__cell[data-status="xfailed"] { background: var(--status-xfailed); }
+.streak__cell[data-status="xpassed"] { background: var(--status-xpassed); }
+.streak__cell[data-status="running"] { background: var(--status-running); }
+
+/* Failures grouped by what raised them. */
+.taxonomy { display: grid; gap: var(--sp-4); }
+.taxonomy__row { display: grid; gap: 6px; }
+.taxonomy__head { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
+.taxonomy__type { font-weight: 650; font-size: 13px; }
+.taxonomy__count { color: var(--status-failed); font-weight: 650; }
+.taxonomy .meter { width: 100%; height: 5px; }
+
+/* The outcome counters under the donut. Every status is drawn, including the
+ * zeroes: "0 failed" is the reassurance people came for. */
+.statstrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-3);
+}
+.statstrip__item {
+  /* Equal shares of whatever is left, down to the width of the longest label:
+     eight counters have to sit on one line in a half-width card, and a counter
+     that wrapped onto its own row would read as a different kind of number. */
+  flex: 1 1 0;
+  min-width: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-2) 4px;
+  border-radius: var(--r-md);
+  text-decoration: none;
+  color: inherit;
+}
+button.statstrip__item {
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+button.statstrip__item:hover { background: var(--surface-2); }
+.statstrip__value {
+  font-size: 22px;
+  font-weight: 640;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--status-unknown);
+}
+.statstrip__item[data-status="passed"] .statstrip__value { color: var(--status-passed); }
+.statstrip__item[data-status="failed"] .statstrip__value { color: var(--status-failed); }
+.statstrip__item[data-status="error"] .statstrip__value { color: var(--status-error); }
+.statstrip__item[data-status="skipped"] .statstrip__value { color: var(--status-skipped); }
+.statstrip__item[data-status="xfailed"] .statstrip__value { color: var(--status-xfailed); }
+.statstrip__item[data-status="xpassed"] .statstrip__value { color: var(--status-xpassed); }
+.statstrip__item[data-status="running"] .statstrip__value { color: var(--status-running); }
+.statstrip__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* The hero: the run's headline number, its donut and its counters, in the
+ * proportions the eye reads first — number, shape, detail. */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-5); align-items: center; }
+.hero__figure { display: grid; gap: 4px; }
+.hero__value {
+  font-size: 52px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.hero__label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.hero__meta { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.hero__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.card__icon { display: inline-flex; color: var(--text-subtle); }
+
+/* ====================================================================== */
 /* Grids                                                                   */
 /* ====================================================================== */
 
@@ -1315,6 +1540,7 @@ th[aria-sort] .table__sort { color: var(--text); }
    * height as well. */
   .topbar__inner { min-height: 44px; }
   .headline { grid-template-columns: minmax(0, 1fr); }
+  .hero { grid-template-columns: minmax(0, 1fr); justify-items: start; }
 }
 
 @media (max-width: 640px) {
@@ -1324,6 +1550,13 @@ th[aria-sort] .table__sort { color: var(--text); }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
   .kpi { padding: var(--sp-3); }
   .kpi__value { font-size: 22px; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+  .stat { padding: var(--sp-3); }
+  .stat__value { font-size: 24px; }
+  .hero__value { font-size: 40px; }
+  /* The meter is the first thing to go when a cell has to become a line of
+   * text: the number it annotates is still there. */
+  .meter { display: none; }
   .updated { display: none; }
   /* Four controls in one bar at 400px: the switch keeps its icon and track,
    * and `aria-label` carries the name the text was giving it. */
@@ -1380,7 +1613,7 @@ th[aria-sort] .table__sort { color: var(--text); }
 }
 
 @media (max-width: 380px) {
-  .kpis { grid-template-columns: minmax(0, 1fr); }
+  .kpis, .stats { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ====================================================================== */

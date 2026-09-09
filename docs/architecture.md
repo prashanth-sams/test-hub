@@ -144,6 +144,27 @@ snapshot provider, otherwise the live one. Nothing else in the application knows
 which it got — enforced by `tests/test_frontend_assets.py`, which fails if a view
 file so much as mentions `fetch`.
 
+### What the analytics page costs
+
+Most views read one payload. The analytics page (`52-view-analytics.js`) is the
+exception: failure taxonomy, suite hotspots, ownership and the slowest tests all
+need every attempt of every test, and no summary carries those. So the store
+reads the **five most recent finished runs** in full — `ANALYTICS_RUNS` in
+`30-store.js` — plus the overview it shares with the dashboard.
+
+Three things keep that honest:
+
+- Runs still in flight are skipped. Half a run's failures classified as if they
+  were all of them is a wrong answer, not a partial one.
+- Finished run details are immutable, so they are cached by run id. A live
+  update on the page costs one overview request and, at most, one new run.
+- A run that fails to load costs only itself: the page draws the rest and says
+  how many of the five it is describing.
+
+The across-run questions — flakiest tests, most failing tests, the per-test
+verdicts — are *not* recomputed here. They come from the overview, which the
+server computes over the whole window.
+
 The exporter takes this further: it does not render a parallel template, it reads
 the dashboard's own `index.html` and replaces three marker blocks with their
 inlined contents. The offline report *is* the live page with its external

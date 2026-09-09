@@ -171,6 +171,11 @@ test pages are the engineering drill-down and are allowed to return a lot. They 
 endpoints and separate payload types, so that making the drill-down richer cannot make the
 front page slower.</p>
 
+<p>The analytics page sits between them and pays a bounded price for it: it reads the five
+most recent finished runs in full — enough for "what keeps breaking" to be a pattern rather
+than one run's luck — caches them, because a finished run cannot change, and never mixes in
+a run that is still going.</p>
+
 <h2 id="adapters-feature">Formats are plugins, including ours</h2>
 
 <p>Two adapters ship in the box: JUnit/xUnit XML, and Test Hub's own canonical JSON. Both are
