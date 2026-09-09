@@ -7,12 +7,14 @@
  * an avatar here would imply a login that does not exist. The menu shows what
  * there actually is — a display preference and what this page is connected to.
  *
- * **Theme has three states, not two.** The old header button flipped
- * light/dark, which meant that once a reader had clicked it once they could
- * never get back to following their operating system; `theme.followSystem()`
- * existed in 00-util.js with nothing calling it. "System" is the absence of a
- * stored choice, so it is the honest default and the one this menu can return
- * you to.
+ * **Theme is one row.** A menu this small should not spend half its height on
+ * a display preference, so the three theme options collapsed into a single
+ * "Dark mode" switch. The switch reads the *painted* theme rather than the
+ * stored one, so a reader who has never chosen sees their operating system
+ * reflected back and flipping it is what turns that into an explicit choice.
+ * Following the OS again means clearing the choice — `util.theme.followSystem()`
+ * still does it, and the OS still wins until there is a stored choice, but the
+ * menu no longer offers a control for it.
  *
  * The menu stays open when the theme changes. That is deliberate: the whole
  * page repaints underneath it, and closing would hide the thing the reader
@@ -26,33 +28,30 @@
   var ui = TestHub.ui;
   var el = util.el;
 
-  var THEME_OPTIONS = [
-    { mode: 'system', label: 'System', icon: 'monitor' },
-    { mode: 'light', label: 'Light', icon: 'sun' },
-    { mode: 'dark', label: 'Dark', icon: 'moon' }
-  ];
+  /* A `switch` rather than a `menuitemcheckbox`: it is a two-state display
+   * preference that takes effect immediately, not a choice among the menu's
+   * navigation items. The track is decorative — `aria-checked` on the button is
+   * what is announced. */
+  function darkModeSwitch(onToggle) {
+    var track = el('span', { className: 'switch' }, [
+      el('span', { className: 'switch__thumb' })
+    ]);
 
-  function themeItem(option, onChoose) {
-    var check = ui.icon('check', 14);
-    check.setAttribute('class', 'menu__check');
-
-    var node = el('button', {
-      className: 'menu__item',
+    return el('button', {
+      className: 'menu__item menu__item--switch',
       attrs: {
         type: 'button',
-        role: 'menuitemradio',
+        role: 'switch',
         'aria-checked': 'false'
       },
-      dataset: { mode: option.mode },
       on: {
-        click: function () { onChoose(option.mode); }
+        click: onToggle
       }
     }, [
-      ui.icon(option.icon, 15),
-      el('span', { className: 'menu__item-label', text: option.label }),
-      check
+      ui.icon('moon', 15),
+      el('span', { className: 'menu__item-label', text: 'Dark mode' }),
+      track
     ]);
-    return node;
   }
 
   function aboutRow(label, value) {
@@ -87,22 +86,13 @@
 
   function create(ctx) {
     var provider = (ctx && ctx.provider) || {};
-    var items = [];
 
-    function choose(mode) {
-      util.theme.setMode(mode);
-      // `setMode` notifies the theme listeners, and `sync` is one of them, so
-      // the checkmarks move without being told twice.
-    }
+    var themeSwitch = darkModeSwitch(function () {
+      util.theme.toggle();
+      // `toggle` notifies the theme listeners, and `sync` is one of them, so
+      // the switch moves without being told twice.
+    });
 
-    var themeItems = [];
-    for (var i = 0; i < THEME_OPTIONS.length; i++) {
-      var node = themeItem(THEME_OPTIONS[i], choose);
-      items.push({ mode: THEME_OPTIONS[i].mode, node: node });
-      themeItems.push(node);
-    }
-
-    var systemHint = el('div', { className: 'menu__hint' });
     var about = el('div', { className: 'menu__about' });
 
     /* Rebuilt on every open rather than once at mount. The live provider learns
@@ -137,23 +127,14 @@
     ];
 
     util.appendChild(control.panel, [
-      ui.menuSection('Theme', themeItems),
-      systemHint,
+      ui.menuSection(null, [themeSwitch]),
       provider.kind === 'snapshot' ? null : ui.menuSection('Data', dataItems),
       about
     ]);
     fillAbout();
 
     function sync() {
-      var mode = util.theme.mode();
-      for (var index = 0; index < items.length; index++) {
-        var selected = items[index].mode === mode;
-        items[index].node.setAttribute('aria-checked', String(selected));
-        items[index].node.setAttribute('data-selected', String(selected));
-      }
-      systemHint.textContent = mode === 'system'
-        ? 'Following your operating system, which is ' + util.theme.system() + ' right now.'
-        : 'Your choice overrides the operating system on this browser.';
+      themeSwitch.setAttribute('aria-checked', String(util.theme.current() === 'dark'));
     }
 
     var stopListening = util.theme.onChange(sync);
@@ -169,5 +150,5 @@
     };
   }
 
-  TestHub.settings = { create: create, THEME_OPTIONS: THEME_OPTIONS };
+  TestHub.settings = { create: create };
 })(window, document);

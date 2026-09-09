@@ -452,15 +452,38 @@ table.sr-only,
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
 .menu__item:hover { background: var(--surface-3); color: var(--text); }
-.menu__item[data-selected="true"] { color: var(--accent-ink); font-weight: 550; }
-.menu__item[data-selected="true"] .menu__check { opacity: 1; }
 .menu__item-label { flex: 1; }
-.menu__check { opacity: 0; flex: none; }
-.menu__hint {
-  padding: var(--sp-1) var(--sp-2) var(--sp-2);
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--text-subtle);
+
+/* The switch is drawn, not a checkbox: `aria-checked` on the button carries
+ * the state, so the track and thumb only have to follow it. */
+.menu__item--switch { color: var(--text); }
+.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
+}
+.switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--text-subtle);
+  transition: transform 140ms var(--ease), background 140ms var(--ease);
+}
+.menu__item--switch[aria-checked="true"] .switch {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.menu__item--switch[aria-checked="true"] .switch__thumb {
+  transform: translateX(15px);
+  background: var(--text-on-accent);
 }
 .menu__row {
   display: flex;
@@ -518,6 +541,8 @@ table.sr-only,
 
 @media (prefers-reduced-motion: reduce) {
   .menu__panel { animation: none; }
+  .switch,
+  .switch__thumb { transition: none; }
 }
 
 /* ====================================================================== */

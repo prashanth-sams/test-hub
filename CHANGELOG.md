@@ -46,10 +46,11 @@ one of those is listed under **Changed** or **Removed** with the migration.
   dashboard never draws a control that would 403.
 - **Hours are a retention unit.** `--older-than 12h`, for clearing up after a bad
   import. `UNIT_DAYS` became `UNIT_HOURS`.
-- **A settings menu in the dashboard header**, replacing the light/dark toggle.
-  Theme is now a three-way choice — System, Light, Dark — so a reader who picked
-  one can hand it back to their operating system; an About block says whether the
-  page is a live server or an offline export, and which version and schema it is.
+- **A settings menu in the dashboard header**, replacing the light/dark toggle in
+  the header. Theme is a single "Dark mode" switch that reads the theme actually
+  on screen, so a reader who has never chosen sees their operating system
+  reflected back; an About block says whether the page is a live server or an
+  offline export, and which version and schema it is.
   Built on a new `ui.menu()` primitive with the keyboard contract the dashboard
   did not previously have anywhere: arrow keys, Home/End, and Escape returning
   focus to the trigger.
@@ -65,9 +66,10 @@ one of those is listed under **Changed** or **Removed** with the migration.
 - The live dashboard never knew its own version: `LiveDataProvider.meta` carried
   only the API base, so the footer showed no version or schema in live mode. It
   now reads both from `/healthz` at startup.
-- The theme could not be returned to "follow my operating system" once it had been
-  set. `theme.followSystem()` existed in `00-util.js` with nothing calling it; the
-  settings menu is now the caller.
+- The theme preference is three-state underneath the switch — light, dark, or no
+  stored choice at all — so an untouched dashboard still follows
+  `prefers-color-scheme` in both directions, including a change made while the
+  page is open.
 - `FilesystemArtifactStore.put()` now updates the mtime of content it finds already
   stored, instead of leaving it at the first upload's. Nothing read that mtime
   before; the artifact sweep does, and without the bump it could unlink bytes an

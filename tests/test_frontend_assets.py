@@ -251,31 +251,41 @@ def test_the_header_hosts_the_settings_menu() -> None:
     assert 'id="th-settings"' in INDEX_MARKUP
 
 
-def test_the_two_state_theme_toggle_is_gone() -> None:
-    """It could not return a reader to following their OS, which is why it was
-    replaced. A stale reference to it would fail silently at runtime."""
+def test_the_old_header_theme_toggle_is_gone() -> None:
+    """The theme control moved into the settings menu; the standalone header
+    button is gone. A stale reference to it would fail silently at runtime."""
     for path in [*JS_FILES, WEB / "index.html", CSS_FILES[0]]:
         source = path.read_text(encoding="utf-8")
         assert "th-theme" not in source, f"{path.name} still references the removed toggle"
         assert "theme-toggle" not in source, f"{path.name} still references the removed toggle"
 
 
-def test_the_theme_has_three_modes_including_system() -> None:
-    """Two states is the bug: once a reader picks one, `prefers-color-scheme`
-    can never win again."""
+def test_the_theme_still_has_three_modes_including_system() -> None:
+    """The menu now offers a two-state switch, but the *preference* underneath
+    it stays three-state: with nothing stored, `prefers-color-scheme` still
+    wins, and `followSystem` is still the way back to it."""
     boot = JS_FILES[0].read_text(encoding="utf-8")
     assert "followSystem" in boot
     assert "setMode" in boot
     assert re.search(r"MODES:\s*\['system',\s*'light',\s*'dark'\]", boot)
 
+
+def test_the_theme_menu_is_a_single_row() -> None:
+    """It is a display preference in a small menu: three full-width rows and a
+    hint sentence spent half the panel's height on it."""
     settings = settings_source()
-    for mode in ("system", "light", "dark"):
-        assert f"mode: '{mode}'" in settings, f"the menu offers no {mode} option"
+    assert "Dark mode" in settings
+    for gone in ("menu__hint", "THEME_OPTIONS", "menuitemradio"):
+        assert gone not in settings, f"the multi-row theme block left {gone} behind"
+
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert ".menu__hint" not in css, "the hint's styles outlived the hint"
 
 
-def test_the_settings_menu_reaches_follow_system() -> None:
-    """The whole point of the menu. `setMode('system')` is the only path back."""
-    assert "util.theme.setMode(mode)" in settings_source()
+def test_the_switch_follows_the_painted_theme() -> None:
+    """A reader who has never chosen has no stored theme, so a switch reading
+    the stored value would sit at 'off' on a dark page."""
+    assert "util.theme.current() === 'dark'" in settings_source()
 
 
 def test_the_menu_trigger_announces_itself() -> None:
@@ -305,11 +315,11 @@ def test_escape_returns_focus_to_the_trigger() -> None:
     assert "trigger.focus()" in source
 
 
-def test_the_theme_options_are_radios_not_buttons() -> None:
-    """Three mutually exclusive choices are a radio group; announcing them as
-    plain menu items loses both the grouping and the current selection."""
+def test_the_dark_mode_row_is_a_switch() -> None:
+    """A drawn track announces nothing on its own; the role and `aria-checked`
+    are what tell a screen reader this is an on/off control and which it is."""
     settings = settings_source()
-    assert "role: 'menuitemradio'" in settings
+    assert "role: 'switch'" in settings
     assert "aria-checked" in settings
 
 
