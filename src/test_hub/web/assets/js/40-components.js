@@ -775,6 +775,56 @@
     };
   }
 
+  /* The dark-mode switch that sits at the foot of the rail.
+   *
+   * It reads the *painted* theme rather than the stored preference: with
+   * nothing stored the page is following the operating system, and a switch
+   * reading storage would sit at "off" on a dark page. Flipping it is what
+   * turns the OS default into an explicit choice.
+   *
+   * `role="switch"` with `aria-checked` is what is announced; the track and
+   * thumb are drawn, and only follow. The listener is on the theme, not on the
+   * button, so the switch is also right when the OS changes underneath it.
+   */
+  function themeSwitch() {
+    var track = el('span', { className: 'switch' }, [
+      el('span', { className: 'switch__thumb' })
+    ]);
+
+    var node = el('button', {
+      className: 'switchrow',
+      attrs: {
+        type: 'button',
+        role: 'switch',
+        'aria-checked': 'false',
+        'aria-label': 'Dark mode'
+      },
+      on: {
+        click: function () {
+          util.theme.toggle();
+          // `toggle` notifies the theme listeners, and `sync` is one of them,
+          // so the switch moves without being told twice.
+        }
+      }
+    }, [
+      icon('moon', 15),
+      el('span', { className: 'switchrow__label', text: 'Dark mode' }),
+      track
+    ]);
+
+    function sync() {
+      node.setAttribute('aria-checked', String(util.theme.current() === 'dark'));
+    }
+
+    var stopListening = util.theme.onChange(sync);
+    sync();
+
+    return {
+      el: node,
+      destroy: function () { if (stopListening) { stopListening(); } }
+    };
+  }
+
   function menuSection(title, children) {
     return el('div', { className: 'menu__section' }, [
       title ? el('div', { className: 'menu__label', text: title }) : null,
@@ -786,6 +836,7 @@
     icon: icon,
     menu: menu,
     menuSection: menuSection,
+    themeSwitch: themeSwitch,
     statusPill: statusPill,
     liveBadge: liveBadge,
     tag: tag,

@@ -74,6 +74,12 @@
       <a class="nav__link" data-route="overview" data-icon="grid" href="#/overview">Overview</a>
       <a class="nav__link" data-route="runs" data-icon="list" href="#/runs">Runs</a>
     </nav>
+
+    <!-- The dark-mode switch mounts here, at the foot of the rail: a display
+         preference is flipped in passing, so it should not be two clicks deep
+         inside a menu. Built in JS because it carries state — see
+         `ui.themeSwitch` in assets/js/40-components.js. -->
+    <div class="sidebar__foot" id="th-appearance"></div>
   </aside>
 
   <div class="shell__body">

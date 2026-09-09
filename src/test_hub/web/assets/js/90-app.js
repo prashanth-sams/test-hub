@@ -49,6 +49,7 @@
     var connLabel = document.getElementById('th-conn-label');
     var updatedNode = document.getElementById('th-updated');
     var settingsHost = document.getElementById('th-settings');
+    var appearanceHost = document.getElementById('th-appearance');
     var brandSub = document.getElementById('th-brand-sub');
     var footerMeta = document.getElementById('th-footer-meta');
     var navLinks = document.querySelectorAll('[data-route]');
@@ -71,6 +72,12 @@
     // otherwise (ADR-0001 D1).
     if (settingsHost) {
       util.replace(settingsHost, TestHub.settings.create(ctx).el);
+    }
+
+    // The theme is already resolved by the bootstrap in 00-util.js; this only
+    // mounts the control that changes it.
+    if (appearanceHost) {
+      util.replace(appearanceHost, ui.themeSwitch().el);
     }
 
     /* -------------------------------------------------------------- head */

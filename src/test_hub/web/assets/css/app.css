@@ -294,6 +294,14 @@ table.sr-only,
 
 .shell__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 
+/* Pushed to the bottom of the rail by `auto` rather than positioned, so a rail
+ * with more routes in it later still puts this last. */
+.sidebar__foot {
+  margin-top: auto;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--border);
+}
+
 .container {
   width: 100%;
   max-width: var(--shell-max);
@@ -491,7 +499,24 @@ table.sr-only,
 
 /* The switch is drawn, not a checkbox: `aria-checked` on the button carries
  * the state, so the track and thumb only have to follow it. */
-.menu__item--switch { color: var(--text); }
+.switchrow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.switchrow:hover { background: var(--surface-3); color: var(--text); }
+.switchrow__label { flex: 1; }
 .switch {
   position: relative;
   flex: none;
@@ -512,11 +537,11 @@ table.sr-only,
   background: var(--text-subtle);
   transition: transform 140ms var(--ease), background 140ms var(--ease);
 }
-.menu__item--switch[aria-checked="true"] .switch {
+[aria-checked="true"] > .switch {
   background: var(--accent);
   border-color: var(--accent);
 }
-.menu__item--switch[aria-checked="true"] .switch__thumb {
+[aria-checked="true"] > .switch > .switch__thumb {
   transform: translateX(15px);
   background: var(--text-on-accent);
 }
@@ -1279,6 +1304,12 @@ th[aria-sort] .table__sort { color: var(--text); }
   }
   .nav { flex-direction: row; overflow-x: auto; }
   .nav__link { padding: 6px 12px; }
+  /* In the bar there is no bottom to sit at: the switch goes to the far end. */
+  .sidebar__foot { margin-top: 0; margin-left: auto; padding-top: 0; border-top: 0; }
+  .switchrow { width: auto; }
+  /* The rail lets the brand wrap so an export's title can sit under it; in the
+   * bar there is no second line to wrap onto. */
+  .brand { flex: none; flex-wrap: nowrap; padding-left: 0; }
   /* Two stacked bands on a phone: the rail's row and the status row. The
    * second one carries three controls, so it does not need a full header's
    * height as well. */
@@ -1294,6 +1325,9 @@ th[aria-sort] .table__sort { color: var(--text); }
   .kpi { padding: var(--sp-3); }
   .kpi__value { font-size: 22px; }
   .updated { display: none; }
+  /* Four controls in one bar at 400px: the switch keeps its icon and track,
+   * and `aria-label` carries the name the text was giving it. */
+  .switchrow__label { display: none; }
   .filters__row { gap: var(--sp-2); }
   .field { flex: 1 1 140px; }
   .select, .input { min-width: 0; width: 100%; }

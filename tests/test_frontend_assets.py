@@ -306,22 +306,28 @@ def test_the_theme_still_has_three_modes_including_system() -> None:
     assert re.search(r"MODES:\s*\['system',\s*'light',\s*'dark'\]", boot)
 
 
-def test_the_theme_menu_is_a_single_row() -> None:
-    """It is a display preference in a small menu: three full-width rows and a
-    hint sentence spent half the panel's height on it."""
+def test_the_theme_control_is_a_single_row_in_the_rail() -> None:
+    """It started as three full-width menu rows and a hint sentence, which spent
+    half the settings panel on a display preference. It is now one switch at the
+    foot of the rail, one click from anywhere."""
+    assert 'id="th-appearance"' in INDEX_MARKUP, "the rail has nowhere to mount it"
+    assert "sidebar__foot" in INDEX_MARKUP
+
     settings = settings_source()
-    assert "Dark mode" in settings
-    for gone in ("menu__hint", "THEME_OPTIONS", "menuitemradio"):
-        assert gone not in settings, f"the multi-row theme block left {gone} behind"
+    for gone in ("Dark mode", "menu__hint", "THEME_OPTIONS", "menuitemradio"):
+        assert gone not in settings, f"the theme block left {gone} in the menu"
 
     css = CSS_FILES[0].read_text(encoding="utf-8")
     assert ".menu__hint" not in css, "the hint's styles outlived the hint"
+    assert re.search(r"^\.sidebar__foot \{[^}]*margin-top: auto", css, re.M), (
+        "the switch is not pinned to the foot of the rail"
+    )
 
 
 def test_the_switch_follows_the_painted_theme() -> None:
     """A reader who has never chosen has no stored theme, so a switch reading
     the stored value would sit at 'off' on a dark page."""
-    assert "util.theme.current() === 'dark'" in settings_source()
+    assert "util.theme.current() === 'dark'" in components_source()
 
 
 def test_the_menu_trigger_announces_itself() -> None:
@@ -353,10 +359,20 @@ def test_escape_returns_focus_to_the_trigger() -> None:
 
 def test_the_dark_mode_row_is_a_switch() -> None:
     """A drawn track announces nothing on its own; the role and `aria-checked`
-    are what tell a screen reader this is an on/off control and which it is."""
-    settings = settings_source()
-    assert "role: 'switch'" in settings
-    assert "aria-checked" in settings
+    are what tell a screen reader this is an on/off control and which it is.
+    The label is hidden on a narrow bar, so the name has to survive that."""
+    source = components_source()
+    assert "role: 'switch'" in source
+    assert "aria-checked" in source
+    assert "'aria-label': 'Dark mode'" in source
+
+
+def test_the_switch_stops_listening_when_it_is_dropped() -> None:
+    """It subscribes to the theme; a mount that cannot unsubscribe leaks one
+    listener per mount."""
+    source = components_source()
+    block = source[source.index("function themeSwitch"):]
+    assert "stopListening()" in block[: block.index("function menuSection")]
 
 
 def test_the_menu_releases_its_document_listeners() -> None:

@@ -47,14 +47,16 @@ one of those is listed under **Changed** or **Removed** with the migration.
 - **Hours are a retention unit.** `--older-than 12h`, for clearing up after a bad
   import. `UNIT_DAYS` became `UNIT_HOURS`.
 - **A left navigation rail.** Overview and Runs moved out of the header into a
-  216px column that also carries the brand, each route with an icon from the
-  dashboard's own icon set. Below 860px the rail folds back into a horizontal
-  bar, so a phone still spends its width on content.
+  216px column that also carries the brand and, at its foot, the dark-mode
+  switch; each route has an icon from the dashboard's own icon set. Below 860px
+  the rail folds back into a horizontal bar, so a phone still spends its width
+  on content.
 - **A settings menu in the dashboard header**, replacing the light/dark toggle in
-  the header. Theme is a single "Dark mode" switch that reads the theme actually
-  on screen, so a reader who has never chosen sees their operating system
-  reflected back; an About block says whether the page is a live server or an
-  offline export, and which version and schema it is.
+  the header. It holds the doorway to retention and an About block that says
+  whether the page is a live server or an offline export, and which version and
+  schema it is. The theme itself is a single "Dark mode" switch at the foot of
+  the rail, reading the theme actually on screen — so a reader who has never
+  chosen sees their operating system reflected back.
   Built on a new `ui.menu()` primitive with the keyboard contract the dashboard
   did not previously have anywhere: arrow keys, Home/End, and Escape returning
   focus to the trigger.
