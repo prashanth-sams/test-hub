@@ -168,7 +168,7 @@
   --sp-6: 32px;
   --sp-7: 48px;
   --shell-max: 1440px;
-  --rail-w: 250px;
+  --rail-w: 180px;
   --header-h: 64px;
   --ease: cubic-bezier(0.2, 0, 0.15, 1);
 }
@@ -378,7 +378,7 @@ table.sr-only,
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
-  padding: var(--sp-4) var(--sp-3) var(--sp-3);
+  padding: var(--sp-4) var(--sp-2) var(--sp-3);
   background: var(--rail-bg);
   color: var(--rail-text);
   border-right: 1px solid var(--rail-border);
@@ -398,7 +398,7 @@ table.sr-only,
  * that can appear inside it is re-pointed at the rail's own tokens here. The
  * switch is built once, in the component kit, and does not know where it was
  * mounted — this is what tells it. */
-.sidebar .switchrow { color: var(--rail-muted); }
+.sidebar .switchrow { color: var(--rail-muted); font-size: var(--fs-sm); padding: 9px 10px; }
 .sidebar .switchrow:hover { background: var(--rail-bg-soft); color: var(--rail-text); }
 .sidebar .switch { background: var(--rail-bg-soft); border-color: var(--rail-border); }
 .sidebar .switch__thumb { background: var(--rail-muted); }
@@ -451,9 +451,10 @@ table.sr-only,
   flex: none;
 }
 /* In the rail the subtitle drops onto its own line: an export's title is
- * arbitrary text and the column is 216px, so beside the wordmark it would be
- * cut off. It is still one line, still ellipsised, but it gets the full width
- * and aligns under the wordmark rather than under the mark. */
+ * arbitrary text and the column is 164px wide inside its gutters, so beside
+ * the wordmark it would be cut off. It is still one line, still ellipsised,
+ * but it gets the full width and aligns under the wordmark rather than under
+ * the mark. */
 .brand { flex-wrap: wrap; }
 .brand__sub {
   width: 100%;
@@ -491,10 +492,16 @@ table.sr-only,
   position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 9px 11px;
+  gap: 10px;
+  padding: 8px 10px;
   border-radius: var(--r-sm);
   color: var(--rail-muted);
+  /* A step above body text, matching the report's 16px rail. The rail holds
+     nine words total and is read at a glance from the far edge of the screen,
+     so it is the one place in the dashboard that reads larger than the content
+     it points at — not smaller, which is how a nav ends up looking like a
+     footnote. */
+  font-size: var(--fs-lg);
   font-weight: 500;
   white-space: nowrap;
   transition: background 120ms var(--ease), color 120ms var(--ease);
@@ -1809,7 +1816,10 @@ th[aria-sort] .table__sort { color: var(--text); }
   .nav { flex-direction: row; overflow-x: auto; gap: var(--sp-3); min-width: 0; }
   .nav__group { flex-direction: row; gap: 1px; }
   .nav__label { display: none; }
-  .nav__link { padding: 6px 12px; }
+  /* The 16px rail size belongs to the vertical column, where nine words have
+     a 180px lane to themselves. In the bar they compete for one row that
+     already scrolls, so they drop back to body size. */
+  .nav__link { padding: 6px 12px; font-size: var(--fs-md); }
   .nav__link[aria-current="page"]::before {
     top: auto;
     left: 8px;
