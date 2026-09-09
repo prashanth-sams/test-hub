@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 import pytest
 
@@ -233,3 +234,125 @@ def test_views_do_not_call_fetch_directly() -> None:
         source = path.read_text(encoding="utf-8")
         assert "fetch(" not in source, f"{path.name} bypasses the provider seam"
         assert "EventSource" not in source, f"{path.name} bypasses the provider seam"
+
+
+# ------------------------------------------------------------------- settings
+
+
+def settings_source() -> str:
+    return (WEB / "assets" / "js" / "80-settings.js").read_text(encoding="utf-8")
+
+
+def components_source() -> str:
+    return (WEB / "assets" / "js" / "40-components.js").read_text(encoding="utf-8")
+
+
+def test_the_header_hosts_the_settings_menu() -> None:
+    assert 'id="th-settings"' in INDEX_MARKUP
+
+
+def test_the_two_state_theme_toggle_is_gone() -> None:
+    """It could not return a reader to following their OS, which is why it was
+    replaced. A stale reference to it would fail silently at runtime."""
+    for path in [*JS_FILES, WEB / "index.html", CSS_FILES[0]]:
+        source = path.read_text(encoding="utf-8")
+        assert "th-theme" not in source, f"{path.name} still references the removed toggle"
+        assert "theme-toggle" not in source, f"{path.name} still references the removed toggle"
+
+
+def test_the_theme_has_three_modes_including_system() -> None:
+    """Two states is the bug: once a reader picks one, `prefers-color-scheme`
+    can never win again."""
+    boot = JS_FILES[0].read_text(encoding="utf-8")
+    assert "followSystem" in boot
+    assert "setMode" in boot
+    assert re.search(r"MODES:\s*\['system',\s*'light',\s*'dark'\]", boot)
+
+    settings = settings_source()
+    for mode in ("system", "light", "dark"):
+        assert f"mode: '{mode}'" in settings, f"the menu offers no {mode} option"
+
+
+def test_the_settings_menu_reaches_follow_system() -> None:
+    """The whole point of the menu. `setMode('system')` is the only path back."""
+    assert "util.theme.setMode(mode)" in settings_source()
+
+
+def test_the_menu_trigger_announces_itself() -> None:
+    source = components_source()
+    for attribute in ("aria-haspopup", "aria-expanded", "aria-controls"):
+        assert attribute in source, f"the menu trigger sets no {attribute}"
+
+
+def test_the_menu_panel_starts_hidden() -> None:
+    """An unhidden panel is read out by a screen reader before it is opened."""
+    assert re.search(r"hidden:\s*true", components_source())
+
+
+def test_the_menu_implements_the_keyboard_contract() -> None:
+    """A dropdown that can only be opened with a mouse is a dropdown half the
+    people who need the settings cannot reach."""
+    source = components_source()
+    for key in ("Escape", "ArrowDown", "ArrowUp", "Home", "End", "Tab"):
+        assert f"'{key}'" in source, f"the menu does not handle {key}"
+
+
+def test_escape_returns_focus_to_the_trigger() -> None:
+    """Without this a keyboard user who changes their mind is dropped at the
+    top of the document with no way back to where they were."""
+    source = components_source()
+    assert "restoreFocus" in source
+    assert "trigger.focus()" in source
+
+
+def test_the_theme_options_are_radios_not_buttons() -> None:
+    """Three mutually exclusive choices are a radio group; announcing them as
+    plain menu items loses both the grouping and the current selection."""
+    settings = settings_source()
+    assert "role: 'menuitemradio'" in settings
+    assert "aria-checked" in settings
+
+
+def test_the_menu_releases_its_document_listeners() -> None:
+    """They are on `document`, so dropping the element does not collect them."""
+    source = components_source()
+    assert "removeEventListener('mousedown'" in source
+    assert "removeEventListener('focusin'" in source
+
+
+def test_the_menu_respects_reduced_motion() -> None:
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert "prefers-reduced-motion" in css
+    block = css[css.index("prefers-reduced-motion") :]
+    assert "menu__panel" in block, "the menu's entry animation ignores reduced motion"
+
+
+# ------------------------------------------------------------------- caching
+
+
+def test_the_dashboard_is_revalidated_rather_than_cached_blind(client: Any) -> None:
+    """The bug this exists to stop: `StaticFiles` sends an ETag and no
+    `Cache-Control`, and a validator with no freshness directive is one a
+    browser may cache heuristically for hours. The symptom is an upgraded Test
+    Hub running the previous release's JavaScript against the current release's
+    markup — silently, because nothing errors.
+    """
+    for route in ("/", "/assets/js/90-app.js", "/assets/css/app.css"):
+        response = client.get(route)
+        assert response.status_code == 200, route
+        assert response.headers.get("cache-control") == "no-cache", route
+
+
+def test_revalidation_still_returns_304(client: Any) -> None:
+    """`no-cache` must not mean re-downloading the bundle on every load."""
+    first = client.get("/assets/js/90-app.js")
+    etag = first.headers.get("etag")
+    assert etag, "no ETag to revalidate against"
+    again = client.get("/assets/js/90-app.js", headers={"If-None-Match": etag})
+    assert again.status_code == 304
+
+
+def test_the_api_is_left_alone(client: Any) -> None:
+    """The cache directive is for the dashboard. The API and SSE set their own."""
+    headers = {key.lower() for key in client.get("/api/v1/projects").headers}
+    assert "cache-control" not in headers

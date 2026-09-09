@@ -52,6 +52,18 @@
     }
   }
 
+  /* `/healthz` is outside the versioned API, so it cannot go through
+   * `request()`. Resolving it *relative to the API base* rather than hard-coding
+   * "/healthz" is what keeps it correct behind a reverse-proxy prefix: from
+   * `/hub/api/v1/` this lands on `/hub/healthz`, which is where it actually is. */
+  function healthUrlFrom(base) {
+    try {
+      return new window.URL('../../healthz', base).toString();
+    } catch (err) {
+      return '/healthz';
+    }
+  }
+
   function joinUrl(base, path) {
     var left = String(base).replace(/\/+$/, '');
     var right = String(path).replace(/^\/+/, '');
@@ -88,6 +100,11 @@
     var closed = false;
 
     self.meta = { apiBase: apiBase, streamUrl: streamUrl };
+
+    // Resolves once the server has said which version it is. Null until
+    // `start()`; the snapshot provider has no equivalent, because a snapshot
+    // carries its versions in the embedded object.
+    self.serverInfo = null;
 
     /* ------------------------------------------------------------- fetch */
 
@@ -556,8 +573,35 @@
       self._setStatus('offline', 'The browser reports no network.');
     });
 
+    /* The live provider knows what server it is talking to but not what
+     * *version* that server is — every payload under /api/v1 is data, not
+     * provenance. `/healthz` carries both numbers, so one call at startup is
+     * what lets the footer and the settings menu say the same thing in live
+     * mode that a snapshot says from its embedded meta.
+     *
+     * Deliberately fire-and-forget: a dashboard that cannot reach /healthz —
+     * reads behind auth, a proxy that only forwards /api — is missing a version
+     * string, not broken, and must not fail to start over it. */
+    function loadServerInfo() {
+      return window.fetch(healthUrlFrom(apiBase), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin'
+      }).then(function (response) {
+        return response.ok ? response.json() : null;
+      }).then(function (payload) {
+        if (!payload) { return null; }
+        if (payload.version) { self.meta.generator_version = payload.version; }
+        if (payload.schema_version) { self.meta.schema_version = payload.schema_version; }
+        return self.meta;
+      })['catch'](function () {
+        return null;
+      });
+    }
+
     self.start = function () {
       closed = false;
+      self.serverInfo = loadServerInfo();
       connect();
       startWatchdog();
       return self;

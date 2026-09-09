@@ -282,6 +282,86 @@ rows will reference blobs that are not there and downloads will 404 — the run
 data itself is unaffected. Restore artifacts first if you are doing them
 separately.
 
+## Retention
+
+<a id="retention"></a>
+
+Nothing ages out until you schedule it. `test-hub prune` is the only thing that
+deletes anything, there is no REST equivalent, and it is not a daemon — the
+reasoning for all three is in [ADR-0002](adr/0002-data-retention.md).
+
+Always look first. `--dry-run` touches nothing:
+
+```shell
+$ test-hub prune --older-than 90d --dry-run
+
+  47 run(s) would be removed
+  spanning  2026-01-04 to 2026-06-10
+    payments-api                 22
+    storefront-web               15
+    ledger-worker                10
+  rows      18402 total
+            412 suites, 6180 tests, 6903 attempts, 4880 events, 27 artifact rows
+  artifacts 24 blob(s), 61.4 MiB, 3 kept (still referenced or inside the grace window)
+  25 run(s) held back by the per-project floor (--keep-min)
+```
+
+Then run it for real. `--yes` is required when there is no terminal, and the
+command refuses rather than prompting into a pipe — a cron entry that forgot it
+fails on the first scheduled run instead of hanging:
+
+```shell
+$ test-hub prune --older-than 90d --yes
+```
+
+**The cutoff.** `--older-than 90d`, `6m`, `2w`, `1y`, or a bare number of days;
+or `--before 2026-01-01` for an absolute date. `m` is 30 days and `y` is 365 —
+fixed lengths, not calendar arithmetic, so `6m` is exactly 180 days.
+
+A run is dated by when it *ran* (`started_at`, falling back to `created_at`),
+which is the same date the dashboard filters on — so what you see under a date
+filter is what a prune to that date removes. `--by-import-date` switches to when
+Test Hub received it, which is what you want if a CI job uploads back-dated
+archives that should still be kept for 90 days after arrival.
+
+**What is protected.** The newest `--keep-min` runs of every project survive
+whatever their age (default 5, `0` disables). Without it, a 90-day policy deletes
+a project that ran nightly for a year and then went quiet out of the dashboard
+entirely. Runs that are still `queued` or `running` are skipped and counted; a
+count that does not go down is a publisher that died, and `--include-unfinished`
+takes them.
+
+**Artifacts.** Blobs are content-addressed, so one file backs every row that ever
+uploaded those bytes. A blob is unlinked only once no row anywhere points at it,
+after the row deletions have committed — so pruning one project does not remove a
+screenshot another project shares. Blobs written within
+`TEST_HUB_ARTIFACT_GC_GRACE_HOURS` are left alone regardless, which closes the
+race against an import that is mid-flight.
+
+**Disk space.** Deleting rows does not shrink `test-hub.db`; SQLite keeps the
+freed pages and reuses them. The blobs are freed immediately and are usually the
+bulk of the bytes. To return the database pages to the filesystem, pass
+`--vacuum` — it rewrites the whole file, wants up to twice its current size in
+free space, and holds an exclusive lock throughout, so run it when the service is
+quiet and never on a disk that is already nearly full.
+
+**Nothing is archived.** Pruned data is gone. If you want a cold copy of the
+window first, `test-hub export --days N` writes it to one self-contained HTML
+file, and [Backups](#backups) covers the database.
+
+**Scheduling it.** A cron entry on the host, at an hour you chose — the prune
+takes SQLite's write lock in batches, and publishers queue behind each one:
+
+```shell
+17 4 * * *  test-hub prune --older-than 90d --yes >> /var/log/test-hub-prune.log 2>&1
+```
+
+Or, against a Compose deployment:
+
+```shell
+$ docker compose exec test-hub test-hub prune --older-than 90d --yes
+```
+
 ## Reverse proxy
 
 <a id="reverse-proxy"></a>
@@ -469,8 +549,11 @@ environment beats `.env`.
 | `TEST_HUB_SSE_HEARTBEAT_SECONDS` | `15` | Keep the proxy's read timeout comfortably above this. |
 | `TEST_HUB_SSE_REPLAY_BUFFER` | `1000` | Events kept per workspace for `Last-Event-ID`. |
 | `TEST_HUB_SSE_MAX_CLIENTS` | `200` | |
-| `TEST_HUB_HISTORY_WINDOW_DAYS` | `30` | |
+| `TEST_HUB_HISTORY_WINDOW_DAYS` | `30` | What the overview *shows*. Deletes nothing. |
 | `TEST_HUB_FLAKY_WINDOW_RUNS` | `20` | |
+| `TEST_HUB_RETENTION_DAYS` | — | Default cutoff for `test-hub prune`. **Nothing sweeps on its own**; schedule the command. |
+| `TEST_HUB_RETENTION_MIN_RUNS` | `5` | Runs always kept per project, however old. `0` disables the floor. |
+| `TEST_HUB_ARTIFACT_GC_GRACE_HOURS` | `24` | A blob written more recently than this is never unlinked. |
 | `TEST_HUB_LOG_LEVEL` | `info` | |
 | `TEST_HUB_LOG_FORMAT` | `text` | `json` for a log shipper. |
 
@@ -495,7 +578,8 @@ with HTTP 200 either way — a healthcheck that raises tells you nothing. Alert 
 the body, not the status code. `live_subscribers` is how many dashboards are
 watching, which is a cheap way to notice that the SSE path broke.
 
-**What to watch.** Data-directory free space (nothing is ever deleted), import
+**What to watch.** Data-directory free space (nothing is deleted unless you have
+scheduled `test-hub prune` — see [Retention](#retention)), import
 latency at p95 (the single-writer queue shows up here first —
 [scaling.md](scaling.md)), and `status != "ok"`.
 

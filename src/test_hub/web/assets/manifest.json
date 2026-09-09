@@ -27,6 +27,7 @@
     "assets/js/55-view-runs.js",
     "assets/js/60-view-run.js",
     "assets/js/65-view-test.js",
+    "assets/js/80-settings.js",
     "assets/js/90-app.js"
   ],
   "files": [
@@ -42,6 +43,7 @@
     "assets/js/55-view-runs.js",
     "assets/js/60-view-run.js",
     "assets/js/65-view-test.js",
+    "assets/js/80-settings.js",
     "assets/js/90-app.js"
   ],
   "markers": {

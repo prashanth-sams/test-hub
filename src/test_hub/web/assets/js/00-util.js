@@ -125,20 +125,43 @@
     }
   })();
 
+  function followSystem() {
+    storageRemove(THEME_KEY);
+    applyTheme(systemTheme());
+    notifyTheme(currentTheme());
+  }
+
+  // The *preference* — three states — as opposed to `current()`, which is the
+  // two-state colour actually painted. 'system' is the absence of a stored
+  // choice, so it is a real state rather than a third value in storage: there
+  // is nothing to migrate if the OS switches, and clearing site data returns a
+  // reader to following their OS rather than to whatever we last wrote.
+  function themeMode() {
+    return storedTheme() || 'system';
+  }
+
+  function setThemeMode(mode) {
+    if (mode === 'system') {
+      followSystem();
+      return 'system';
+    }
+    setTheme(mode);
+    return currentTheme();
+  }
+
   var theme = {
     KEY: THEME_KEY,
+    MODES: ['system', 'light', 'dark'],
     current: currentTheme,
     system: systemTheme,
     stored: storedTheme,
+    mode: themeMode,
+    setMode: setThemeMode,
     set: setTheme,
     toggle: function () {
       return setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
     },
-    followSystem: function () {
-      storageRemove(THEME_KEY);
-      applyTheme(systemTheme());
-      notifyTheme(currentTheme());
-    },
+    followSystem: followSystem,
     onChange: function (fn) {
       themeListeners.push(fn);
       return function () {

@@ -15,8 +15,14 @@ from typing import Any
 import typer
 
 from test_hub.domain.models import ImportResult, RunCounts
+from test_hub.service.retention import PruneResult
 
-__all__ = ["render_counts", "render_import_result", "render_warnings"]
+__all__ = [
+    "render_counts",
+    "render_import_result",
+    "render_prune_result",
+    "render_warnings",
+]
 
 _STATUS_COLOURS = {
     "passed": typer.colors.GREEN,
@@ -92,3 +98,114 @@ def render_import_result(
         )
     render_warnings(result.warnings)
     typer.echo()
+
+
+def human_bytes(count: int) -> str:
+    """Bytes in the largest unit that keeps the number readable."""
+    size = float(count)
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if size < 1024 or unit == "GiB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GiB"  # pragma: no cover - unreachable, kept for mypy
+
+
+def render_prune_plan(result: PruneResult) -> None:
+    """The plan, before anything is deleted. What `--dry-run` prints."""
+    typer.echo()
+    if not result.runs:
+        typer.secho("  nothing to prune", fg=typer.colors.GREEN, bold=True)
+        _render_prune_notes(result)
+        typer.echo()
+        return
+
+    typer.secho(f"  {result.runs} run(s) would be removed", fg=typer.colors.YELLOW, bold=True)
+    if result.oldest and result.newest:
+        typer.secho(
+            f"  spanning  {result.oldest:%Y-%m-%d} to {result.newest:%Y-%m-%d}",
+            fg=typer.colors.BRIGHT_BLACK,
+        )
+    for key, count in sorted(result.by_project.items(), key=lambda item: (-item[1], item[0])):
+        typer.secho(f"    {key:<28} {count}", fg=typer.colors.BRIGHT_BLACK)
+    _render_prune_rows(result)
+    _render_prune_notes(result)
+    typer.echo()
+
+
+def render_prune_result(result: PruneResult, *, json_output: bool = False) -> None:
+    """What the prune actually committed."""
+    if json_output:
+        typer.echo(json.dumps(result.as_dict(), indent=2))
+        return
+    if result.dry_run:
+        render_prune_plan(result)
+        return
+
+    typer.echo()
+    if not result.runs:
+        typer.secho("  nothing to prune", fg=typer.colors.GREEN, bold=True)
+        _render_prune_notes(result)
+        typer.echo()
+        return
+
+    typer.secho(
+        f"  pruned {result.runs} run(s) in {result.batches} batch(es)",
+        fg=typer.colors.GREEN,
+        bold=True,
+    )
+    if result.oldest and result.newest:
+        typer.secho(
+            f"  spanning  {result.oldest:%Y-%m-%d} to {result.newest:%Y-%m-%d}",
+            fg=typer.colors.BRIGHT_BLACK,
+        )
+    _render_prune_rows(result)
+    _render_prune_notes(result)
+
+    if not result.vacuumed and result.rows:
+        # Without this line an operator who pruned to free a disk sees the file
+        # unchanged and concludes the command did nothing.
+        typer.secho(
+            "  the database file has not shrunk; SQLite reuses the freed pages. "
+            "Pass --vacuum to return them to the filesystem.",
+            fg=typer.colors.BRIGHT_BLACK,
+        )
+    typer.echo()
+
+
+def _render_prune_rows(result: PruneResult) -> None:
+    parts = [
+        f"{result.suites} suites",
+        f"{result.test_cases} tests",
+        f"{result.attempts} attempts",
+        f"{result.events} events",
+        f"{result.artifacts} artifact rows",
+    ]
+    if result.idempotency_keys:
+        parts.append(f"{result.idempotency_keys} idempotency keys")
+    typer.secho(f"  rows      {result.rows} total", fg=typer.colors.BRIGHT_BLACK)
+    typer.secho("            " + ", ".join(parts), fg=typer.colors.BRIGHT_BLACK)
+    if result.blobs_unlinked or result.blobs_retained:
+        freed = human_bytes(result.bytes_freed)
+        shared = (
+            f", {result.blobs_retained} kept (still referenced or inside the grace window)"
+            if result.blobs_retained
+            else ""
+        )
+        typer.secho(
+            f"  artifacts {result.blobs_unlinked} blob(s), {freed}{shared}",
+            fg=typer.colors.BRIGHT_BLACK,
+        )
+
+
+def _render_prune_notes(result: PruneResult) -> None:
+    if result.protected:
+        typer.secho(
+            f"  {result.protected} run(s) held back by the per-project floor (--keep-min)",
+            fg=typer.colors.BRIGHT_BLACK,
+        )
+    if result.skipped_live:
+        typer.secho(
+            f"  {result.skipped_live} run(s) past the cutoff are still queued or running "
+            f"and were left alone (--include-unfinished takes them)",
+            fg=typer.colors.YELLOW,
+        )

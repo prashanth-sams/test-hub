@@ -7,8 +7,8 @@
  * D1). After the two lines below, nothing else in the codebase can tell.
  *
  * Everything else here is chrome: the header's connection pill and last-updated
- * clock, the theme toggle, the disconnected banner, and a router that mounts one
- * view at a time and lets it own its own DOM.
+ * clock, the settings menu, the disconnected banner, and a router that mounts
+ * one view at a time and lets it own its own DOM.
  */
 (function (window, document) {
   'use strict';
@@ -47,30 +47,21 @@
     var connPill = document.getElementById('th-conn');
     var connLabel = document.getElementById('th-conn-label');
     var updatedNode = document.getElementById('th-updated');
-    var themeButton = document.getElementById('th-theme');
+    var settingsHost = document.getElementById('th-settings');
     var brandSub = document.getElementById('th-brand-sub');
     var footerMeta = document.getElementById('th-footer-meta');
     var navLinks = document.querySelectorAll('[data-route]');
 
     var current = { name: null, view: null };
 
-    /* ------------------------------------------------------------- theme */
+    /* ---------------------------------------------------------- settings */
 
-    function syncThemeButton() {
-      if (!themeButton) { return; }
-      var dark = util.theme.current() === 'dark';
-      themeButton.setAttribute('aria-pressed', String(dark));
-      themeButton.setAttribute('title', dark ? 'Switch to light theme' : 'Switch to dark theme');
-      themeButton.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    // Mounted after the provider is chosen, because the About block reports
+    // which one it is — a live server and a frozen export render identically
+    // otherwise (ADR-0001 D1).
+    if (settingsHost) {
+      util.replace(settingsHost, TestHub.settings.create(ctx).el);
     }
-
-    if (themeButton) {
-      themeButton.addEventListener('click', function () {
-        util.theme.toggle();
-      });
-    }
-    util.theme.onChange(syncThemeButton);
-    syncThemeButton();
 
     /* -------------------------------------------------------------- head */
 
@@ -206,6 +197,12 @@
     syncStatus(store.state);
     syncUpdated(store.state);
     store.start();
+    // The live provider learns the server's version a round trip after start,
+    // so the footer is drawn twice: once with what we knew, once with what the
+    // server said. A snapshot has no `serverInfo` and skips this.
+    if (provider.serverInfo && provider.serverInfo.then) {
+      provider.serverInfo.then(syncMeta);
+    }
     mount(store.state);
     syncNav(store.state);
     if (current.view) { current.view.update(store.state, 'route'); }

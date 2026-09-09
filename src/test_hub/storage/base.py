@@ -12,7 +12,7 @@ that only ever creates one workspace.
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator, Iterable, Sequence
+from collections.abc import AsyncIterator, Collection, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import IO, Any, Protocol, runtime_checkable
@@ -34,6 +34,7 @@ from test_hub.domain.status import RunStatus
 
 __all__ = [
     "ArtifactStore",
+    "ArtifactSweep",
     "EventBus",
     "EventRepository",
     "RunFilter",
@@ -116,6 +117,28 @@ class StoredArtifact:
     size_bytes: int
     path: str
     created: bool
+
+
+@dataclass(slots=True)
+class ArtifactSweep:
+    """What a garbage-collection pass over the blob store did.
+
+    ``retained`` counts digests that were candidates but survived, either
+    because a row still points at them — content addressing means one blob can
+    back rows in many runs — or because they were written inside the grace
+    window and an uncommitted import may still be about to claim them.
+    """
+
+    unlinked: int = 0
+    bytes_freed: int = 0
+    retained: int = 0
+
+    def __add__(self, other: ArtifactSweep) -> ArtifactSweep:
+        return ArtifactSweep(
+            unlinked=self.unlinked + other.unlinked,
+            bytes_freed=self.bytes_freed + other.bytes_freed,
+            retained=self.retained + other.retained,
+        )
 
 
 @runtime_checkable
@@ -209,6 +232,15 @@ class ArtifactStore(Protocol):
     def list_for_run(self, run_id: uuid.UUID) -> list[Artifact]: ...
 
     def get(self, artifact_id: uuid.UUID) -> Artifact | None: ...
+
+    def collect_unreferenced(
+        self,
+        digests: Iterable[str],
+        *,
+        grace_seconds: float,
+        excluding_runs: Collection[uuid.UUID] = (),
+        apply: bool = True,
+    ) -> ArtifactSweep: ...
 
 
 @runtime_checkable

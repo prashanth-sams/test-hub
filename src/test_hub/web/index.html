@@ -44,6 +44,7 @@
 <script src="assets/js/55-view-runs.js"></script>
 <script src="assets/js/60-view-run.js"></script>
 <script src="assets/js/65-view-test.js"></script>
+<script src="assets/js/80-settings.js"></script>
 <script src="assets/js/90-app.js"></script>
 <!-- test-hub:scripts:end -->
 </head>
@@ -72,18 +73,12 @@
           <span id="th-conn-label">Connecting</span>
         </span>
 
-        <button class="iconbtn theme-toggle" id="th-theme" type="button"
-                aria-pressed="false" aria-label="Switch theme" title="Switch theme">
-          <svg class="theme-toggle__light" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false">
-            <path d="M12 17.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11Z"></path>
-            <path d="M12 1.8v2.4M12 19.8v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"></path>
-          </svg>
-          <svg class="theme-toggle__dark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-            <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1Z"></path>
-          </svg>
-        </button>
+        <!-- The settings menu mounts here. Its trigger is built in JS rather
+             than written out below, because the panel it controls has to be
+             built there anyway and a half-static, half-dynamic control is the
+             kind that drifts. The theme itself is already resolved before this
+             point by the bootstrap in assets/js/00-util.js. -->
+        <div id="th-settings"></div>
       </div>
     </div>
   </header>

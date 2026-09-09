@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from test_hub.storage.base import (
     ArtifactStore,
+    ArtifactSweep,
     EventBus,
     EventRepository,
     RunFilter,
@@ -23,6 +24,7 @@ from test_hub.storage.uow import SqlUnitOfWork, UnitOfWorkFactory, create_unit_o
 
 __all__ = [
     "ArtifactStore",
+    "ArtifactSweep",
     "Database",
     "EventBus",
     "EventRepository",

@@ -29,12 +29,13 @@ publish to it, and `curl` is a first-class client.
 | Stable test identity | A UUIDv5 derived from project, suite path, class, name and normalized parameters — never from timestamps or line numbers. Reorder your parameters, move the test down a file, run it on another machine: it is still the same test, and its history follows it. |
 | Live updates | Server-Sent Events with heartbeats, `Last-Event-ID` replay and an explicit resync when a client has been away too long. Results appear in the browser within a couple of seconds, without a refresh. |
 | Idempotent ingestion | Repost an event, a batch or a whole report — nothing duplicates and no count moves. `(source, event id)` is unique, and `X-Idempotency-Key` covers the batch. |
-| Light and dark themes | The dashboard follows your operating system until you choose, then remembers your choice. Dark is a designed counterpart, not an inversion, and the status language stays identical in both. |
+| Light and dark themes | The dashboard follows your operating system until you choose otherwise, then remembers your choice — and the settings menu in the header will hand it back to your OS. Dark is a designed counterpart, not an inversion, and the status language stays identical in both. |
 | Run comparison | Every run is measured against the previous *comparable* run — same project, team, component, type, environment and branch — with newly failing, newly passing, still failing, added and removed tests called out. |
 | Flaky detection | Within a run (failed then passed on retry) and across runs (disagreeing with its own history). Both formulas are written down in [docs/metrics.md](docs/metrics.md) and implemented exactly once. |
 | Executive and engineering altitudes | A portfolio overview that is cheap enough to poll, kept deliberately separate from the run-level drill-down that is allowed to be large. |
 | Secure by default | Loopback-only binding, a refusal to serve an unauthenticated public interface, hashed API tokens, XML parsed with entities disabled, size limits, content-addressed artifacts, a restrictive CSP, and configurable secret redaction over everything it stores. |
 | No Node, no CDN | The frontend is hand-written CSS and JavaScript shipped inside the wheel. It loads nothing from the internet, which is what lets the offline export be a single file and the CSP be `default-src 'none'`. |
+| Retention you control | `test-hub prune` deletes runs past a cutoff — `90d`, `6m`, an absolute date — along with everything under them and the artifact blobs left unreferenced. A per-project floor keeps a dormant project from vanishing, `--dry-run` shows the plan first, and there is deliberately no REST endpoint for it. |
 | Runs anywhere | `pip install test-hub`, SQLite, one process. A Dockerfile and a Compose file with a persistent volume are included for when you want it to be somebody else's laptop. |
 
 ## A look at the dashboard
@@ -253,6 +254,7 @@ Full detail and the threat model are in [SECURITY.md](SECURITY.md) and
 |---|---|
 | [Architecture](docs/architecture.md) | How it fits together, and why |
 | [ADR-0001](docs/adr/0001-architecture.md) | The decisions, the alternatives, and the known limits |
+| [ADR-0002](docs/adr/0002-data-retention.md) | Retention: what a prune deletes, and what protects it |
 | [Canonical schemas](docs/schemas/README.md) | The versioned wire contract |
 | [Event contract](docs/events.md) | The CloudEvents envelope and all eight event types |
 | [Metrics](docs/metrics.md) | Every formula, exactly |

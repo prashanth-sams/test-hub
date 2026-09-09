@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ import pytest
 from typer.testing import CliRunner
 
 from test_hub.cli import app as cli_app
+from test_hub.config import reset_settings_cache
 from test_hub.version import __version__
 from tests.paths import junit
 
@@ -45,7 +47,7 @@ def test_version(runner: CliRunner, cli_env: dict[str, str]) -> None:
 def test_help_lists_every_command(runner: CliRunner, cli_env: dict[str, str]) -> None:
     result = run(runner, cli_env, "--help")
     assert result.exit_code == 0
-    for command in ("serve", "ingest", "publish", "export", "demo", "formats", "token"):
+    for command in ("serve", "ingest", "publish", "export", "demo", "prune", "formats", "token"):
         assert command in result.stdout
 
 
@@ -249,3 +251,117 @@ def test_publish_help_offers_only_safe_token_options(
     assert "--token-env" in help_text
     assert "--token-file" in help_text
     assert "--token " not in help_text
+
+
+# ------------------------------------------------------------------- prune
+
+
+def seed_old_run(runner: CliRunner, env: dict[str, str], project: str = "p") -> None:
+    """Import a report. The fixture carries its own timestamp, so it is already
+    old enough for any cutoff these tests use."""
+    run(runner, env, "ingest", str(junit("simple.xml")), "--project", project)
+    # `get_settings` is process-wide and cached, and these tests make several
+    # invocations inside one process where the real CLI would make one per
+    # process. Without this, the second invocation reuses the first one's
+    # environment.
+    reset_settings_cache()
+
+
+def everything_said(result: Any) -> str:
+    """All the ways a Typer run can report a failure, in one string.
+
+    A `TestHubError` reaches the console script through `main()`, which the
+    runner does not call, so it arrives here as `result.exception`; a usage
+    error goes to stderr; ordinary output goes to stdout.
+    """
+    parts = [result.stdout or ""]
+    with contextlib.suppress(ValueError):  # capture mode dependent
+        parts.append(result.stderr or "")
+    if result.exception is not None:
+        parts.append(str(result.exception))
+    return "\n".join(parts)
+
+
+def test_prune_dry_run_deletes_nothing(runner: CliRunner, cli_env: dict[str, str]) -> None:
+    seed_old_run(runner, cli_env)
+    plan = run(runner, cli_env, "prune", "--before", "2030-01-01", "--keep-min", "0", "--dry-run")
+    assert plan.exit_code == 0
+    assert "would be removed" in plan.stdout
+
+    listing = run(
+        runner, cli_env, "prune", "--before", "2030-01-01", "--keep-min", "0", "--dry-run"
+    )
+    assert "1 run(s) would be removed" in listing.stdout, "the dry run must not have consumed it"
+
+
+def test_prune_deletes_with_yes(runner: CliRunner, cli_env: dict[str, str]) -> None:
+    seed_old_run(runner, cli_env)
+    result = run(runner, cli_env, "prune", "--before", "2030-01-01", "--keep-min", "0", "--yes")
+    assert result.exit_code == 0
+    assert "pruned 1 run(s)" in result.stdout
+
+    after = run(runner, cli_env, "prune", "--before", "2030-01-01", "--keep-min", "0", "--dry-run")
+    assert "nothing to prune" in after.stdout
+
+
+def test_prune_without_a_cutoff_explains_itself(runner: CliRunner, cli_env: dict[str, str]) -> None:
+    result = runner.invoke(cli_app, ["prune"], env=cli_env)
+    assert result.exit_code != 0
+    assert "TEST_HUB_RETENTION_DAYS" in everything_said(result)
+
+
+def test_prune_reads_the_default_cutoff_from_the_setting(
+    runner: CliRunner, cli_env: dict[str, str]
+) -> None:
+    seed_old_run(runner, cli_env)
+    env = {**cli_env, "TEST_HUB_RETENTION_DAYS": "1"}
+    result = run(runner, env, "prune", "--keep-min", "0", "--dry-run")
+    assert result.exit_code == 0
+    assert "1 run(s) would be removed" in result.stdout
+
+
+def test_prune_refuses_to_prompt_when_there_is_no_terminal(
+    runner: CliRunner, cli_env: dict[str, str]
+) -> None:
+    """A cron entry that forgot --yes must fail loudly, not block on a prompt
+    nobody will ever answer."""
+    seed_old_run(runner, cli_env)
+    result = runner.invoke(
+        cli_app, ["prune", "--before", "2030-01-01", "--keep-min", "0"], env=cli_env
+    )
+    assert result.exit_code != 0
+    assert "--yes" in everything_said(result)
+
+    still_there = run(
+        runner, cli_env, "prune", "--before", "2030-01-01", "--keep-min", "0", "--dry-run"
+    )
+    assert "1 run(s) would be removed" in still_there.stdout
+
+
+def test_prune_json_is_machine_readable(runner: CliRunner, cli_env: dict[str, str]) -> None:
+    seed_old_run(runner, cli_env)
+    result = run(
+        runner, cli_env, "prune", "--before", "2030-01-01", "--keep-min", "0", "--yes", "--json"
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["runs"] == 1
+    assert payload["dry_run"] is False
+    assert payload["deleted"]["events"] > 0
+    assert payload["by_project"] == {"p": 1}
+
+
+def test_prune_rejects_two_ways_of_saying_the_same_cutoff(
+    runner: CliRunner, cli_env: dict[str, str]
+) -> None:
+    result = runner.invoke(
+        cli_app, ["prune", "--older-than", "30d", "--before", "2030-01-01"], env=cli_env
+    )
+    assert result.exit_code != 0
+    assert "pass one" in everything_said(result)
+
+
+def test_prune_rejects_an_unreadable_duration(runner: CliRunner, cli_env: dict[str, str]) -> None:
+    result = runner.invoke(cli_app, ["prune", "--older-than", "3 months"], env=cli_env)
+    assert result.exit_code != 0
+    assert "90d" in everything_said(result)

@@ -33,10 +33,13 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import os
 import re
+import time
 import uuid
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from pathlib import Path
-from typing import IO
+from typing import IO, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -45,7 +48,7 @@ from test_hub.config import Settings
 from test_hub.domain.identity import workspace_id as derive_workspace_id
 from test_hub.domain.models import Artifact, utcnow
 from test_hub.errors import NotFoundError, PayloadTooLargeError, ValidationError
-from test_hub.storage.base import StoredArtifact
+from test_hub.storage.base import ArtifactSweep, StoredArtifact
 from test_hub.storage.models import ArtifactRow, RunRow, short_text
 from test_hub.storage.repositories import artifact_to_model
 
@@ -54,6 +57,14 @@ __all__ = ["CHUNK_SIZE", "FilesystemArtifactStore", "sanitize_artifact_name"]
 #: Streaming chunk. Large enough that the syscall overhead disappears, small
 #: enough that a rejected 10 GB upload never holds 10 GB of anything.
 CHUNK_SIZE = 64 * 1024
+
+#: SQLite's default ``SQLITE_MAX_VARIABLE_NUMBER`` is 999 on builds old enough to
+#: still be shipped by a distribution. Every ``IN`` list here is chunked below
+#: that, because the failure is a hard error at the driver rather than a slow
+#: query, and it only appears once somebody prunes a big enough window.
+_PARAM_CHUNK = 500
+
+_T = TypeVar("_T")
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
@@ -65,6 +76,11 @@ _RESERVED_NAMES = frozenset(
     | {f"com{index}" for index in range(1, 10)}
     | {f"lpt{index}" for index in range(1, 10)}
 )
+
+
+def _chunks(items: Sequence[_T], size: int) -> Iterator[Sequence[_T]]:
+    for start in range(0, len(items), size):
+        yield items[start : start + size]
 
 
 def sanitize_artifact_name(name: str) -> str:
@@ -162,6 +178,14 @@ class FilesystemArtifactStore:
             # Same content, already stored. Rewriting it would replace a good
             # file with an identical one and briefly unlink it for readers.
             temp.unlink(missing_ok=True)
+            # Touch it, though. This path takes no write lock — the row is
+            # recorded later — so without a bump the mtime would mean "first
+            # time anyone uploaded these bytes" and the retention sweep could
+            # unlink a blob between this `put` and its `record`. Bumped, mtime
+            # means *last* upload, which is what the sweep's grace window needs
+            # to be safe (ADR-0002 D4).
+            with contextlib.suppress(OSError):
+                os.utime(final)
             return StoredArtifact(sha256=sha256, size_bytes=size, path=str(final), created=False)
 
         final.parent.mkdir(parents=True, exist_ok=True)
@@ -181,6 +205,73 @@ class FilesystemArtifactStore:
 
     def exists(self, sha256: str) -> bool:
         return self.path_for(sha256).is_file()
+
+    def collect_unreferenced(
+        self,
+        digests: Iterable[str],
+        *,
+        grace_seconds: float,
+        excluding_runs: Collection[uuid.UUID] = (),
+        apply: bool = True,
+    ) -> ArtifactSweep:
+        """Unlink blobs that no row points at any more.
+
+        Content addressing is why this cannot be a per-run delete: one blob
+        backs every row that ever uploaded those bytes, across runs and across
+        projects, so "this run is gone" says nothing about whether its
+        screenshot is still somebody else's screenshot. The only safe question
+        is whether *any* row still names the digest, and it must be asked after
+        the deleting transaction has committed — unlinking first means a
+        rollback leaves live rows pointing at missing files.
+
+        ``excluding_runs`` treats rows belonging to those runs as already gone,
+        which is what lets a dry run report the same numbers the real sweep
+        would produce without deleting anything first.
+
+        ``grace_seconds`` is the race guard. :meth:`put` short-circuits on
+        content that is already stored and takes no write lock to do it, so an
+        importer can be between its ``put`` and its ``record`` while this runs.
+        ``put`` touches the file on that path, so a recent mtime means "somebody
+        uploaded these bytes recently" and this leaves it alone.
+        """
+        sweep = ArtifactSweep()
+        excluded = set(excluding_runs)
+        for digest in dict.fromkeys(digests):  # de-duplicate, keep order
+            path = self.path_for(digest)
+            try:
+                stat = path.stat()
+            except OSError:
+                continue  # already gone, or never landed
+            if self._still_referenced(digest, excluded):
+                sweep.retained += 1
+                continue
+            if grace_seconds > 0 and (time.time() - stat.st_mtime) < grace_seconds:
+                sweep.retained += 1
+                continue
+            if apply and not self.delete(digest):
+                continue
+            sweep.unlinked += 1
+            sweep.bytes_freed += stat.st_size
+        return sweep
+
+    def _still_referenced(self, digest: str, excluded: Collection[uuid.UUID]) -> bool:
+        """Does any surviving artifact row name this digest?
+
+        Indexed by ``ix_artifacts_sha256``, so this is a probe per candidate
+        rather than a scan. The ``excluded`` list is chunked because SQLite caps
+        the number of bound parameters in one statement, and a dry run over a
+        long retention window can produce far more run ids than that cap.
+        """
+        stmt = select(ArtifactRow.id).where(ArtifactRow.sha256 == digest)
+        if not excluded:
+            return self._session.execute(stmt.limit(1)).first() is not None
+        for chunk in _chunks(list(excluded), _PARAM_CHUNK):
+            survivor = self._session.execute(
+                stmt.where(ArtifactRow.run_id.not_in(chunk)).limit(1)
+            ).first()
+            if survivor is not None:
+                return True
+        return False
 
     def delete(self, sha256: str) -> bool:
         path = self.path_for(sha256)

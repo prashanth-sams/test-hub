@@ -448,10 +448,14 @@ size caps and by SQLite's single-writer ceiling, which under load means everyone
 else's imports queue behind it (see [Scaling](scaling.md)). If the port is
 reachable by anything you do not control, put a rate limit in the proxy.
 
-**There is no data retention, expiry or deletion.** No endpoint deletes a run, a
-project or an artifact; nothing ages data out; there is no artifact garbage
-collector, so a blob whose rows rolled back stays on disk forever. Storage grows
-monotonically. Plan a volume, or plan to `rm` the data directory.
+**Deletion is the terminal's job, not the API's.** No endpoint deletes a run, a
+project or an artifact, and that is a decision rather than a gap: authentication
+has two scopes, and the write one is what every CI publisher token holds, so a
+prune endpoint behind it would let a token that lives in a repository's CI
+settings delete a year of history ([ADR-0002](adr/0002-data-retention.md) D8).
+Retention is `test-hub prune`, on the host, run by someone with filesystem
+access — and it is not automatic, so until you schedule it nothing ages out and
+storage still grows monotonically. Plan a volume either way.
 
 **Nothing is encrypted at rest.** The SQLite file and the artifact tree are plain
 files. `ensure_directories()` chmods the data directory to `0700` and blobs to

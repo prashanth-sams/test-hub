@@ -19,7 +19,49 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Data retention.** `test-hub prune` deletes runs older than a cutoff, everything
+  under them, and the content-addressed artifact blobs left unreferenced as a
+  result. `--older-than 90d|6m|2w|1y`, or `--before <date>`; `--dry-run` prints the
+  plan and touches nothing. New settings `TEST_HUB_RETENTION_DAYS` (the command's
+  default cutoff — nothing sweeps on its own), `TEST_HUB_RETENTION_MIN_RUNS`
+  (runs always kept per project, default 5) and `TEST_HUB_ARTIFACT_GC_GRACE_HOURS`
+  (default 24). Deliberately CLI-only: the write scope is what CI publisher tokens
+  hold. See [ADR-0002](docs/adr/0002-data-retention.md).
+- `ArtifactStore.collect_unreferenced()`, which frees a content-addressed blob only
+  once no row anywhere still names its digest.
+- **A settings menu in the dashboard header**, replacing the light/dark toggle.
+  Theme is now a three-way choice — System, Light, Dark — so a reader who picked
+  one can hand it back to their operating system; an About block says whether the
+  page is a live server or an offline export, and which version and schema it is.
+  Built on a new `ui.menu()` primitive with the keyboard contract the dashboard
+  did not previously have anywhere: arrow keys, Home/End, and Escape returning
+  focus to the trigger.
+
+### Fixed
+
+- **The dashboard was served without `Cache-Control`.** `StaticFiles` sends an
+  `ETag` and a `Last-Modified` but no freshness directive, which browsers are free
+  to cache heuristically — so an upgraded Test Hub could keep running the previous
+  release's JavaScript against the current release's markup, with no error and no
+  console message. `/` and `/assets/*` now send `no-cache`, which revalidates and
+  still answers 304. The API is unchanged.
+- The live dashboard never knew its own version: `LiveDataProvider.meta` carried
+  only the API base, so the footer showed no version or schema in live mode. It
+  now reads both from `/healthz` at startup.
+- The theme could not be returned to "follow my operating system" once it had been
+  set. `theme.followSystem()` existed in `00-util.js` with nothing calling it; the
+  settings menu is now the caller.
+- `FilesystemArtifactStore.put()` now updates the mtime of content it finds already
+  stored, instead of leaving it at the first upload's. Nothing read that mtime
+  before; the artifact sweep does, and without the bump it could unlink bytes an
+  in-flight import was about to claim.
+
+### Changed
+
+- New migration `0002_retention_indexes` adds `ix_idempotency_keys_run_id`. That
+  table had no index but its primary key, so deleting by run scanned it whole.
 
 <!--
 Add entries here as you merge, under these headings, in this order. Delete the

@@ -203,6 +203,36 @@ class Settings(BaseSettings):
     flaky_window_runs: Annotated[int, Field(ge=2)] = 20
     open_browser: bool = False
 
+    # ------------------------------------------------------------ retention
+    #
+    # These bound how long data is *kept*, which is a different question from
+    # `history_window_days` above — that one bounds what the overview *shows*
+    # and deletes nothing. Nothing here sweeps on its own either: the settings
+    # are defaults for `test-hub prune`, which an operator schedules (ADR-0002
+    # D1). A setting that silently deleted data on a timer would take SQLite's
+    # single write lock at an hour nobody chose.
+    retention_days: Annotated[int | None, Field(ge=1)] = Field(
+        default=None,
+        description=(
+            "Default cutoff for `test-hub prune`, in days. Nothing is deleted until "
+            "that command runs; schedule it."
+        ),
+    )
+    retention_min_runs: Annotated[int, Field(ge=0)] = Field(
+        default=5,
+        description=(
+            "Runs always kept per project, however old. 0 disables the floor. Stops a "
+            "cutoff from deleting a dormant project out of existence."
+        ),
+    )
+    artifact_gc_grace_hours: Annotated[float, Field(ge=0)] = Field(
+        default=24.0,
+        description=(
+            "A content-addressed blob touched more recently than this is never "
+            "unlinked, even with no rows referencing it."
+        ),
+    )
+
     # ------------------------------------------------------------ validators
 
     @field_validator(

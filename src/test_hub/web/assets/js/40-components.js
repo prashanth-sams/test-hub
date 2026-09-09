@@ -33,7 +33,10 @@
     search: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z', 'm20 20-4.1-4.1'],
     back: ['M20 12H4', 'm10 6-6 6 6 6'],
     filter: ['M3.5 5.5h17l-6.5 7.6V19l-4 2v-7.9Z'],
-    clock: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7.2V12l3 1.8']
+    clock: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7.2V12l3 1.8'],
+    gear: ['M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z', 'M19.4 14.4a1.5 1.5 0 0 0 .3 1.7l.1.1a1.9 1.9 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-2.6 1v.2a1.9 1.9 0 1 1-3.8 0v-.1a1.5 1.5 0 0 0-2.6-1l-.1.1a1.9 1.9 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0-1-2.6h-.2a1.9 1.9 0 1 1 0-3.8h.1a1.5 1.5 0 0 0 1-2.6l-.1-.1a1.9 1.9 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 1.7.3h.1a1.5 1.5 0 0 0 .9-1.4v-.2a1.9 1.9 0 1 1 3.8 0v.1a1.5 1.5 0 0 0 2.6 1l.1-.1a1.9 1.9 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0-.3 1.7v.1a1.5 1.5 0 0 0 1.4.9h.2a1.9 1.9 0 1 1 0 3.8h-.1a1.5 1.5 0 0 0-1.4.9Z'],
+    check: ['m5 12.8 4.4 4.4L19 7.6'],
+    monitor: ['M4.5 4.8h15a1.5 1.5 0 0 1 1.5 1.5v8.4a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 14.7V6.3a1.5 1.5 0 0 1 1.5-1.5Z', 'M9 19.2h6M12 16.2v3']
   };
 
   function icon(name, size) {
@@ -621,8 +624,166 @@
     return { el: root, sync: sync };
   }
 
+  /* ---------------------------------------------------------------- menu */
+
+  /* An anchored popover with a trigger. The dashboard's first, so the keyboard
+   * contract is written here once rather than per caller:
+   *
+   *   Enter/Space/click  toggle, and on open move focus to the first item
+   *   ArrowDown/Up       roving focus within the panel, wrapping
+   *   Home/End           first / last item
+   *   Escape             close and return focus to the trigger
+   *   Tab                close, and let focus leave naturally
+   *   click outside      close, without stealing focus
+   *
+   * Returning focus to the trigger on Escape is the part that is easy to skip
+   * and impossible to work around: without it a keyboard user who opens the
+   * menu and changes their mind is dropped at the top of the document.
+   *
+   * `items` are built by the caller and are expected to carry a menu role
+   * (`menuitem`, `menuitemradio`); anything focusable inside the panel is
+   * treated as an item for arrow-key purposes.
+   */
+  function menu(spec) {
+    var id = spec.id || ('th-menu-' + Math.random().toString(36).slice(2, 8));
+    var open = false;
+
+    var panel = el('div', {
+      className: 'menu__panel',
+      attrs: {
+        id: id,
+        role: 'menu',
+        'aria-label': spec.label || 'Menu',
+        hidden: true
+      }
+    });
+
+    var trigger = el('button', {
+      className: 'iconbtn menu__trigger',
+      attrs: {
+        type: 'button',
+        'aria-haspopup': 'true',
+        'aria-expanded': 'false',
+        'aria-controls': id,
+        'aria-label': spec.label || 'Menu',
+        title: spec.title || spec.label || 'Menu'
+      }
+    }, icon(spec.icon || 'gear', 16));
+
+    var root = el('div', { className: 'menu' }, [trigger, panel]);
+
+    function items() {
+      return panel.querySelectorAll('[role^="menuitem"], button, [href], input, select');
+    }
+
+    function focusItem(index) {
+      var list = items();
+      if (!list.length) { return; }
+      var wrapped = (index + list.length) % list.length;
+      list[wrapped].focus();
+    }
+
+    function indexOfActive() {
+      var list = items();
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] === document.activeElement) { return i; }
+      }
+      return -1;
+    }
+
+    function setOpen(next, options) {
+      if (open === next) { return; }
+      open = next;
+      panel.hidden = !next;
+      root.setAttribute('data-open', String(next));
+      trigger.setAttribute('aria-expanded', String(next));
+      if (next) {
+        if (spec.onOpen) { spec.onOpen(panel); }
+        if (!options || options.focus !== false) { focusItem(0); }
+      } else if (options && options.restoreFocus) {
+        trigger.focus();
+      }
+    }
+
+    trigger.addEventListener('click', function () {
+      setOpen(!open, { focus: true });
+    });
+
+    panel.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setOpen(false, { restoreFocus: true });
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        focusItem(indexOfActive() + 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        focusItem(indexOfActive() - 1);
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        focusItem(0);
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        focusItem(items().length - 1);
+      } else if (event.key === 'Tab') {
+        setOpen(false);
+      }
+    });
+
+    trigger.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown' && !open) {
+        event.preventDefault();
+        setOpen(true, { focus: true });
+      } else if (event.key === 'Escape' && open) {
+        setOpen(false, { restoreFocus: true });
+      }
+    });
+
+    // Pointer-down rather than click: a click that starts inside the panel and
+    // ends outside it — a drag over a label — would otherwise close the menu.
+    function onDocumentMouseDown(event) {
+      if (!open || root.contains(event.target)) { return; }
+      setOpen(false);
+    }
+
+    // Focus leaving the menu entirely closes it, which covers Tab out and
+    // clicking straight into another control.
+    function onDocumentFocusIn(event) {
+      if (!open || root.contains(event.target)) { return; }
+      setOpen(false);
+    }
+
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    document.addEventListener('focusin', onDocumentFocusIn);
+
+    return {
+      el: root,
+      panel: panel,
+      trigger: trigger,
+      open: function () { setOpen(true, { focus: true }); },
+      close: function (options) { setOpen(false, options); },
+      isOpen: function () { return open; },
+      // These two listeners are on `document`, not on the menu, so dropping the
+      // element is not enough to collect them — a caller that mounts a menu per
+      // view would otherwise accumulate one pair per mount.
+      destroy: function () {
+        document.removeEventListener('mousedown', onDocumentMouseDown);
+        document.removeEventListener('focusin', onDocumentFocusIn);
+      }
+    };
+  }
+
+  function menuSection(title, children) {
+    return el('div', { className: 'menu__section' }, [
+      title ? el('div', { className: 'menu__label', text: title }) : null,
+      el('div', { className: 'menu__group' }, children)
+    ]);
+  }
+
   TestHub.ui = {
     icon: icon,
+    menu: menu,
+    menuSection: menuSection,
     statusPill: statusPill,
     liveBadge: liveBadge,
     tag: tag,
