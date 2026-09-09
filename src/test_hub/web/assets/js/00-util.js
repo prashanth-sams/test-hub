@@ -366,6 +366,24 @@
     return isNaN(parsed.getTime()) ? null : parsed;
   }
 
+  function formatDate(value) {
+    var date = toDate(value);
+    if (!date) { return '—'; }
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  /** Bytes in the largest unit that keeps the number readable. */
+  function formatBytes(count) {
+    var size = Number(count) || 0;
+    var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+    var index = 0;
+    while (size >= 1024 && index < units.length - 1) {
+      size /= 1024;
+      index += 1;
+    }
+    return (index === 0 ? size.toFixed(0) : size.toFixed(1)) + ' ' + units[index];
+  }
+
   function formatDateTime(value) {
     var date = toDate(value);
     if (!date) { return DASH; }
@@ -659,6 +677,8 @@
     formatDelta: formatDelta,
     deltaDirection: deltaDirection,
     formatDuration: formatDuration,
+    formatBytes: formatBytes,
+    formatDate: formatDate,
     formatDateTime: formatDateTime,
     formatTime: formatTime,
     formatDay: formatDay,

@@ -121,9 +121,25 @@
       onOpen: fillAbout
     });
 
+    /* Retention lives on a page, not in here. A dropdown is the wrong shape for
+     * something irreversible — it is small, it closes when focus moves, and it
+     * would put "delete 4,000 rows" one stray click from the theme switch. This
+     * is the doorway; the preview and the confirmation are on the page. */
+    var dataItems = [
+      el('a', {
+        className: 'menu__item',
+        attrs: { role: 'menuitem', href: '#/settings' },
+        on: { click: function () { control.close(); } }
+      }, [
+        ui.icon('gear', 15),
+        el('span', { className: 'menu__item-label', text: 'Retention and data\u2026' })
+      ])
+    ];
+
     util.appendChild(control.panel, [
       ui.menuSection('Theme', themeItems),
       systemHint,
+      provider.kind === 'snapshot' ? null : ui.menuSection('Data', dataItems),
       about
     ]);
     fillAbout();

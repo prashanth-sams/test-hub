@@ -125,6 +125,22 @@ class TokenVerifier:
             hashes.append(hash_token(plaintext))
         return cls(hashes=hashes, enabled=bool(getattr(settings, "auth_enabled", False)))
 
+    @classmethod
+    def admin_from_settings(cls, settings: object) -> TokenVerifier:
+        """The verifier for destructive maintenance.
+
+        Always ``enabled``, whatever ``auth_enabled`` says, and deliberately so:
+        this verifier answers "is this caller an administrator", which is not the
+        same question as "is authentication switched on". An instance with no
+        admin tokens configured therefore accepts no admin token at all, and
+        :func:`test_hub.api.deps.require_admin` is the only thing that decides
+        whether an unauthenticated loopback caller may proceed without one.
+        """
+        hashes = list(getattr(settings, "admin_token_hashes", []) or [])
+        for plaintext in getattr(settings, "admin_tokens", []) or []:
+            hashes.append(hash_token(plaintext))
+        return cls(hashes=hashes, enabled=True)
+
     def __bool__(self) -> bool:
         return bool(self.hashes)
 

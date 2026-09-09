@@ -58,7 +58,8 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from test_hub.service.runtime import AppContext
 
 __all__ = [
-    "UNIT_DAYS",
+    "DEFAULT_UNIT",
+    "UNIT_HOURS",
     "UNLINKED_TABLES",
     "PruneResult",
     "RetentionPolicy",
@@ -84,18 +85,26 @@ UNLINKED_TABLES: tuple[str, ...] = ("artifacts", "events", "idempotency_keys")
 #: Statuses that mean the run may still be being written to.
 _LIVE_STATUSES: tuple[str, ...] = (RunStatus.QUEUED.value, RunStatus.RUNNING.value)
 
-#: The duration grammar, in days. ``m`` is thirty days and ``y`` is three
+#: The duration grammar, in hours. ``m`` is thirty days and ``y`` is three
 #: hundred and sixty-five — deliberately not calendar arithmetic, which would
 #: mean taking on ``dateutil`` so that a retention cutoff could land on the
 #: 31st. Fixed-length units are predictable, are one line to test, and are what
 #: every log-rotation tool already means.
-UNIT_DAYS: dict[str, int] = {"d": 1, "w": 7, "m": 30, "y": 365}
+#:
+#: Hours are here because "clear the last hour" is a real thing to want after a
+#: bad import, and the alternative — a fractional day — is not something anyone
+#: should have to write.
+UNIT_HOURS: dict[str, int] = {"h": 1, "d": 24, "w": 24 * 7, "m": 24 * 30, "y": 24 * 365}
 
-_DURATION_RE = re.compile(r"^\s*(\d+)\s*([dwmy]?)\s*$", re.IGNORECASE)
+#: The default unit when a bare number is given. Days, because a retention
+#: policy is measured in days far more often than in hours.
+DEFAULT_UNIT = "d"
+
+_DURATION_RE = re.compile(r"^\s*(\d+)\s*([hdwmy]?)\s*$", re.IGNORECASE)
 
 
 def parse_duration(text: str) -> timedelta:
-    """``90d``, ``6m``, ``2w``, ``1y``, or a bare number of days.
+    """``12h``, ``90d``, ``2w``, ``6m``, ``1y``, or a bare number of days.
 
     Raises :class:`~test_hub.errors.ConfigurationError` with the whole grammar
     in the message, because this is read off a cron entry that nobody is
@@ -105,8 +114,8 @@ def parse_duration(text: str) -> timedelta:
     if match is None:
         raise ConfigurationError(
             f"cannot read {text!r} as a duration. Use a number of days, or a number "
-            f"followed by d (day), w (7 days), m (30 days) or y (365 days) — "
-            f"for example 90d, 6m, 2w, 1y.",
+            f"followed by h (hour), d (day), w (7 days), m (30 days) or y (365 days) — "
+            f"for example 12h, 90d, 2w, 6m, 1y.",
             detail={"value": text},
         )
     amount = int(match.group(1))
@@ -115,7 +124,7 @@ def parse_duration(text: str) -> timedelta:
             f"a retention cutoff must be a positive duration, not {text!r}",
             detail={"value": text},
         )
-    return timedelta(days=amount * UNIT_DAYS[(match.group(2) or "d").lower()])
+    return timedelta(hours=amount * UNIT_HOURS[(match.group(2) or DEFAULT_UNIT).lower()])
 
 
 def resolve_cutoff(

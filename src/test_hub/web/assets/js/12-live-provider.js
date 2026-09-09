@@ -108,12 +108,25 @@
 
     /* ------------------------------------------------------------- fetch */
 
-    function request(path, params) {
+    function post(path, body) {
+      return request(path, null, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body || {})
+      });
+    }
+
+    function request(path, params, overrides) {
       var query = util.buildQuery(params || {});
       var url = joinUrl(apiBase, path) + (query ? '?' + query : '');
       var controller = null;
       var timer = null;
       var init = { method: 'GET', headers: { Accept: 'application/json' }, credentials: 'same-origin' };
+      if (overrides) {
+        for (var key in overrides) {
+          if (Object.prototype.hasOwnProperty.call(overrides, key)) { init[key] = overrides[key]; }
+        }
+      }
       if (window.AbortController) {
         controller = new window.AbortController();
         init.signal = controller.signal;
@@ -351,6 +364,25 @@
      * server that predates that endpoint, and `/projects` fills the project
      * list on a workspace whose runs have all aged out of the window.
      */
+    /* ------------------------------------------------------- retention */
+
+    /* Destructive, and behind the admin scope server-side. It still belongs on
+     * the provider rather than in the view: ADR-0001 D1 says views never call
+     * `fetch`, and that rule is worth more here than anywhere else — a view that
+     * built its own DELETE would be a view the snapshot mode could not stub out. */
+
+    self.getRetention = function () {
+      return request('retention');
+    };
+
+    self.previewPrune = function (body) {
+      return post('retention/preview', body);
+    };
+
+    self.runPrune = function (body) {
+      return post('retention/prune', body);
+    };
+
     self.getFacets = function () {
       var projectsPromise = request('projects').then(function (payload) {
         return (payload.projects || []).map(function (project) { return project.key; });

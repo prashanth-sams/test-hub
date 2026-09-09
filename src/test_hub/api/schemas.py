@@ -45,6 +45,9 @@ __all__ = [
     "HealthResponse",
     "ImportResponse",
     "ProjectListResponse",
+    "PruneRequest",
+    "PruneResponse",
+    "RetentionSettingsResponse",
     "RunListResponse",
 ]
 
@@ -208,3 +211,80 @@ class HealthResponse(_Response):
 
 
 ARTIFACT_KINDS = [kind.value for kind in ArtifactKind]
+
+
+# ----------------------------------------------------------------- retention
+
+
+class RetentionSettingsResponse(_Response):
+    """What the dashboard needs to draw the retention panel.
+
+    ``admin`` is about *this caller*, not about the server: it answers "may the
+    person holding this page delete anything", which is the only question the UI
+    can act on. A dashboard that drew a delete button and then got a 403 would be
+    worse than one that never drew it.
+    """
+
+    admin: bool = Field(description="Whether this caller may run a prune.")
+    retention_days: int | None = Field(
+        default=None, description="The configured default cutoff, if any."
+    )
+    min_runs: int = Field(description="Runs always kept per project.")
+    grace_hours: float = Field(description="How long a new artifact blob is protected.")
+    units: dict[str, int] = Field(description="The duration grammar, in hours per unit.")
+
+
+class PruneRequest(_Request):
+    """A cutoff, expressed the way the caller prefers.
+
+    Exactly one of ``older_than`` and ``before``. ``confirm`` is required for the
+    destructive endpoint and ignored by the preview: an API that deletes a year
+    of history on a request a client sent by accident is an API with one field
+    missing.
+    """
+
+    older_than: str | None = Field(
+        default=None,
+        description="A duration: 90d, 6m, 2w, 1y, 12h, or a bare number of days.",
+    )
+    before: AwareDatetime | None = Field(
+        default=None, description="An absolute cutoff. Runs at or before it are removed."
+    )
+    keep_min: int | None = Field(
+        default=None, ge=0, description="Runs kept per project. Defaults to the server setting."
+    )
+    project_keys: list[str] = Field(default_factory=list, description="Restrict to these projects.")
+    by_import_date: bool = Field(
+        default=False, description="Cut on when the run was imported, not when it ran."
+    )
+    include_unfinished: bool = Field(
+        default=False, description="Also remove queued and running runs past the cutoff."
+    )
+    confirm: bool = Field(default=False, description="Required by the destructive endpoint.")
+
+
+class PruneResponse(_Response):
+    """What a prune did, or — when ``dry_run`` — what it would do."""
+
+    dry_run: bool
+    cutoff: AwareDatetime
+    runs: int
+    rows: int
+    deleted: dict[str, int]
+    blobs_unlinked: int
+    blobs_retained: int
+    bytes_freed: int
+    skipped_live: int
+    protected: int
+    batches: int
+    vacuumed: bool = Field(
+        default=False,
+        description=(
+            "Always false over HTTP. VACUUM rewrites the whole database behind an "
+            "exclusive lock, which is not something a web request should start; run "
+            "`test-hub prune --vacuum` on the host to reclaim the file space."
+        ),
+    )
+    by_project: dict[str, int]
+    oldest: AwareDatetime | None = None
+    newest: AwareDatetime | None = None

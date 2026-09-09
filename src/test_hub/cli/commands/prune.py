@@ -32,8 +32,8 @@ def prune(
         str | None,
         typer.Option(
             "--older-than",
-            help="Delete runs older than this: 90d, 6m, 2w, 1y, or a bare number of days. "
-            "m is 30 days and y is 365 — not calendar months or years.",
+            help="Delete runs older than this: 12h, 90d, 2w, 6m, 1y, or a bare number "
+            "of days. m is 30 days and y is 365 — not calendar months or years.",
         ),
     ] = None,
     before: Annotated[

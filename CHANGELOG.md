@@ -31,6 +31,21 @@ one of those is listed under **Changed** or **Removed** with the migration.
   hold. See [ADR-0002](docs/adr/0002-data-retention.md).
 - `ArtifactStore.collect_unreferenced()`, which frees a content-addressed blob only
   once no row anywhere still names its digest.
+- **Retention from the dashboard.** The gear menu's *Retention and data…* opens a
+  Settings page that shows the configured policy and clears old data by a cutoff in
+  hours, days, weeks, months or years. It previews exactly what would be deleted —
+  runs, tests, attempts, events and artifact bytes, broken down by project — before
+  anything is, and changing any field discards the preview so the delete button
+  always describes the numbers on screen.
+- **An administrator scope.** `POST /api/v1/retention/preview` and
+  `/retention/prune` are the only destructive endpoints and are guarded by
+  `TEST_HUB_ADMIN_TOKEN_HASHES`, a separate list from the publisher tokens —
+  create one with `test-hub token create --admin`. An unauthenticated loopback
+  instance is admin already; a public bind with `--insecure-no-auth` is not.
+  `GET /api/v1/retention` reports whether the calling request may prune, so the
+  dashboard never draws a control that would 403.
+- **Hours are a retention unit.** `--older-than 12h`, for clearing up after a bad
+  import. `UNIT_DAYS` became `UNIT_HOURS`.
 - **A settings menu in the dashboard header**, replacing the light/dark toggle.
   Theme is now a three-way choice — System, Light, Dark — so a reader who picked
   one can hand it back to their operating system; an About block says whether the
@@ -62,6 +77,9 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 - New migration `0002_retention_indexes` adds `ix_idempotency_keys_run_id`. That
   table had no index but its primary key, so deleting by run scanned it whole.
+- ADR-0002 D8 is amended. It originally ruled out a REST endpoint for pruning
+  entirely; the reasoning underneath it was never "no endpoint" but "not on the
+  publisher's credential", and that is what the admin scope implements.
 
 <!--
 Add entries here as you merge, under these headings, in this order. Delete the

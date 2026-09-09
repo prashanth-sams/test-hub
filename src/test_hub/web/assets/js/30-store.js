@@ -92,6 +92,9 @@
       if (head === 'tests') {
         return { name: 'runs', params: {}, query: parsed.query };
       }
+      if (head === 'settings') {
+        return { name: 'settings', params: {}, query: parsed.query };
+      }
       return { name: 'overview', params: {}, query: parsed.query };
     }
 

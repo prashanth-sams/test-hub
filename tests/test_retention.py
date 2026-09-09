@@ -25,7 +25,7 @@ from test_hub.domain.status import RunStatus
 from test_hub.errors import ConfigurationError
 from test_hub.service.imports import ImportRequest, ImportService
 from test_hub.service.retention import (
-    UNIT_DAYS,
+    UNIT_HOURS,
     UNLINKED_TABLES,
     RetentionPolicy,
     RetentionService,
@@ -528,11 +528,24 @@ def test_duration_grammar(text: str, days: int) -> None:
     assert parse_duration(text) == timedelta(days=days)
 
 
+@pytest.mark.parametrize(("text", "hours"), [("1h", 1), ("24h", 24), ("36H", 36), ("2h", 2)])
+def test_hour_grammar(text: str, hours: int) -> None:
+    assert parse_duration(text) == timedelta(hours=hours)
+
+
 def test_a_month_is_thirty_days_and_says_so() -> None:
-    """Fixed-length units, not calendar arithmetic — see UNIT_DAYS."""
-    assert UNIT_DAYS["m"] == 30
-    assert UNIT_DAYS["y"] == 365
+    """Fixed-length units, not calendar arithmetic — see UNIT_HOURS."""
+    assert UNIT_HOURS["m"] == 24 * 30
+    assert UNIT_HOURS["y"] == 24 * 365
     assert parse_duration("6m") == timedelta(days=180)
+
+
+def test_hours_are_a_unit() -> None:
+    """"Clear the last hour" is a real thing to want after a bad import, and a
+    fractional day is not something anyone should have to write."""
+    assert parse_duration("1h") == timedelta(hours=1)
+    assert parse_duration("36h") == timedelta(hours=36)
+    assert UNIT_HOURS["h"] == 1
 
 
 @pytest.mark.parametrize("text", ["", "soon", "-5d", "3 months", "90dd", "1.5d", "d", "9x"])

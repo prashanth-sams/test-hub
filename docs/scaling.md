@@ -272,7 +272,9 @@ unreferenced as a result ([ADR-0002](adr/0002-data-retention.md)). Two things it
 is not: it is not automatic — nothing sweeps until you schedule the command — and
 it is not a size ceiling, because the policy is age with a per-project floor, so
 a workspace full of dormant projects keeps `--keep-min` runs of each regardless
-of the cutoff. There is still no deletion *endpoint*, deliberately (D8).
+of the cutoff. The dashboard's Settings page drives the same service over
+`/api/v1/retention`, behind an administrator token that is deliberately separate
+from the one CI publishes with (D8).
 
 **One workspace.** The column is on every row from the first migration
 (ADR-0001 D9) precisely so that adding tenancy later is not the migration nobody

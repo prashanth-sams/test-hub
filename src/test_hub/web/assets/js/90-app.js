@@ -22,7 +22,8 @@
     overview: function () { return TestHub.views.overview; },
     runs: function () { return TestHub.views.runs; },
     run: function () { return TestHub.views.run; },
-    test: function () { return TestHub.views.test; }
+    test: function () { return TestHub.views.test; },
+    settings: function () { return TestHub.views.settings; }
   };
 
   var STATUS_TEXT = {
@@ -123,7 +124,9 @@
     }
 
     function syncNav(state) {
-      var name = state.route.name === 'run' ? 'runs' : (state.route.name === 'test' ? 'runs' : state.route.name);
+      var name = state.route.name === 'run' || state.route.name === 'test'
+        ? 'runs'
+        : state.route.name;
       for (var i = 0; i < navLinks.length; i++) {
         var link = navLinks[i];
         if (link.getAttribute('data-route') === name) {

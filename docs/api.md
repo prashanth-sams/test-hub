@@ -59,6 +59,29 @@ Two header forms are accepted, and they are the same token checked the same way:
 -H "X-API-Key: $TEST_HUB_TOKEN"
 ```
 
+### Scopes
+
+Three, and the third one matters:
+
+| Scope | Guards | Configured with |
+|---|---|---|
+| read | Every `GET`. Open by default even with auth on; `TEST_HUB_REQUIRE_AUTH_FOR_READS=true` closes it. | `TEST_HUB_API_TOKEN_HASHES` |
+| write | Imports, run creation, events, artifacts. | `TEST_HUB_API_TOKEN_HASHES` |
+| **admin** | `/retention/*` — the only endpoints that delete anything. | `TEST_HUB_ADMIN_TOKEN_HASHES` |
+
+Admin is a separate list, not a flag on a write token, because the write token is
+the one that lives in every repository's CI settings and gets copied between
+projects. A credential that can post a test result must not also be able to delete
+a year of them ([ADR-0002](adr/0002-data-retention.md) D8).
+
+```shell
+$ test-hub token create --admin
+```
+
+An unauthenticated **loopback** instance is admin without a token — anyone who can
+reach that port can already run `test-hub prune` on the host. A public bind with
+`--insecure-no-auth` is not.
+
 `X-API-Key` exists because a surprising number of CI systems make it awkward to
 set an `Authorization` header on a generic HTTP step. Prefer `Bearer` when you
 have the choice.
@@ -907,3 +930,73 @@ a `Last-Event-ID` from one worker means nothing to another. `test-hub serve`
 therefore runs exactly one worker, and the fix when that ceiling bites is a
 shared bus behind the `EventBus` protocol, not `--workers 4`. See
 [Scaling](scaling.md#the-bus).
+
+
+## `GET /api/v1/retention`
+
+The retention policy, and whether *this caller* may act on it. The dashboard asks
+this first so it can render an explanation instead of a form that would 403.
+
+```shell
+$ curl -s "$HUB/api/v1/retention" | jq
+{
+  "admin": true,
+  "retention_days": null,
+  "min_runs": 5,
+  "grace_hours": 24.0,
+  "units": {"h": 1, "d": 24, "w": 168, "m": 720, "y": 8760}
+}
+```
+
+`units` is hours per unit, and it is the server's copy of the duration grammar —
+`m` is 30 days and `y` is 365, not calendar arithmetic.
+
+## `POST /api/v1/retention/preview`
+
+Counts what a prune would remove. Writes nothing, and runs in a read-only
+transaction so it does not queue in front of a publisher. **Admin scope.**
+
+```shell
+$ curl -sX POST "$HUB/api/v1/retention/preview" \
+    -H 'content-type: application/json' \
+    -H "Authorization: Bearer $TEST_HUB_ADMIN_TOKEN" \
+    -d '{"older_than":"90d","keep_min":5}' | jq '{runs, rows, by_project, bytes_freed}'
+{
+  "runs": 47,
+  "rows": 18402,
+  "by_project": {"payments-api": 22, "storefront-web": 15, "ledger-worker": 10},
+  "bytes_freed": 64381952
+}
+```
+
+`older_than` takes `12h`, `90d`, `2w`, `6m`, `1y` or a bare number of days;
+`before` takes an absolute timestamp instead. Exactly one of the two.
+
+Failure modes: 403 without an admin token, 422 when the duration cannot be read
+or neither cutoff was given.
+
+## `POST /api/v1/retention/prune`
+
+The same request, executed. **Irreversible**, and **admin scope**.
+
+```shell
+$ curl -sX POST "$HUB/api/v1/retention/prune" \
+    -H 'content-type: application/json' \
+    -H "Authorization: Bearer $TEST_HUB_ADMIN_TOKEN" \
+    -d '{"older_than":"90d","keep_min":5,"confirm":true}' | jq '{runs, rows, blobs_unlinked}'
+{"runs": 47, "rows": 18402, "blobs_unlinked": 24}
+```
+
+`confirm: true` is required and there is no default. An API that destroys a year
+of history on a request somebody sent by accident is an API with one field
+missing; the omission answers 422 and changes nothing.
+
+The response shape is identical to the preview's, with `dry_run: false`. Deletion
+happens in committed batches rather than one transaction — SQLite serializes
+writers, and holding the write lock for a whole prune would stall every publisher
+for its duration. An interrupted call is therefore not atomic and is safe to
+repeat: the counts returned are what committed.
+
+`vacuumed` is always `false` here. Reclaiming the file space rewrites the whole
+database behind an exclusive lock, which is not something an HTTP request should
+start — run `test-hub prune --vacuum` on the host.

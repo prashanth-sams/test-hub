@@ -356,3 +356,59 @@ def test_the_api_is_left_alone(client: Any) -> None:
     """The cache directive is for the dashboard. The API and SSE set their own."""
     headers = {key.lower() for key in client.get("/api/v1/projects").headers}
     assert "cache-control" not in headers
+
+
+# ------------------------------------------------------------------ retention
+
+
+def settings_view_source() -> str:
+    return (WEB / "assets" / "js" / "70-view-settings.js").read_text(encoding="utf-8")
+
+
+def test_the_settings_view_is_shipped() -> None:
+    assert "assets/js/70-view-settings.js" in MANIFEST["js"]
+    assert "#/settings" in settings_source(), "the menu has no way into the view"
+
+
+def test_deleting_needs_a_preview_first() -> None:
+    """The two-step flow is the safety. A delete button that could be pressed
+    without the counts in front of it would be a delete button pressed blind."""
+    source = settings_view_source()
+    assert "if (preview === null) { return null; }" in source, "the preview card is unconditional"
+    assert "invalidatePreview" in source, "changing the cutoff must throw the preview away"
+    assert "confirm: true" in source
+
+
+def test_changing_any_input_invalidates_the_preview() -> None:
+    """Otherwise the button says "delete 30 runs" while describing a cutoff the
+    reader has already changed."""
+    source = settings_view_source()
+    body = source[source.index("function formCard") : source.index("function previewCard")]
+    for field in ("th-retention-amount", "th-retention-keep", "th-retention-unfinished"):
+        assert field in body
+    assert body.count("invalidatePreview") >= 4
+
+
+def test_the_view_never_calls_fetch_itself() -> None:
+    """ADR-0001 D1: views talk to the provider, never to the network. It is what
+    lets snapshot mode answer `admin: false` instead of erroring."""
+    source = settings_view_source()
+    assert "fetch(" not in source
+    assert "XMLHttpRequest" not in source
+    for call in ("provider.getRetention", "provider.previewPrune", "provider.runPrune"):
+        assert call in source
+
+
+def test_a_snapshot_says_it_cannot_prune() -> None:
+    """A frozen file has no server to ask; the view must render its explanation
+    rather than a form that cannot work."""
+    snapshot = (WEB / "assets" / "js" / "11-snapshot-provider.js").read_text(encoding="utf-8")
+    assert "getRetention" in snapshot
+    assert "admin: false" in snapshot
+
+
+def test_the_danger_button_is_styled_after_the_base_button() -> None:
+    """`.btn--danger` overrides `.btn`'s own background at the same specificity,
+    so source order is the only thing that decides which wins."""
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert css.index(".btn--danger") > css.index(".btn--primary")

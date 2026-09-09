@@ -448,14 +448,24 @@ size caps and by SQLite's single-writer ceiling, which under load means everyone
 else's imports queue behind it (see [Scaling](scaling.md)). If the port is
 reachable by anything you do not control, put a rate limit in the proxy.
 
-**Deletion is the terminal's job, not the API's.** No endpoint deletes a run, a
-project or an artifact, and that is a decision rather than a gap: authentication
-has two scopes, and the write one is what every CI publisher token holds, so a
-prune endpoint behind it would let a token that lives in a repository's CI
-settings delete a year of history ([ADR-0002](adr/0002-data-retention.md) D8).
-Retention is `test-hub prune`, on the host, run by someone with filesystem
-access — and it is not automatic, so until you schedule it nothing ages out and
-storage still grows monotonically. Plan a volume either way.
+**Deleting data needs its own credential.** `POST /api/v1/retention/prune` is the
+only destructive endpoint, and it is behind a third scope rather than the write
+one: `require_write` is what every CI publisher token holds, and those tokens live
+in repository settings, get copied between projects and are the likeliest to leak.
+A credential that can post a test result must not also be able to delete a year of
+them ([ADR-0002](adr/0002-data-retention.md) D8). Configure
+`TEST_HUB_ADMIN_TOKEN_HASHES` with `test-hub token create --admin`.
+
+An unauthenticated **loopback** instance is admin without a token, because anyone
+who can reach that port can already run `test-hub prune` in a terminal. An
+instance bound to a public interface with `--insecure-no-auth` is **not** — open
+writes are a choice you made knowingly, and open deletes are a second one.
+
+Nothing ages out on a timer, so until you schedule a prune, storage still grows
+monotonically. Plan a volume either way.
+
+**No single-run deletion.** There is no `DELETE /runs/{id}`. Removing one bad
+import means a cutoff that covers it, or `test-hub prune` on the host.
 
 **Nothing is encrypted at rest.** The SQLite file and the artifact tree are plain
 files. `ensure_directories()` chmods the data directory to `0700` and blobs to

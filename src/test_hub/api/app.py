@@ -33,7 +33,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from test_hub.api.routes import health, imports, queries, runs, stream
+from test_hub.api.routes import health, imports, queries, retention, runs, stream
 from test_hub.api.security import TokenVerifier
 from test_hub.config import Settings, get_settings
 from test_hub.errors import TestHubError
@@ -192,6 +192,7 @@ def create_app(
         # Writes happen on worker threads; the bus needs this loop to publish onto.
         app.state.context.bus.bind_loop()
         app.state.verifier = TokenVerifier.from_settings(settings)
+        app.state.admin_verifier = TokenVerifier.admin_from_settings(settings)
         app.state.settings = settings
         for warning in settings.check_bind_safety():
             logger.warning(warning)
@@ -222,6 +223,7 @@ def create_app(
     app.include_router(runs.router, prefix=API_PREFIX)
     app.include_router(queries.router, prefix=API_PREFIX)
     app.include_router(stream.router, prefix=API_PREFIX)
+    app.include_router(retention.router, prefix=API_PREFIX)
 
     if settings.cors_allow_origins:
         app.add_middleware(

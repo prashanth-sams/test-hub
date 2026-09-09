@@ -19,8 +19,8 @@ from typing import Annotated
 
 from fastapi import Depends, Header, Request
 
-from test_hub.api.security import TokenVerifier
-from test_hub.errors import AuthenticationError
+from test_hub.api.security import TokenVerifier, parse_authorization
+from test_hub.errors import AuthenticationError, AuthorizationError
 from test_hub.service.imports import ImportService
 from test_hub.service.runs import RunService
 from test_hub.service.runtime import AppContext
@@ -32,6 +32,8 @@ __all__ = [
     "get_context",
     "get_import_service",
     "get_run_service",
+    "is_admin",
+    "require_admin",
     "require_read",
     "require_write",
 ]
@@ -44,6 +46,10 @@ def get_context(request: Request) -> AppContext:
 
 def get_verifier(request: Request) -> TokenVerifier:
     return request.app.state.verifier  # type: ignore[no-any-return]
+
+
+def get_admin_verifier(request: Request) -> TokenVerifier:
+    return request.app.state.admin_verifier  # type: ignore[no-any-return]
 
 
 Context = Annotated[AppContext, Depends(get_context)]
@@ -89,6 +95,54 @@ def require_read(
     if not context.settings.require_auth_for_reads:
         return
     require_write(request, authorization, x_api_key)
+
+
+def is_admin(
+    request: Request,
+    authorization: str | None = None,
+    x_api_key: str | None = None,
+) -> bool:
+    """Whether this caller may run destructive maintenance.
+
+    Two ways in, and no third:
+
+    **An admin token.** A separate list from the write tokens, because the write
+    token is the one that lives in every repository's CI settings — a credential
+    that can post a test result must not also be able to delete a year of them
+    (ADR-0002 D8).
+
+    **An unauthenticated loopback instance.** The laptop case: the port is
+    reachable only from this machine, and anyone who can reach it can already
+    run ``test-hub prune`` in a terminal, so refusing here would protect nothing
+    and only make the dashboard lie about what it can do.
+
+    Note what is *not* on that list: an instance bound to a public interface with
+    ``--insecure-no-auth``. Writes are open there by the operator's explicit
+    choice, but "anyone on the network may add data" and "anyone on the network
+    may destroy it" are different enough that the second needs saying out loud —
+    with an admin token.
+    """
+    admin = get_admin_verifier(request)
+    presented = parse_authorization(authorization) or (x_api_key or "").strip() or None
+    if presented and admin.hashes and admin.verify(presented):
+        return True
+    settings = get_context(request).settings
+    return not settings.auth_enabled and settings.is_loopback
+
+
+def require_admin(
+    request: Request,
+    authorization: Annotated[str | None, Header()] = None,
+    x_api_key: Annotated[str | None, Header()] = None,
+) -> None:
+    """Guard destructive maintenance. See :func:`is_admin` for the rules."""
+    if is_admin(request, authorization, x_api_key):
+        return
+    raise AuthorizationError(
+        "this endpoint needs an administrator token. Create one with "
+        "`test-hub token create --admin` and set TEST_HUB_ADMIN_TOKEN_HASHES, "
+        "or run `test-hub prune` on the host."
+    )
 
 
 def get_import_service(context: Context) -> ImportService:

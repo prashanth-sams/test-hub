@@ -240,6 +240,13 @@
       return Promise.reject(notFound('Test', testId));
     };
 
+    /* A snapshot is a file. There is no server to ask and nothing to delete —
+     * `admin: false` is what makes the settings view render its "not available
+     * here" state instead of a form that could not work. */
+    self.getRetention = function () {
+      return Promise.resolve({ admin: false, snapshot: true });
+    };
+
     self.getFacets = function () {
       var base = snapshot && snapshot.overview;
       var derived = provider.facetsFromSummaries(summaries);

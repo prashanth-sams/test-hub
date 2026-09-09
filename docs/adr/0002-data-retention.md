@@ -1,6 +1,6 @@
 # ADR-0002 — Data retention and pruning
 
-- **Status**: Accepted
+- **Status**: Accepted (D8 amended 2026-09-09)
 - **Date**: 2026-09-09
 - **Deciders**: Test Hub maintainers
 - **Supersedes**: —
@@ -194,22 +194,51 @@ genuinely still going. Deleting the second is data loss during a write; leaving
 the first is a small leak that the printed count makes visible. `--include-unfinished`
 covers the operator who has looked at the count and decided.
 
-### D8 — No REST endpoint, and therefore no accidental history wipe
+### D8 — Retention has its own scope, and never rides on the write token
 
-Nothing in `/api/v1` prunes. The CLI, on the host, with filesystem access, is the
-only way.
+**Amended 2026-09-09.** This originally said there would be *no* REST endpoint at
+all, and that the CLI on the host was the only way to prune. That was the right
+call given two scopes; it was the wrong call given a requirement to manage
+retention from the dashboard, which is what the product was actually asked for.
+The reasoning underneath it was never "no endpoint" — it was "not on the
+publisher's credential". That part stands, and the endpoints are built on it.
 
-*Why*: authentication has exactly two scopes, read and write
-([deps.py:52,77](../../src/test_hub/api/deps.py#L52)), and `require_write` is what
-every CI publisher token holds. A prune endpoint behind `require_write` means any
-token that can post a test result can delete a year of history — and those tokens
-live in CI settings, get copied between repos, and are the ones most likely to
-leak. Retention is not a publishing operation and must not share publishing's
-credential.
+`POST /retention/preview` and `POST /retention/prune` exist, behind
+`require_admin`, which accepts exactly two things:
 
-*Consequence*: `DELETE /runs/{id}` — a genuinely useful thing for removing one bad
-import — is blocked on the same question and is deliberately out of scope here. It
-needs a third scope, and that is its own decision record.
+- **An admin token**, configured in `TEST_HUB_ADMIN_TOKEN_HASHES` — a separate
+  list from `TEST_HUB_API_TOKEN_HASHES`. `require_write` is what every CI
+  publisher token holds, and those tokens live in CI settings, get copied between
+  repositories, and are the ones most likely to leak. A credential that can post
+  a test result must not also be able to delete a year of them.
+- **An unauthenticated loopback instance.** Anyone who can reach that port can
+  already run `test-hub prune` in a terminal, so refusing would protect nothing
+  and would make the dashboard lie about what it can do.
+
+Explicitly *not* on that list: a public bind with `--insecure-no-auth`. Open
+writes are a choice an operator makes knowingly; open deletes are a second choice
+and have to be made separately.
+
+*Why an endpoint at all*: the alternative — telling an operator to SSH to the
+host to delete last quarter's runs — is not a security control, it is an
+inconvenience, and inconveniences get worked around by handing more people shell
+access. A narrow, separately-credentialed endpoint is the safer end state.
+
+*Consequences*:
+
+- A third scope now exists. `GET /retention` reports `admin` for *the calling
+  request*, so the dashboard renders an explanation instead of a form that would
+  403 on submit.
+- `POST /retention/prune` requires `confirm: true`. A request sent by accident
+  does nothing.
+- The destructive control is a page (`#/settings`), not a menu item. A dropdown
+  is the wrong shape for something irreversible, and the preview — a server-side
+  count of exactly what would go — is what makes it safe. Changing any input
+  discards the preview, so the button always describes the numbers on screen.
+- `VACUUM` is deliberately not exposed. It rewrites the whole database behind an
+  exclusive lock, which is not something a web request should start (D10).
+- `DELETE /runs/{id}` — removing one bad import — is unblocked by the same scope
+  now, but is still out of scope here and unbuilt.
 
 ### D9 — No `run.deleted` event
 
@@ -360,6 +389,11 @@ Each of these fails on today's code, which is the point of listing them:
   narrows it, so different policies are different cron entries. Per-project
   retention stored as data is a schema change and a UI, and neither is warranted
   before someone asks.
+- **No editable policy.** `TEST_HUB_RETENTION_DAYS` and the rest are environment
+  settings, and the Settings page shows them read-only. Editing them from the
+  dashboard means persisting settings somewhere, which is a store this product
+  does not have — and a *saved* policy that nothing enforces on a timer would be a
+  promise the server does not keep (D1).
 - **No archival.** Pruned data is gone, not exported. An operator who wants a
   cold copy runs `test-hub export` for the window first — that is what the
   offline snapshot is for, and the docs say so next to the destructive command.

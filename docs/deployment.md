@@ -286,9 +286,42 @@ separately.
 
 <a id="retention"></a>
 
-Nothing ages out until you schedule it. `test-hub prune` is the only thing that
-deletes anything, there is no REST equivalent, and it is not a daemon — the
-reasoning for all three is in [ADR-0002](adr/0002-data-retention.md).
+Nothing ages out until you schedule it. Retention is not a daemon: it runs when
+somebody runs it, either from the terminal or from the dashboard's Settings page.
+The reasoning is in [ADR-0002](adr/0002-data-retention.md).
+
+### From the dashboard
+
+The gear in the header → **Retention and data…** opens `#/settings`, which shows
+the configured policy, lets you pick a cutoff in hours, days, weeks, months or
+years, and — this is the part that matters — **previews exactly what would be
+deleted before anything is**. Changing any field throws the preview away, so the
+delete button always describes the numbers on screen.
+
+**Who may use it.** Deleting needs an administrator token, which is a *different*
+list from the tokens CI publishes with:
+
+```shell
+$ test-hub token create --admin
+$ export TEST_HUB_ADMIN_TOKEN_HASHES="pbkdf2_sha256$..."
+```
+
+A publisher token cannot prune, and gets a 403 if it tries. The dashboard asks
+`GET /api/v1/retention` first and renders an explanation rather than a form when
+the answer is no.
+
+Two exceptions to needing that token, both deliberate:
+
+- **A loopback instance with no auth** — the laptop case — is admin already.
+  Anyone who can reach that port can run `test-hub prune` in a terminal anyway.
+- **A public bind with `--insecure-no-auth` is not.** Open writes are a choice you
+  made knowingly; open deletes are a second choice, and it has to be made
+  separately.
+
+`VACUUM` is not exposed over HTTP — it rewrites the whole database behind an
+exclusive lock. Use the CLI for that.
+
+### From the terminal
 
 Always look first. `--dry-run` touches nothing:
 
@@ -314,9 +347,11 @@ fails on the first scheduled run instead of hanging:
 $ test-hub prune --older-than 90d --yes
 ```
 
-**The cutoff.** `--older-than 90d`, `6m`, `2w`, `1y`, or a bare number of days;
-or `--before 2026-01-01` for an absolute date. `m` is 30 days and `y` is 365 —
-fixed lengths, not calendar arithmetic, so `6m` is exactly 180 days.
+**The cutoff.** `--older-than 12h`, `90d`, `2w`, `6m`, `1y`, or a bare number of
+days; or `--before 2026-01-01` for an absolute date. `m` is 30 days and `y` is
+365 — fixed lengths, not calendar arithmetic, so `6m` is exactly 180 days. Hours
+are there because "clear the last hour" is a real thing to want after a bad
+import.
 
 A run is dated by when it *ran* (`started_at`, falling back to `created_at`),
 which is the same date the dashboard filters on — so what you see under a date
@@ -534,6 +569,8 @@ environment beats `.env`.
 | `TEST_HUB_SQLITE_BUSY_TIMEOUT_MS` | `10000` | How long a writer waits behind another writer. |
 | `TEST_HUB_API_TOKEN_HASHES` | — | Comma-separated, or a JSON array. The preferred form. |
 | `TEST_HUB_API_TOKENS` | — | Plaintext; hashed at startup. Use the hashes instead. |
+| `TEST_HUB_ADMIN_TOKEN_HASHES` | — | Tokens allowed to **delete** data. A separate list on purpose — see [Retention](#retention). |
+| `TEST_HUB_ADMIN_TOKENS` | — | Plaintext admin tokens. Use the hashes instead. |
 | `TEST_HUB_AUTH_ENABLED` | auto | Turns itself on when any token is configured. |
 | `TEST_HUB_REQUIRE_AUTH_FOR_READS` | `false` | Reads are open by default even with auth on. |
 | `TEST_HUB_INSECURE_NO_AUTH` | `false` | Explicit opt-in to an unauthenticated non-loopback bind. |
