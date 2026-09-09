@@ -42,7 +42,10 @@
 <script src="assets/js/40-components.js"></script>
 <script src="assets/js/50-view-overview.js"></script>
 <script src="assets/js/52-view-analytics.js"></script>
+<script src="assets/js/53-view-suites.js"></script>
+<script src="assets/js/54-view-metrics.js"></script>
 <script src="assets/js/55-view-runs.js"></script>
+<script src="assets/js/56-view-evidence.js"></script>
 <script src="assets/js/60-view-run.js"></script>
 <script src="assets/js/65-view-test.js"></script>
 <script src="assets/js/70-view-settings.js"></script>
@@ -71,10 +74,35 @@
       <span class="brand__sub" id="th-brand-sub"></span>
     </a>
 
+    <!-- Nine routes, in three groups. The grouping is the point: "where things
+         stand", "what ran", and "what the run left behind" are three different
+         questions, and a flat list of nine links makes the reader re-read all
+         nine every time to find which one they are in.
+
+         Three of these routes — Test Steps, API Logs and Test Coverage — have
+         no model behind them yet. They are in the rail deliberately and each
+         one says what it is waiting for rather than pretending to be empty;
+         see the header comment in assets/js/56-view-evidence.js. -->
     <nav class="nav" aria-label="Primary">
-      <a class="nav__link" data-route="overview" data-icon="grid" href="#/overview">Overview</a>
-      <a class="nav__link" data-route="analytics" data-icon="chart" href="#/analytics">Analytics</a>
-      <a class="nav__link" data-route="runs" data-icon="list" href="#/runs">Runs</a>
+      <div class="nav__group">
+        <a class="nav__link" data-route="overview" data-icon="grid" href="#/overview">Overview</a>
+        <a class="nav__link" data-route="analytics" data-icon="chart" href="#/analytics">Analytics</a>
+      </div>
+
+      <div class="nav__group" role="group" aria-labelledby="th-nav-results">
+        <div class="nav__label" id="th-nav-results">Results</div>
+        <a class="nav__link" data-route="runs" data-icon="archive" href="#/runs">Runs</a>
+        <a class="nav__link" data-route="suites" data-icon="briefcase" href="#/suites">Test Suites</a>
+        <a class="nav__link" data-route="metrics" data-icon="rows" href="#/metrics">Test Metrics</a>
+        <a class="nav__link" data-route="steps" data-icon="steps" href="#/steps">Test Steps</a>
+      </div>
+
+      <div class="nav__group" role="group" aria-labelledby="th-nav-evidence">
+        <div class="nav__label" id="th-nav-evidence">Evidence</div>
+        <a class="nav__link" data-route="screenshots" data-icon="camera" href="#/screenshots">Screenshots</a>
+        <a class="nav__link" data-route="logs" data-icon="swap" href="#/logs">API Logs</a>
+        <a class="nav__link" data-route="coverage" data-icon="shield" href="#/coverage">Test Coverage</a>
+      </div>
     </nav>
 
     <!-- The dark-mode switch mounts here, at the foot of the rail: a display

@@ -261,6 +261,59 @@ def test_the_rail_becomes_a_bar_on_a_phone() -> None:
     assert ".sidebar" in block, "the rail is still a column on a phone"
 
 
+def test_every_rail_link_has_a_view_and_a_route() -> None:
+    """A link in the rail that no view answers falls back to the overview and
+    looks like the page simply forgot to change — the worst kind of broken."""
+    routes = re.findall(r'data-route="([^"]+)"', INDEX_MARKUP)
+    assert len(routes) == len(set(routes)), "a route is in the rail twice"
+
+    app = (WEB / "assets/js/90-app.js").read_text(encoding="utf-8")
+    views = set(re.findall(r"^\s+(\w+): function \(\) \{ return TestHub\.views\.", app, re.M))
+    store = store_source()
+
+    for route in routes:
+        assert route in views, f"the rail links to {route}, which no view answers"
+        parses = (
+            # …an explicit branch, a member of the shared-dataset route table, or
+            # `overview`, which is what an unrecognised hash falls back to.
+            f"head === '{route}'" in store
+            or re.search(rf"^\s+{route}: true,?$", store, re.M) is not None
+            or route == "overview"
+        )
+        assert parses, f"the store cannot parse #/{route}"
+
+
+def test_every_registered_view_is_defined_somewhere() -> None:
+    """The router looks views up by name at mount time, so a missing one is a
+    runtime error on a click rather than anything a load catches."""
+    app = (WEB / "assets/js/90-app.js").read_text(encoding="utf-8")
+    source = js_source()
+    for name in re.findall(r"^\s+(\w+): function \(\) \{ return TestHub\.views\.", app, re.M):
+        assert f"TestHub.views.{name} = {{" in source, f"no view module defines {name}"
+
+
+def test_the_rail_is_dark_in_both_themes() -> None:
+    """The rail is chrome: it holds still while the content switches theme. That
+    only works if the light block defines the same rail tokens as the dark one —
+    a rail painted with --surface would follow the theme instead."""
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    light = css[css.index(":root {") : css.index(':root[data-theme="dark"] {')]
+    dark = css[css.index(':root[data-theme="dark"] {') :]
+    for token in ("--rail-bg", "--rail-text", "--rail-muted", "--rail-active-bg"):
+        assert token in light, f"{token} is not defined for the light theme"
+        assert token in dark, f"{token} is not defined for the dark theme"
+    assert "background: var(--rail-bg)" in css
+
+
+def test_wide_content_scrolls_inside_its_own_box() -> None:
+    """Regression: a card holding a nine-column table refused to be narrower than
+    that table and pushed the whole page into horizontal scroll, because a grid
+    item's automatic minimum size is its min-content width."""
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert ".stack > * { min-width: 0; }" in css
+    assert ".card { min-width: 0; }" in css
+
+
 def test_the_nav_icons_come_from_the_icon_set() -> None:
     """Inline SVG in the markup is a second copy of path data to keep in step;
     `data-icon` is resolved against the one set in 40-components.js."""
@@ -459,7 +512,7 @@ def test_analytics_never_classifies_a_run_that_is_still_going() -> None:
     answer, not a partial one."""
     source = store_source()
     body = source[
-        source.index("function analyticsRunsFrom") : source.index("function loadAnalytics")
+        source.index("function analyticsRunsFrom") : source.index("function loadRunDetails")
     ]
     assert "is_live" in body and "finished_at" in body
 

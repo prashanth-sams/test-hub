@@ -89,6 +89,23 @@
   --skeleton-b: #f5f7fa;
   --live-halo: #0d5cb63d;
 
+  /* -- the rail ------------------------------------------------------ */
+  /* The navigation rail is dark in BOTH themes. It is chrome, not content:
+     holding it constant gives the page one fixed edge, and the nine routes in
+     it read as a single object rather than as nine cards. These are their own
+     token names rather than --surface / --text on purpose — painting a light
+     theme's rail with dark-theme tokens would drag the charts' palette along
+     with it, because the SVGs read those same custom properties back out. */
+  --rail-bg: #161c27;
+  --rail-bg-soft: #232c3b;
+  --rail-text: #eef1f7;
+  --rail-muted: #a6b1c2;
+  --rail-label: #7d8899;
+  --rail-border: #2a3444;
+  --rail-active-bg: #253258;
+  --rail-active-text: #ffffff;
+  --rail-active-bar: #7b95ff;
+
   /* -- non-colour design tokens (safe to read anywhere) -------------- */
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "Noto Sans", sans-serif;
@@ -106,7 +123,7 @@
   --sp-6: 32px;
   --sp-7: 48px;
   --shell-max: 1440px;
-  --rail-w: 216px;
+  --rail-w: 234px;
   --header-h: 60px;
   --ease: cubic-bezier(0.2, 0, 0.15, 1);
 }
@@ -174,6 +191,18 @@
   --skeleton-a: #1a212c;
   --skeleton-b: #222b38;
   --live-halo: #64a8ff42;
+
+  /* Darker than --surface, not lighter: in the dark theme the rail recedes
+     behind the content rather than floating in front of it. */
+  --rail-bg: #0d121a;
+  --rail-bg-soft: #1b2330;
+  --rail-text: #e9edf4;
+  --rail-muted: #97a2b1;
+  --rail-label: #6f7b8c;
+  --rail-border: #1f2836;
+  --rail-active-bg: #1d2748;
+  --rail-active-text: #d5deff;
+  --rail-active-bar: #8ba4ff;
 }
 
 /* ====================================================================== */
@@ -286,10 +315,11 @@ table.sr-only,
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
-  padding: var(--sp-4) var(--sp-3);
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-3) var(--sp-3);
+  background: var(--rail-bg);
+  color: var(--rail-text);
+  border-right: 1px solid var(--rail-border);
 }
 
 .shell__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
@@ -299,8 +329,19 @@ table.sr-only,
 .sidebar__foot {
   margin-top: auto;
   padding-top: var(--sp-2);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--rail-border);
 }
+
+/* The rail is the one dark surface in a light-theme page, so every control
+ * that can appear inside it is re-pointed at the rail's own tokens here. The
+ * switch is built once, in the component kit, and does not know where it was
+ * mounted — this is what tells it. */
+.sidebar .switchrow { color: var(--rail-muted); }
+.sidebar .switchrow:hover { background: var(--rail-bg-soft); color: var(--rail-text); }
+.sidebar .switch { background: var(--rail-bg-soft); border-color: var(--rail-border); }
+.sidebar .switch__thumb { background: var(--rail-muted); }
+.sidebar [aria-checked="true"] > .switch { background: var(--rail-active-bar); border-color: var(--rail-active-bar); }
+.sidebar [aria-checked="true"] > .switch > .switch__thumb { background: var(--rail-bg); }
 
 .container {
   width: 100%;
@@ -334,10 +375,10 @@ table.sr-only,
   font-weight: 650;
   font-size: 15px;
   letter-spacing: -0.02em;
-  color: var(--text);
+  color: var(--rail-text);
   white-space: nowrap;
 }
-.brand:hover { text-decoration: none; color: var(--text); }
+.brand:hover { text-decoration: none; color: var(--rail-text); }
 .brand__mark {
   width: 22px; height: 22px;
   border-radius: 7px;
@@ -357,30 +398,79 @@ table.sr-only,
   min-width: 0;
   font-weight: 450;
   font-size: 12px;
-  color: var(--text-subtle);
+  color: var(--rail-label);
   padding-left: calc(22px + var(--sp-2));
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .brand__sub:empty { display: none; }
 
-.nav { display: flex; flex-direction: column; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+/* Nine routes is more than a flat list carries. They are grouped — where you
+ * are, what ran, what it left behind — and each group is labelled, so the rail
+ * is scanned by section rather than read top to bottom every time. */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
 .nav::-webkit-scrollbar { display: none; }
+.nav__group { display: flex; flex-direction: column; gap: 1px; }
+.nav__label {
+  padding: 0 10px var(--sp-1);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--rail-label);
+}
 .nav__link {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: 10px;
   padding: 8px 10px;
   border-radius: var(--r-sm);
-  color: var(--text-muted);
+  color: var(--rail-muted);
   font-weight: 500;
   white-space: nowrap;
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
-.nav__link svg { flex: none; opacity: 0.8; }
-.nav__link:hover { background: var(--surface-3); color: var(--text); text-decoration: none; }
-.nav__link[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); }
+.nav__link svg { flex: none; opacity: 0.75; }
+.nav__link:hover { background: var(--rail-bg-soft); color: var(--rail-text); text-decoration: none; }
+.nav__link[aria-current="page"] {
+  background: var(--rail-active-bg);
+  color: var(--rail-active-text);
+}
 .nav__link[aria-current="page"] svg { opacity: 1; }
+/* The current route also gets a bar down its leading edge. Colour alone is
+ * carrying the state otherwise, and against a dark rail the tinted background
+ * is a subtle signal to anyone who does not separate those two blues. */
+.nav__link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--rail-active-bar);
+}
+/* A route with nothing behind it yet is still shown — see the empty states in
+ * 56-view-evidence.js — but it says so before it is clicked. */
+.nav__link[data-empty="true"] { color: var(--rail-label); }
+.nav__count {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--rail-bg-soft);
+  color: var(--rail-muted);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.nav__link[aria-current="page"] .nav__count { color: var(--rail-active-text); }
 
 .topbar__meta {
   margin-left: auto;
@@ -659,10 +749,14 @@ table.sr-only,
 }
 .card__head {
   display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--border);
 }
+/* A control in a card head is an accessory to the card, not a reason for the
+   card to be wider than the page: it takes the width it is given. */
+.card__head .field--grow { flex: 0 1 220px; }
 .card__title { font-size: 13px; font-weight: 650; }
 .card__hint { font-size: 12px; color: var(--text-subtle); }
 .card__body { padding: var(--sp-4); }
@@ -1414,6 +1508,10 @@ th[aria-sort] .table__sort { color: var(--text); }
   margin-bottom: var(--sp-4);
 }
 .banner__title { font-weight: 600; color: var(--text); }
+/* A note, not a warning: these say what a page cannot show, which is
+   information the reader needs and not a problem they have to act on. */
+.banner--info { background: var(--accent-soft); border-color: var(--accent-border); }
+.banner--info .banner__title { color: var(--accent-ink); }
 .banner--warn { background: var(--status-skipped-soft); border-color: var(--status-skipped-soft); }
 .banner--warn .banner__title { color: var(--status-skipped); }
 .banner--error { background: var(--status-failed-soft); border-color: var(--status-failed-soft); }
@@ -1483,8 +1581,104 @@ th[aria-sort] .table__sort { color: var(--text); }
 }
 .artifact-list li:last-child { border-bottom: 0; }
 
+/* ====================================================================== */
+/* Evidence — the gallery, disclosures and step lists                      */
+/* ====================================================================== */
+
+/* A button that has to look like the link it behaves like: it opens a panel on
+ * this page rather than navigating, so it must not be an <a href="#">. */
+.linkbtn {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+.linkbtn:hover { text-decoration: underline; }
+
+/* The screenshot gallery. `auto-fill` rather than a fixed column count: the
+ * same page carries four captures and four hundred, and neither should be
+ * stretched or crushed to fit a number chosen here. */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-4);
+}
+.shot { margin: 0; display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.shot__open { display: block; border-radius: var(--r-md); }
+.shot__open:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.shot__frame {
+  display: grid;
+  place-items: center;
+  /* Fixed height, object-fit inside: a gallery whose rows jump around as each
+   * image decodes is unreadable while it loads, and screenshots arrive in every
+   * aspect ratio a CI runner can produce. */
+  height: 150px;
+  overflow: hidden;
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.shot__img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+.shot__fallback {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  color: var(--text-subtle);
+  font-size: 12px;
+  text-align: center;
+}
+.shot__title { font-weight: 550; font-size: 13px; overflow-wrap: anywhere; }
+.shot__meta { font-size: 12px; color: var(--text-subtle); gap: var(--sp-2); }
+
+/* Native <details>: the open/closed state is the browser's to keep, so there is
+ * no view state here to lose on a live update. */
+.disclosure {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.disclosure__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  list-style: none;
+  min-width: 0;
+}
+.disclosure__summary::-webkit-details-marker { display: none; }
+.disclosure__summary:hover { background: var(--surface-3); border-radius: var(--r-md); }
+.disclosure__summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.disclosure[open] > .disclosure__summary {
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+.disclosure__body { display: grid; gap: var(--sp-3); padding: var(--sp-3); min-width: 0; }
+.disclosure__body > * { min-width: 0; }
+
+/* Published steps. Numbered by the list itself — the numbers are the sequence,
+ * which is the only thing a step list is for. */
+.steps { margin: 0; padding-left: var(--sp-5); display: grid; gap: var(--sp-1); }
+.steps__item { padding: 4px 0; }
+.steps__item::marker { color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.steps__name { margin-right: var(--sp-2); overflow-wrap: anywhere; }
+
+/* `min-width: 0` on the children, or none of the internal scrollers below ever
+ * scroll. A grid item's automatic minimum size is its MIN-CONTENT width, so a
+ * card holding a nine-column table refuses to be narrower than that table, the
+ * card pushes the grid, the grid pushes the page, and `.table-wrap { overflow-x:
+ * auto }` never gets the chance to do its job. Every wide thing in this
+ * stylesheet — tables, <pre> blocks, the nav bar on a phone — depends on this
+ * one line to stay inside its own box. */
 .stack { display: grid; gap: var(--sp-4); }
+.stack > * { min-width: 0; }
 .stack--sm { gap: var(--sp-3); }
+.stack--sm > * { min-width: 0; }
+.card { min-width: 0; }
 .row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 .row--tight { gap: var(--sp-2); }
 
@@ -1522,13 +1716,37 @@ th[aria-sort] .table__sort { color: var(--text); }
     overflow: visible;
     flex-direction: row;
     align-items: center;
-    gap: var(--sp-3);
+    /* Two rows, not one. Nine links squeezed into whatever is left beside the
+       brand is a 150px window onto a 1000px strip — technically scrollable and
+       useless in practice. Wrapping gives the nav the full width of the phone
+       and keeps the brand and the theme switch on the row above it. */
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
     padding: var(--sp-2) var(--sp-4);
     border-right: 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--rail-border);
   }
-  .nav { flex-direction: row; overflow-x: auto; }
+  .sidebar .brand { flex: none; }
+  .nav { order: 3; flex: 1 0 100%; }
+  /* The groups collapse into one scrolling row of links. Their labels go: in a
+   * horizontal bar a heading sits beside what it heads rather than above it,
+   * which reads as another link. The grouping survives as the gap between
+   * runs of links, which is what it was doing visually anyway. */
+  /* `min-width: 0` again: the bar is a flex row, and without it the nav sizes
+     itself to all nine links and takes the page with it instead of scrolling. */
+  .nav { flex-direction: row; overflow-x: auto; gap: var(--sp-3); min-width: 0; }
+  .nav__group { flex-direction: row; gap: 1px; }
+  .nav__label { display: none; }
   .nav__link { padding: 6px 12px; }
+  .nav__link[aria-current="page"]::before {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 0;
+    width: auto;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+  }
   /* In the bar there is no bottom to sit at: the switch goes to the far end. */
   .sidebar__foot { margin-top: 0; margin-left: auto; padding-top: 0; border-top: 0; }
   .switchrow { width: auto; }

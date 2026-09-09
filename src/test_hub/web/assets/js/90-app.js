@@ -21,6 +21,12 @@
   var VIEWS = {
     overview: function () { return TestHub.views.overview; },
     analytics: function () { return TestHub.views.analytics; },
+    suites: function () { return TestHub.views.suites; },
+    metrics: function () { return TestHub.views.metrics; },
+    steps: function () { return TestHub.views.steps; },
+    screenshots: function () { return TestHub.views.screenshots; },
+    logs: function () { return TestHub.views.logs; },
+    coverage: function () { return TestHub.views.coverage; },
     runs: function () { return TestHub.views.runs; },
     run: function () { return TestHub.views.run; },
     test: function () { return TestHub.views.test; },
@@ -140,16 +146,36 @@
       }
     }
 
+    var navScroller = document.querySelector('.nav');
+
     function syncNav(state) {
       var name = state.route.name === 'run' || state.route.name === 'test'
         ? 'runs'
         : state.route.name;
+      var active = null;
       for (var i = 0; i < navLinks.length; i++) {
         var link = navLinks[i];
         if (link.getAttribute('data-route') === name) {
           link.setAttribute('aria-current', 'page');
+          active = link;
         } else {
           link.removeAttribute('aria-current');
+        }
+      }
+      // On a phone the rail is a horizontal strip that scrolls, and nine routes
+      // do not fit in it. Landing on a page whose own link is off the end of
+      // that strip reads as "this page is not in the nav", so the strip is
+      // moved rather than the reader being asked to go looking. `scrollLeft` is
+      // set directly rather than using scrollIntoView, which would also scroll
+      // the document and take the page heading off the top of the screen.
+      if (active && navScroller && navScroller.scrollWidth > navScroller.clientWidth) {
+        var margin = 16;
+        var left = active.offsetLeft - margin;
+        var right = active.offsetLeft + active.offsetWidth + margin;
+        if (left < navScroller.scrollLeft) {
+          navScroller.scrollLeft = Math.max(0, left);
+        } else if (right > navScroller.scrollLeft + navScroller.clientWidth) {
+          navScroller.scrollLeft = right - navScroller.clientWidth;
         }
       }
     }

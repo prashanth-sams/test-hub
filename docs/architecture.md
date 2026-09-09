@@ -144,13 +144,17 @@ snapshot provider, otherwise the live one. Nothing else in the application knows
 which it got — enforced by `tests/test_frontend_assets.py`, which fails if a view
 file so much as mentions `fetch`.
 
-### What the analytics page costs
+### What the detail pages cost
 
-Most views read one payload. The analytics page (`52-view-analytics.js`) is the
-exception: failure taxonomy, suite hotspots, ownership and the slowest tests all
-need every attempt of every test, and no summary carries those. So the store
-reads the **five most recent finished runs** in full — `ANALYTICS_RUNS` in
-`30-store.js` — plus the overview it shares with the dashboard.
+Most views read one payload. Seven routes are the exception — analytics, test
+suites, test metrics, test steps, screenshots, API logs and coverage — and they
+share one dataset rather than each fetching their own. Failure taxonomy, suite
+hotspots, ownership, per-test timing and every attached file all need every
+attempt of every test, and no summary carries those. So the store reads the
+**five most recent finished runs** in full — `ANALYTICS_RUNS` in `30-store.js`,
+loaded by `loadRunDetails` for every route in `DETAIL_ROUTES` — plus the overview
+it shares with the dashboard. Moving between those seven pages costs nothing: the
+runs are already in memory and already cached.
 
 Three things keep that honest:
 
@@ -164,6 +168,22 @@ Three things keep that honest:
 The across-run questions — flakiest tests, most failing tests, the per-test
 verdicts — are *not* recomputed here. They come from the overview, which the
 server computes over the whole window.
+
+### The pages with nothing behind them
+
+Three routes in the rail name things the schema does not model, and they say so
+rather than going missing:
+
+| Route | What exists | What the page does |
+|---|---|---|
+| Screenshots | `ArtifactKind.SCREENSHOT` / `.VIDEO` | Real. A gallery, images served from `/api/v1/artifacts/{id}` under the existing `img-src 'self'`; video is linked, never embedded, because `media-src` is not in the CSP. |
+| API Logs | `ArtifactKind.LOG` / `.TRACE`, and `stdout` / `stderr` / `logs` per attempt | Shows those, and states in a banner that there is **no request/response object** in the schema — nothing can be filtered by status code or endpoint. |
+| Test Coverage | `ArtifactKind.COVERAGE` | Lists the stored reports. Test Hub does not parse a percentage out of them, so the page prints no coverage figure and draws no trend. |
+| Test Steps | nothing | The finest grain recorded is the attempt. The page renders `attempt.metadata.steps` when a publisher supplies it — an interim convention, not a model — and otherwise says how many attempts it checked and found none. |
+
+The rule they follow: an empty page names what would fill it. "No screenshots in
+the last five runs" is a fact about the suite, and it is the fact somebody
+clicked the link to find out.
 
 The exporter takes this further: it does not render a parallel template, it reads
 the dashboard's own `index.html` and replaces three marker blocks with their

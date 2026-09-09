@@ -34,6 +34,25 @@
   var DEFAULT_WINDOW_DAYS = 30;
   var DEFAULT_PAGE_SIZE = 25;
 
+  /* The routes that read the same thing: the portfolio overview plus the most
+   * recent finished runs, in full. Analytics asks that dataset why the suite
+   * fails; suites, metrics, screenshots, logs and coverage ask it what ran,
+   * what it cost and what it left behind. One loader, one cache, one loading
+   * state — seven pages that would otherwise each fetch the same five runs.
+   *
+   * `steps` is in the list because it is honest about being empty: it says how
+   * many runs it looked through before finding no step data, and that sentence
+   * needs the same runs as everything else. */
+  var DETAIL_ROUTES = {
+    analytics: true,
+    suites: true,
+    metrics: true,
+    steps: true,
+    screenshots: true,
+    logs: true,
+    coverage: true
+  };
+
   function create(provider) {
     var bus = util.emitter();
     var tokens = { overview: 0, runs: 0, run: 0, test: 0, analytics: 0, facets: 0 };
@@ -93,8 +112,8 @@
       if (head === 'tests') {
         return { name: 'runs', params: {}, query: parsed.query };
       }
-      if (head === 'analytics') {
-        return { name: 'analytics', params: {}, query: parsed.query };
+      if (DETAIL_ROUTES[head]) {
+        return { name: head, params: {}, query: parsed.query };
       }
       if (head === 'settings') {
         return { name: 'settings', params: {}, query: parsed.query };
@@ -115,8 +134,8 @@
 
       if (route.name === 'overview') {
         loadOverview();
-      } else if (route.name === 'analytics') {
-        loadAnalytics();
+      } else if (DETAIL_ROUTES[route.name]) {
+        loadRunDetails();
       } else if (route.name === 'runs') {
         loadRuns();
       } else if (route.name === 'run') {
@@ -156,8 +175,8 @@
         segments = ['tests', route.params.testId];
       } else if (route.name === 'runs') {
         segments = ['runs'];
-      } else if (route.name === 'analytics') {
-        segments = ['analytics'];
+      } else if (DETAIL_ROUTES[route.name]) {
+        segments = [route.name];
       } else {
         segments = ['overview'];
       }
@@ -272,7 +291,7 @@
       });
     }
 
-    //: How many finished runs the analytics page reads in full. Five is the
+    //: How many finished runs the detail pages read in full. Five is the
     //: number at which "what keeps breaking" stops being one run's luck, and
     //: it is also the point past which a live server is being asked for real
     //: work to draw one page. The snapshot provider answers all five from
@@ -280,7 +299,7 @@
     var ANALYTICS_RUNS = 5;
 
     /**
-     * The analytics page reads the portfolio overview and the newest finished
+     * The detail pages read the portfolio overview and the newest finished
      * runs that match the filters, in full.
      *
      * In full is the point: failure taxonomy, suite hotspots, ownership and the
@@ -319,7 +338,7 @@
       return detail;
     }
 
-    function loadAnalytics() {
+    function loadRunDetails() {
       // The analytics section owns the loading state for the whole page: the
       // overview it fetches is a dependency of this view, not a second view
       // loading beside it, and two spinners for one page is one too many.
@@ -368,7 +387,7 @@
     function reloadCurrent() {
       var route = state.route;
       if (route.name === 'overview') { return loadOverview(); }
-      if (route.name === 'analytics') { return loadAnalytics(); }
+      if (DETAIL_ROUTES[route.name]) { return loadRunDetails(); }
       if (route.name === 'runs') { return loadRuns(); }
       if (route.name === 'run') { return loadRun(route.params.runId, { keepPrevious: true }); }
       if (route.name === 'test') { return loadTest(route.params.testId, { keepPrevious: true }); }
@@ -389,12 +408,12 @@
       var resync = message.reason === 'resync';
       if (route.name === 'overview') {
         loadOverview();
-      } else if (route.name === 'analytics') {
+      } else if (DETAIL_ROUTES[route.name]) {
         // Cheap to repeat: the overview is one request and the finished runs it
         // names are already cached, so a live update costs a run payload only
         // when a run this page has never drawn appears.
         if (resync) { analyticsCache = {}; }
-        loadAnalytics();
+        loadRunDetails();
       } else if (route.name === 'runs') {
         loadRuns();
       } else if (route.name === 'run') {
@@ -431,5 +450,5 @@
     return store;
   }
 
-  TestHub.store = { create: create, FILTER_KEYS: FILTER_KEYS };
+  TestHub.store = { create: create, FILTER_KEYS: FILTER_KEYS, DETAIL_ROUTES: DETAIL_ROUTES };
 })(window);
