@@ -15,7 +15,11 @@ the product. What it deliberately includes:
 * a run that is still going, so the LIVE indicator and the SSE path have
   something to show;
 * failures with real-looking stack traces, long log output, and one test whose
-  name contains HTML, so the escaping is exercised by simply looking at the page.
+  name contains HTML, so the escaping is exercised by simply looking at the page;
+* the files a run leaves behind — screenshots, a request log, a coverage report,
+  a trace — because the Screenshots, API Logs and Test Coverage pages have
+  nothing to be judged by otherwise. They are generated, never captured: see
+  ``test_hub.demo.evidence``.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from test_hub.demo.evidence import attach_evidence, steps_for
 from test_hub.domain.events import (
     DomainEvent,
     EventType,
@@ -47,6 +52,7 @@ from test_hub.domain.models import (
 )
 from test_hub.domain.status import RunStatus, TestStatus
 from test_hub.logging import get_logger
+from test_hub.service.runs import RunService
 from test_hub.service.runtime import AppContext
 
 __all__ = ["DemoResult", "seed_demo"]
@@ -324,6 +330,7 @@ class DemoResult:
     live_run_id: uuid.UUID | None = None
     failures: int = 0
     flaky: int = 0
+    artifacts: int = 0
 
 
 def seed_demo(
@@ -337,6 +344,10 @@ def seed_demo(
     generator = random.Random(SEED)
     result = DemoResult(projects=len(PROJECTS))
     now = utcnow()
+    # Files go in through the same service a real publisher uses, so they are
+    # stored content-addressed and announced as `artifact.published` events —
+    # the demo is not allowed a private door into the store.
+    runs_service = RunService(context)
 
     for project in PROJECTS:
         for index in range(runs_per_project):
@@ -349,6 +360,16 @@ def seed_demo(
                 project, started, generator, workspace_id=context.workspace_id, live=False
             )
             _apply(context, events)
+            # After the run has been applied, never during: an artifact belongs
+            # to a run that exists, and `add_artifact` says so.
+            result.artifacts += attach_evidence(
+                runs_service,
+                events[0].run_id,
+                events,
+                framework=project.framework,
+                project_key=project.key,
+                started=started,
+            )
             result.runs += 1
             result.tests += stats[0]
             result.attempts += stats[1]
@@ -365,6 +386,8 @@ def seed_demo(
             live=True,
         )
         _apply(context, events)
+        # No evidence on the live run: coverage is written when a run ends, and
+        # every page that reads attachments reads finished runs only.
         result.runs += 1
         result.live_run_id = events[0].run_id
         logger.info("live demo run %s is still open", result.live_run_id)
@@ -569,6 +592,17 @@ def _emit_test(
         )
 
     logs = "\n".join(generator.sample(LOG_LINES, k=generator.randrange(2, len(LOG_LINES))))
+    # Steps ride in the attempt's metadata, which is where the Test Steps page
+    # looks for them until there is a step model to put them in. Only the
+    # browser suite publishes any — a page that is empty for four projects out
+    # of five is the honest picture of where this stands.
+    metadata: dict[str, object] = {}
+    steps = steps_for(suite_path, name)
+    if steps:
+        if status in (TestStatus.FAILED, TestStatus.ERROR):
+            # The failure landed somewhere: the last step is where it stopped.
+            steps[-1]["status"] = status.value
+        metadata["steps"] = steps
     emit(  # type: ignore[operator]
         EventType.TEST_FINISHED,
         TestFinishedData(
@@ -588,6 +622,7 @@ def _emit_test(
             logs=logs,
             tags=[project.team],
             worker=f"gw{generator.randrange(0, 4)}",
+            metadata=metadata,
         ),
         at,
     )

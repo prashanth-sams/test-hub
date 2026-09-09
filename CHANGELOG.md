@@ -21,6 +21,27 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Added
 
+- **Six more pages in the rail, and a rail that can hold them.** Test Suites
+  (every suite folded by path across the recent runs, sortable, searchable, and
+  expandable into its tests), Test Metrics (one row per test identity with runs,
+  pass rate, retries, flakiness and where its time goes), Screenshots, API Logs,
+  Test Coverage and Test Steps. The rail is now dark in both themes, grouped
+  under *Results* and *Evidence*, and on a phone it becomes a full-width
+  scrolling strip that brings the current route into view. All seven pages that
+  read run detail share one fetch, so moving between them costs nothing; see
+  [the architecture notes](docs/architecture.md#what-the-detail-pages-cost).
+- **Honest empty states for what Test Hub does not model.** API Logs says there
+  is no request/response object in the schema and shows the log evidence there
+  is; Test Coverage says the report is stored rather than parsed, so it prints no
+  percentage; Test Steps says the finest grain recorded is the attempt, and
+  renders `attempt.metadata.steps` when a publisher supplies it. In an offline
+  export, the pages that read attachments say the export carries the runs and not
+  the files — rather than reporting that nothing was captured.
+- **Sample data with something attached.** `test-hub demo` now publishes the
+  files a run leaves behind: screenshots for the browser suite's failures, a
+  request log, a coverage report and a trace. They are generated, never captured
+  — including the PNGs, which are drawn by a thirty-line encoder in
+  `test_hub.demo.evidence` rather than by adding an image dependency.
 - **An analytics page.** A third view in the rail, one level below the portfolio
   overview and above the run drill-down. Six tiles (stability score, pass rate of
   the last run and its delta, flaky tests, what is failing now, runs analysed,
@@ -28,7 +49,7 @@ one of those is listed under **Changed** or **Removed** with the migration.
   tests behind each type, suite hotspots, ownership, where the run's time goes,
   and a per-test verdict — stable, flaky, broken or quiet — with the shape of its
   recent history. It reads the five most recent finished runs in full and caches
-  them; see [the architecture notes](docs/architecture.md#what-the-analytics-page-costs).
+  them; see [the architecture notes](docs/architecture.md#what-the-detail-pages-cost).
 - **A richer headline on the overview and the run page.** The health card leads
   with the number of results, the donut and a strip of outcome counters covering
   every status a test can end on, plus flaky and retried. On a run page those

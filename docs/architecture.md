@@ -183,7 +183,14 @@ rather than going missing:
 
 The rule they follow: an empty page names what would fill it. "No screenshots in
 the last five runs" is a fact about the suite, and it is the fact somebody
-clicked the link to find out.
+clicked the link to find out. An offline export is the case worth being careful
+about: it carries the runs but not the files attached to them, so those pages say
+*that* rather than reporting that nothing was captured.
+
+`test-hub demo` publishes a sample of each kind — screenshots for the browser
+suite's failures, a request log, a coverage report, a trace — so the three pages
+can be judged without wiring up a publisher first. Every byte of it is generated
+by `test_hub.demo.evidence`, including the PNGs.
 
 The exporter takes this further: it does not render a parallel template, it reads
 the dashboard's own `index.html` and replaces three marker blocks with their

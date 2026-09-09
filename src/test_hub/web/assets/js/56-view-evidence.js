@@ -226,6 +226,14 @@
         }
 
         var found = collect(details);
+        // An offline export carries the runs but not the files they attached —
+        // `include_artifacts` is off by default in the exporter, and an artifact
+        // URL points at a server the export does not have. The empty states
+        // below have to tell those two cases apart: "this suite captured
+        // nothing" and "this file does not carry what it captured" are
+        // different facts, and only one of them is about the tests.
+        found.exported = state.providerKind === 'snapshot' &&
+          !(state.capabilities && state.capabilities.artifacts);
         subtitle.textContent = spec.describe(found, details);
         util.replace(content, el('div', { className: 'stack' },
           spec.render(found, details, repaint, local)));
@@ -319,8 +327,10 @@
     describe: function (found, details) {
       var shots = ofKind(found.files, ['screenshot', 'video']);
       if (!shots.length) {
-        return 'No screenshots in the last ' + util.formatNumber(details.length) + ' finished ' +
-          util.pluralize(details.length, 'run') + '.';
+        return found.exported
+          ? 'This export carries the runs, not the files they attached.'
+          : 'No screenshots in the last ' + util.formatNumber(details.length) +
+            ' finished ' + util.pluralize(details.length, 'run') + '.';
       }
       return util.formatNumber(shots.length) + ' ' + util.pluralize(shots.length, 'capture') +
         ' from the last ' + util.formatNumber(details.length) + ' finished ' +
@@ -336,10 +346,16 @@
           icon: 'camera',
           body: ui.emptyState({
             icon: 'camera',
-            title: 'Nothing was captured in these runs',
-            hint: 'Screenshots appear here when a run attaches a file with kind ' +
-              '"screenshot" or "video". Publish them with the run and they are ' +
-              'matched to the test that produced them.'
+            title: found.exported
+              ? 'This export does not carry its attachments'
+              : 'Nothing was captured in these runs',
+            hint: found.exported
+              ? 'The runs are in this file; the files they attached are not. ' +
+                'Screenshots stay on the Test Hub server that wrote the export, ' +
+                'which is where this page can show them.'
+              : 'Screenshots appear here when a run attaches a file with kind ' +
+                '"screenshot" or "video". Publish them with the run and they are ' +
+                'matched to the test that produced them.'
           })
         })];
       }
@@ -520,12 +536,26 @@
           icon: 'swap',
           body: ui.emptyState({
             icon: 'swap',
-            title: 'No log files and no captured output',
-            hint: 'Attach a file with kind "log", or publish stdout, stderr and logs ' +
-              'on the attempt, and they appear here against the test that wrote them.'
+            title: found.exported
+              ? 'Nothing was captured, and no file came with this export'
+              : 'No log files and no captured output',
+            hint: found.exported
+              ? 'Captured output travels inside an export; attached log files do ' +
+                'not. Neither is in these runs.'
+              : 'Attach a file with kind "log", or publish stdout, stderr and logs ' +
+                'on the attempt, and they appear here against the test that wrote them.'
           })
         }));
         return nodes;
+      }
+
+      if (!files.length && found.exported) {
+        nodes.push(ui.banner({
+          tone: 'warn',
+          title: 'Log files are not in this export',
+          text: 'The captured output below travels with the runs. Files attached ' +
+            'to a run stay on the server that wrote this export.'
+        }));
       }
 
       if (files.length) {
@@ -567,8 +597,10 @@
     describe: function (found, details) {
       var files = ofKind(found.files, ['coverage']).length;
       if (!files) {
-        return 'No coverage report in the last ' + util.formatNumber(details.length) +
-          ' finished ' + util.pluralize(details.length, 'run') + '.';
+        return found.exported
+          ? 'This export carries the runs, not the files they attached.'
+          : 'No coverage report in the last ' + util.formatNumber(details.length) +
+            ' finished ' + util.pluralize(details.length, 'run') + '.';
       }
       return util.formatNumber(files) + ' coverage ' + util.pluralize(files, 'report') +
         ' from the last ' + util.formatNumber(details.length) + ' finished ' +
@@ -583,10 +615,15 @@
           icon: 'shield',
           body: ui.emptyState({
             icon: 'shield',
-            title: 'No coverage report was attached',
-            hint: 'Publish the report your tooling already produces — coverage.xml, ' +
-              'lcov.info, an HTML bundle — as an artifact with kind "coverage", and ' +
-              'every run keeps its own copy here.'
+            title: found.exported
+              ? 'This export does not carry its attachments'
+              : 'No coverage report was attached',
+            hint: found.exported
+              ? 'The runs are in this file; the reports they attached stayed on the ' +
+                'Test Hub server that wrote it.'
+              : 'Publish the report your tooling already produces — coverage.xml, ' +
+                'lcov.info, an HTML bundle — as an artifact with kind "coverage", and ' +
+                'every run keeps its own copy here.'
           })
         })];
       }
@@ -631,10 +668,18 @@
 
   function stepsCard(entry) {
     var steps = entry.steps.map(normalizeStep);
+    var attempt = entry.attempt.attempt_number || 1;
+    // A retried test publishes steps twice, and two identical headings with
+    // different outcomes under them is the most confusing thing this page could
+    // show. Both cards are labelled with their attempt, not just the second:
+    // "4 steps" followed by "Attempt 2 · 4 steps" leaves the reader working out
+    // what the first one was.
+    var retried = (entry.test.attempts || []).length > 1;
     return ui.card({
       title: testName(entry.test),
       icon: 'steps',
-      hint: util.formatNumber(steps.length) + ' ' + util.pluralize(steps.length, 'step'),
+      hint: (retried ? 'Attempt ' + attempt + ' · ' : '') +
+        util.formatNumber(steps.length) + ' ' + util.pluralize(steps.length, 'step'),
       actions: [runLink(entry.detail)],
       body: el('ol', { className: 'steps' }, steps.map(function (step) {
         return el('li', { className: 'steps__item' }, [

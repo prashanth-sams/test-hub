@@ -63,6 +63,12 @@ def demo(
         f"so the red and amber states have something to show",
         fg=typer.colors.BRIGHT_BLACK,
     )
+    if result.artifacts:
+        typer.secho(
+            f"  {result.artifacts} files attached — screenshots, request logs, "
+            f"coverage reports and a trace",
+            fg=typer.colors.BRIGHT_BLACK,
+        )
     if result.live_run_id:
         typer.secho(f"  one run is still open: {result.live_run_id}", fg=typer.colors.BLUE)
     typer.secho(f"  stored in {settings.data_dir}", fg=typer.colors.BRIGHT_BLACK)

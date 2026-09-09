@@ -121,6 +121,8 @@ def test_demo_creates_sample_data(runner: CliRunner, cli_env: dict[str, str]) ->
     assert "sample data created" in result.stdout
     assert "projects" in result.stdout
     assert "one run is still open" in result.stdout
+    # The evidence pages need something to draw; see tests/test_demo_evidence.py.
+    assert "files attached" in result.stdout
 
 
 def test_demo_is_deterministic(runner: CliRunner, tmp_path: Path) -> None:
