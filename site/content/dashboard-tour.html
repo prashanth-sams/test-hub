@@ -1,0 +1,219 @@
+<!--META {"title": "Dashboard tour", "eyebrow": "Start here", "description": "Every view in the Test Hub dashboard, what each number counts, and what the comparison panel is actually telling you.", "lede": "Four views, two altitudes. The overview answers how the portfolio is doing; the run and test pages answer why something went red. This walks each one, and says what a panel means rather than what it is called."} -->
+
+<h2 id="the-shell">The shell</h2>
+
+<p>Every view shares a top bar: the brand, <b>Overview</b> and <b>Runs</b>, a relative
+timestamp of the last refresh, a connection indicator, and the theme toggle.</p>
+
+<p>The connection indicator has three states — <b>Connecting</b>, <b>Live</b> and
+<b>Reconnecting</b>. In live mode it reflects the Server-Sent Events stream: green and
+"Live" means results are arriving as they happen. When the stream drops, a banner appears
+above the view and the dashboard keeps working from what it already has; it reconnects by
+itself, and if it has been away long enough for the server's replay buffer to have moved
+past it, it refetches instead of quietly displaying stale numbers. In an offline export
+there is nothing to connect to, so the indicator says so and the banner never appears.</p>
+
+<p>Every view is addressable. The routes are hash-based — <code>#/overview</code>,
+<code>#/runs</code>, <code>#/runs/&lt;uuid&gt;</code>, <code>#/tests/&lt;uuid&gt;</code> —
+with filters carried in the query part, so "the failing integration runs on main for
+payments" is a link you can paste into an incident channel. Hash routing is not a
+stylistic choice: it is the only kind that survives being opened from
+<code>file://</code>, where there is no server to answer a real path.</p>
+
+<div class="note"><span class="note__title">Theme</span>The dashboard follows your operating
+system until you touch the toggle, then remembers your choice. Dark is a designed
+counterpart rather than an inversion: surfaces darken, ink lightens, and the status
+language — pass green, fail red, error deep red, skip amber, xfail purple, running blue —
+survives the switch, so a screenshot taken in either theme reads identically to a
+colleague.</div>
+
+<h2 id="overview">Overview — the portfolio</h2>
+
+<p>The executive altitude. It answers four questions and refuses to answer any others: how
+much testing happened, how much of it passed, is it getting better or worse, and what is on
+fire right now.</p>
+
+<h3 id="overview-filters">Window and filters</h3>
+
+<p>A segmented control picks the window — 7, 14, 30 or 90 days — and six filters narrow it:
+project, team, component, test type, environment and branch. The dropdown values are facets
+the server computes from the data that is actually there, so you are never offered a filter
+that matches nothing. The same filter vocabulary is used on the Runs view, which is what
+lets a selection carry from one to the other.</p>
+
+<h3 id="overview-kpis">The KPI row</h3>
+
+<p>Six tiles: <b>Tests</b>, <b>Passed</b>, <b>Failed</b>, <b>Error</b>, <b>Skipped</b> and
+<b>Running</b>. Two things about them are deliberate and worth knowing.</p>
+
+<p>They count <em>tests</em>, not runs — the run count is the sub-label under "Tests". And a
+pass rate with nothing executed renders as an em dash rather than 0%. A suite that only
+skipped is not a 0% suite, and showing it in red trains people to ignore red.</p>
+
+<h3 id="overview-charts">Outcomes, health, volume, trend and duration</h3>
+
+<ul>
+  <li><b>Test outcomes</b> — the run's status mix as a single proportional bar, in the status
+  colours, with a legend. Statuses with a zero count are omitted rather than drawn as
+  slivers.</li>
+  <li><b>Health</b> — the headline pass rate for the window, with the counts spelled out
+  underneath in a sentence.</li>
+  <li><b>Volume by day</b> — tests executed per day. This is the chart that tells you a
+  suite stopped running before it tells you the suite started failing.</li>
+  <li><b>Pass rate trend</b> — pass rate and failure rate per day across the window.</li>
+  <li><b>Run duration</b> — p50 and p95 per day. Both, because a mean hides the shard that
+  takes eleven minutes.</li>
+</ul>
+
+<p>Every chart is inline SVG, drawn by the dashboard itself, reading its palette back out of
+the CSS custom properties. That is why they re-colour correctly the instant you switch
+theme, and why there is no charting library in the wheel.</p>
+
+<h3 id="overview-live-and-projects">Active runs and project health</h3>
+
+<p><b>Active runs</b> lists what is queued or running right now, and is the panel the demo
+data deliberately keeps one run open for. When nothing is running it says so rather than
+showing an empty table.</p>
+
+<p><b>Project health</b> is one row per project: runs in the last 24 hours, last run and its
+status, pass rate with a delta against the previous period, live runs, and a count of flaky
+tests. Below that, the worst offenders — the tests failing most often, and the flakiest —
+each linking straight to its test page.</p>
+
+<div class="note"><span class="note__title">An empty overview that is not an empty
+install</span>If every run in the workspace is older than the selected window, the overview
+says exactly that instead of rendering a blank state that looks like a fresh installation.
+The payload carries both <code>total_runs</code> (inside the window) and
+<code>total_runs_all_time</code> so the view can tell the two apart.</div>
+
+<h2 id="runs">Runs — the drill-down's front door</h2>
+
+<p>Every run, newest first, with the full filter set: a free-text search over run name,
+branch, commit and tags, plus project, team, component, test type, environment, branch and
+status. Sort and page are here too.</p>
+
+<p>All of it lives in the URL. That is the feature, not tidiness: a filtered list has to be
+a link somebody can paste, and it has to survive a reload and the back button. Sorting is
+handled by the server in live mode and in the browser in an offline snapshot — the view
+knows about neither, it just puts <code>sort</code> and <code>dir</code> in the hash and
+lets whichever provider is mounted honour them.</p>
+
+<p>Each row carries the run's status, project, team and component, its environment and
+branch, the framework and language if the publisher said, the counts, the duration, and a
+live badge while it is still going.</p>
+
+<h2 id="run-detail">Run detail — everything about one run</h2>
+
+<p>The engineering altitude: what a person needs when a pipeline has just gone red.</p>
+
+<h3 id="run-context">Run context</h3>
+
+<p>Where the run came from — framework and version, language, environment, branch, commit,
+CI provider, pipeline id and a link to the pipeline, hostname, OS, and who started it. Every
+field is optional, because publishers know varying amounts, and the panel shows what it was
+told rather than inventing placeholders.</p>
+
+<h3 id="run-comparison">Compared with the previous run</h3>
+
+<p>The panel that earns its place. It shows deltas for pass rate, duration and test count,
+then five lists:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>List</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td><b>Newly failing</b></td><td>Passed in the baseline, fails now. This is the list you read first.</td></tr>
+    <tr><td><b>Still failing</b></td><td>Was already broken. Not your regression, but not nothing.</td></tr>
+    <tr><td><b>Newly passing</b></td><td>Was broken, is fixed.</td></tr>
+    <tr><td><b>Added</b></td><td>Test identities that did not exist in the baseline run.</td></tr>
+    <tr><td><b>Removed</b></td><td>Identities the baseline had and this run did not report — deleted, renamed, or not collected.</td></tr>
+  </tbody>
+</table></div>
+
+<p>The baseline is the previous <em>comparable</em> run: same project, team, component, test
+type, environment and branch. When there is no such run the panel says so, in those words,
+rather than comparing against something unlike it and producing a delta that means nothing.
+There is a link to open the baseline.</p>
+
+<div class="note note--warn"><span class="note__title">Why "Removed" is not always
+alarming</span>A renamed test is a removed identity and an added one, because identity is
+derived from the name. That is the correct answer — it genuinely is a different test now —
+but it means a refactor produces a long "Removed" list. Read it alongside "Added".</div>
+
+<h3 id="run-warnings">Parser warnings</h3>
+
+<p>If the import could not represent something exactly, it is on this panel: severity, code,
+message and where in the input it happened. An unmapped status word, a timestamp with no UTC
+offset, a truncated stack trace, counts that disagreed with the file's own header. Nothing
+is swallowed, because a warning you cannot see is a number you cannot trust.</p>
+
+<h3 id="run-suites-tests">Suites and tests</h3>
+
+<p>The suite tree, with each suite's counts and duration, expandable to the tests inside it.
+Below that, every test in the run as a searchable, sortable table: status (with a
+<span class="st st--flaky">flaky</span> pill where it applies), name, parameters, attempt
+count and duration.</p>
+
+<p>The table's own search, status filter and sort are view-local rather than in the URL:
+they are a way of reading one page, not a place anybody links to. The run itself, and every
+test on it, are linkable.</p>
+
+<h3 id="run-artifacts">Artifacts</h3>
+
+<p>Files attached to the run — screenshots, videos, logs, traces, coverage, and the raw
+uploaded report if <code>store_raw_reports</code> is on. They are stored content-addressed,
+so the same screenshot uploaded from fifty parallel shards is one stored object. They are
+always served as an attachment with the stored content type and
+<code>X-Content-Type-Options: nosniff</code>, never inline: an artifact is attacker-supplied
+content sitting on the dashboard's own origin.</p>
+
+<h2 id="test-detail">Test detail — one test, across every run</h2>
+
+<p>This page exists because identity is stable. A test that got a new id every run would
+have no history, could not be called flaky, and could not be compared with itself.</p>
+
+<h3 id="test-kpis">The numbers</h3>
+
+<p>Flake rate, failure rate, average duration with a small duration trend, and the attempt
+count in the latest run. Flake rate is the percentage of runs in the trailing window in
+which this test behaved flakily — it was flaky within that run, or its outcome disagreed
+with the window's majority. Fewer than two usable runs and it renders as nothing at all:
+one data point cannot describe consistency.</p>
+
+<h3 id="test-attempts">Latest result, attempt by attempt</h3>
+
+<p>Every attempt gets its own panel, in order, each with its status, the framework's original
+word for that status where it differed, the duration, the failure type and message, the stack
+trace, and any stdout, stderr or captured logs.</p>
+
+<p>A retry is a separate execution with its own output, not a correction of the one before
+it — so the failure that a rerun later "fixed" is still on the page. That is the argument for
+the event model, made visible.</p>
+
+<div class="note"><span class="note__title">The bytes are the bytes</span>Stack traces, logs
+and stdout arrive as text nodes inside a <code>&lt;pre&gt;</code>. There is no formatting
+pass, no ANSI translation and no markup: what the framework produced is what you read. A
+test named <code>&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;</code> renders as that
+text, in both the live dashboard and the offline file, and there is a test asserting
+it.</div>
+
+<h3 id="test-history">History</h3>
+
+<p>A strip of squares, newest on the left, one per run, each coloured by outcome and linking
+to its run — the shape of a flaky test is visible at a glance. Underneath, the same history
+as a table: run time, status, attempt count, duration, branch and environment.</p>
+
+<div class="note"><span class="note__title">In an offline export</span>A snapshot contains
+the runs it was built from, so a test's history in an exported file is bounded by what that
+export included. When it is partial the page says so on a banner rather than presenting a
+short history as a complete one.</div>
+
+<h2 id="offline">The same dashboard, offline</h2>
+
+<p>Everything above is identical in the file <code>test-hub export</code> writes. The views,
+the charts, the filters, the routing, the theme toggle. What differs is where the data comes
+from: a frozen snapshot object embedded in the page instead of a REST API and an event
+stream. The footer of an exported file names the generator version and how many runs are in
+it.</p>
+
+<p>What an export cannot do is update while you watch, and it cannot fetch a run that was not
+included in it. Those are the two things the live mode is for.</p>

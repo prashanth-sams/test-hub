@@ -1,0 +1,51 @@
+# The build stage needs src/, pyproject.toml, README.md, LICENSE and CHANGELOG.md
+# (the sdist include list) and nothing else. Everything below either bloats the
+# context, invalidates the layer cache on every edit, or would end up baked into
+# an image where it does not belong.
+
+.git/
+.github/
+.gitignore
+.dockerignore
+
+.venv/
+venv/
+env/
+.env
+.env.*
+
+__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# Local runtime data. Copying somebody's laptop database into an image would
+# also copy every secret their test output ever leaked.
+data/
+*.db
+*.db-wal
+*.db-shm
+artifacts/
+
+# Docs and the built website are not needed to build or run the service.
+docs/
+site/
+tests/
+
+.idea/
+.vscode/
+.DS_Store
+Dockerfile
+docker-compose.yml

@@ -1,0 +1,237 @@
+<!--META {"title": "Getting started", "eyebrow": "Start here", "description": "Install Test Hub, put data in it, and read that data — locally, from CI, or as one HTML file you can email.", "lede": "Three commands get you a dashboard with realistic data in it. The rest of this page is the four things you will actually do afterwards: import a report you already have, publish from a pipeline, send somebody a file, and decide where the data lives."} -->
+
+<h2 id="install">Install it</h2>
+
+<p>Test Hub is one Python package. It needs Python 3.11 or newer and nothing else — no
+Node, no database server, no container runtime. The dashboard is hand-written CSS and
+JavaScript shipped inside the wheel, so there is no build step to run and nothing to
+fetch from a CDN.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="From PyPI">
+<pre><code>$ pip install test-hub</code></pre>
+</div>
+
+<p>That gives you the <code>test-hub</code> command, the <code>test_hub</code> import package
+and the Python publishing SDK. Storage is SQLite in a file, artifacts are a directory of
+files, and both are created on first use.</p>
+
+<h2 id="see-it-with-data">See it with data in it</h2>
+
+<p>An empty dashboard tells you nothing about whether you want one. <code>test-hub demo</code>
+invents a plausible organization — five projects across three teams, two weeks of history,
+real failures, genuinely flaky tests, and one run that is still going so the live indicator
+has something to show.</p>
+
+<ol class="steps">
+  <li>
+    <h3>Seed the sample data</h3>
+    <div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub demo</code></pre>
+    </div>
+    <p>It prints what it made:</p>
+    <div class="codeblock" data-lang="output" data-caption="Real output, with the log lines trimmed">
+<pre><code>  seeding sample data…
+
+  sample data created
+  5 projects, 31 runs, 258 test results, 270 attempts
+  23 failures and 12 flaky retries, so the red and amber states have something to show
+  one run is still open: f0c9dd0b-4534-4e9c-8ede-844121dd118b
+  stored in /private/tmp/th-docs-site
+
+  next:  test-hub serve</code></pre>
+    </div>
+  </li>
+  <li>
+    <h3>Start the server</h3>
+    <div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub serve</code></pre>
+    </div>
+    <div class="codeblock" data-lang="output">
+<pre><code>  Test Hub  http://127.0.0.1:8000
+  dashboard http://127.0.0.1:8000/
+  API docs  http://127.0.0.1:8000/api/docs
+  data      /Users/you/Library/Application Support/test-hub</code></pre>
+    </div>
+    <p>It binds loopback. Nothing else on the network can reach it, which is why it does
+    not ask you for a token yet. Opening it up is a separate, deliberate step — see
+    <a href="security.html#binding">Security</a>.</p>
+  </li>
+  <li>
+    <h3>Open the dashboard</h3>
+    <p><a href="http://127.0.0.1:8000/">http://127.0.0.1:8000/</a>. The
+    <a href="dashboard-tour.html">dashboard tour</a> walks through what every panel means;
+    the short version is Overview for "how is the portfolio doing", Runs for finding one,
+    and the run and test pages for "why did this go red".</p>
+  </li>
+</ol>
+
+<div class="note note--tip"><span class="note__title">Tip</span>Point
+<code>TEST_HUB_DATA_DIR</code> at a scratch directory while you are experimenting, and the
+demo data never touches the store you keep. Everything below in this page was produced
+with <code>TEST_HUB_DATA_DIR=/tmp/th-docs-site</code>.</div>
+
+<h2 id="import-a-report">Import a report you already have</h2>
+
+<p>If anything in your build writes JUnit XML — pytest with <code>--junitxml</code>, Maven
+Surefire, Gradle, Jest, Playwright, Go's <code>gotestsum</code>, .NET through a converter —
+you already have an input. <code>ingest</code> parses it into the local store.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="One report, with the metadata that makes it findable later">
+<pre><code>$ test-hub ingest results.xml \
+    --project payments-api \
+    --team payments \
+    --component checkout \
+    --environment staging \
+    --type component</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="Actual output for a five-test Surefire file with one retry in it">
+<pre><code>  imported run 5c45c0b4-bdb1-4686-828f-cb3149216918
+  adapter   junit-xml (detected, 90% confident)
+  project   payments-api
+  stored in /private/tmp/th-docs-site
+  5 tests  2 passed  1 failed  1 error  1 skipped  1 flaky  50.0% pass
+
+  1 parser warning(s):
+    naive_timestamp [testsuite[CheckoutIT]]: timestamps in this report carry no UTC offset; they are read as UTC</code></pre>
+</div>
+
+<p>Three things in that output are worth reading rather than skimming.</p>
+
+<ul>
+  <li><b>The adapter, and how confident detection was.</b> Nothing guessed silently. A
+  <code>&lt;testsuites&gt;</code> root scores 0.9; a file that declares
+  <code>"kind": "test-hub-report"</code> scores 1.0. If detection picks wrong, <code>--format
+  junit-xml</code> overrules it — see <a href="adapters.html#detection">Adapters</a>.</li>
+  <li><b>The counts are folded, not copied.</b> The file's own
+  <code>tests="5" failures="1"</code> attributes were advisory. Test Hub counted the cases it
+  actually parsed. Where the two disagree you get a <code>counts_mismatch</code> warning
+  instead of a wrong number.</li>
+  <li><b>Five tests, six attempts, one flaky.</b> The file had a Surefire
+  <code>&lt;flakyFailure&gt;</code> in it: a test that failed and then passed on a rerun.
+  Test Hub stores both attempts, counts the test once through its last one, and flags it
+  flaky. <a href="metrics.html#flaky">How that is defined.</a></li>
+</ul>
+
+<div class="note"><span class="note__title">Note</span>Every flag above except
+<code>--project</code> is optional, and every one of them is worth setting. They are what
+the filters filter on, and — with the exception of <code>--project</code> — they are also
+what makes a run <em>comparable</em> to the previous one. A run with no environment and no
+branch is compared against other runs with no environment and no branch.</div>
+
+<h2 id="publish-from-ci">Publish from CI to a shared server</h2>
+
+<p>The same import, aimed at a server somebody else is running. <code>publish</code> is
+<code>ingest</code> over HTTP: same adapters, same parsing, same result object.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ export TEST_HUB_TOKEN='ths_…'          # from `test-hub token create`
+$ test-hub publish results.xml \
+    --url https://test-hub.internal \
+    --project payments-api \
+    --team payments \
+    --type component \
+    --branch "$GIT_BRANCH" \
+    --commit "$GIT_COMMIT" \
+    --token-env TEST_HUB_TOKEN</code></pre>
+</div>
+
+<p>There is deliberately no <code>--token</code> flag. A token on a command line is visible
+in <code>ps</code> to every other user on the machine, lands in shell history, and appears
+in the CI log whenever a step is echoed. <code>--token-env</code> and <code>--token-file</code>
+are the two supported ways in.</p>
+
+<p>You do not need Test Hub installed on the build agent at all. This is a complete
+publisher:</p>
+
+<div class="codeblock" data-lang="shell" data-caption="curl is a first-class client, not a fallback">
+<pre><code>curl -X POST https://test-hub.internal/api/v1/imports \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -F "file=@target/surefire-reports/TEST-com.example.LedgerTest.xml" \
+  -F "project=ledger-worker" \
+  -F "team=payments" \
+  -F "type=integration" \
+  -F "environment=staging" \
+  -F "branch=$GIT_BRANCH" \
+  -F "commit=$GIT_COMMIT"</code></pre>
+</div>
+
+<p>Worked pipelines for GitHub Actions, GitLab CI, Jenkins and friends are on the
+<a href="ci-integrations.html">CI integrations</a> page.</p>
+
+<h2 id="one-file">Send one HTML file to somebody who has no server</h2>
+
+<p>Not everyone who needs to see a result will install anything or be let through a
+firewall. <code>export</code> writes the whole dashboard, the CSS, the JavaScript and the
+data into a single file.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub export --output test-hub-report.html --title "Payments nightly"</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output">
+<pre><code>  wrote /tmp/th-report.html
+  854 KB, self-contained — no network needed to open it</code></pre>
+</div>
+
+<p>It is the <em>same</em> dashboard — the same rendering code, reading a frozen snapshot
+object instead of talking to a REST API. There is no second renderer that could drift. Open
+it from <code>file://</code>, attach it to a ticket, publish it as a CI artifact.</p>
+
+<p>To export straight from a directory of report files without touching your store at all —
+which is what you want on a build agent — pass <code>--input</code>:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub export --input ./results --output report.html --project payments-api</code></pre>
+</div>
+
+<h2 id="where-data-lives">Where the data lives</h2>
+
+<p>By default, in the platform's user-data directory — not in whatever folder you happened
+to be standing in, so that <code>test-hub serve</code> run from two different projects is one
+Test Hub rather than two.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Platform</th><th>Default data directory</th></tr></thead>
+  <tbody>
+    <tr><td>macOS</td><td><code>~/Library/Application Support/test-hub</code></td></tr>
+    <tr><td>Linux</td><td><code>$XDG_DATA_HOME/test-hub</code>, or <code>~/.local/share/test-hub</code></td></tr>
+    <tr><td>Windows</td><td><code>%LOCALAPPDATA%\test-hub</code></td></tr>
+  </tbody>
+</table></div>
+
+<p>Inside it: <code>test-hub.db</code> (SQLite, in WAL mode) and <code>artifacts/</code>
+(content-addressed files). The directory is created with mode <code>0700</code> where the
+filesystem supports it. Override it with <code>--data-dir</code> or
+<code>TEST_HUB_DATA_DIR</code>, both of which mean the same thing.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Keep an experiment out of your real store">
+<pre><code>$ export TEST_HUB_DATA_DIR=/tmp/th-scratch
+$ test-hub demo --reset
+$ test-hub serve</code></pre>
+</div>
+
+<h2 id="what-next">What next</h2>
+
+<div class="cards">
+  <div>
+    <h3>Read the dashboard</h3>
+    <p><a href="dashboard-tour.html">Dashboard tour</a> — every panel, what it counts, and
+    what the comparison panel is telling you.</p>
+  </div>
+  <div>
+    <h3>Wire up a pipeline</h3>
+    <p><a href="ci-integrations.html">CI integrations</a> — GitHub Actions, GitLab, Jenkins,
+    sharded suites, and what to do when a shard fails to upload.</p>
+  </div>
+  <div>
+    <h3>Publish live results</h3>
+    <p><a href="rest-api.html#runs">REST API</a> — open a run, stream results as tests
+    finish, close it. Every call is safe to retry.</p>
+  </div>
+  <div>
+    <h3>Put it somewhere shared</h3>
+    <p><a href="deployment.html">Deployment</a> — Docker, Compose, a reverse proxy, tokens,
+    and backups.</p>
+  </div>
+</div>

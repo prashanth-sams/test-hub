@@ -1,0 +1,63 @@
+# Dependency updates.
+#
+# Two ecosystems, deliberately treated differently:
+#
+#   github-actions — updated eagerly and grouped. A stale action is a supply-chain
+#                    risk with no upside, and the workflows are pinned to major
+#                    tags, so most of these are one-line ref bumps that CI proves.
+#
+#   pip            — updated conservatively. `pyproject.toml` declares floors
+#                    (`fastapi>=0.110`), not pins, so a compatible release
+#                    reaches users without any bump here. Dependabot's job on
+#                    this repo is to raise the floor when a *new* release
+#                    genuinely requires it, which is rare and should be read by
+#                    a human. Everything is grouped into one pull request per
+#                    week so it is one review, not eleven.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels: [dependencies]
+    commit-message:
+      prefix: build
+      prefix-development: chore
+    groups:
+      # Runtime floors move rarely and each one is a compatibility claim, so
+      # they are grouped separately from tooling — a red CI run on this group
+      # means something users would hit.
+      runtime:
+        dependency-type: production
+        patterns: ["*"]
+      dev-tooling:
+        dependency-type: development
+        patterns: ["*"]
+    ignore:
+      # Ruff and mypy find new things in every minor release. Taking those
+      # automatically turns an unrelated pull request red; the version floor is
+      # raised deliberately, together with the fixes.
+      - dependency-name: ruff
+        update-types: [version-update:semver-minor, version-update:semver-patch]
+      - dependency-name: mypy
+        update-types: [version-update:semver-minor, version-update:semver-patch]

@@ -1,0 +1,350 @@
+<!--META {"title": "REST API", "eyebrow": "Reference", "description": "Every endpoint under /api/v1, with curl examples and real responses.", "lede": "The API is the product. It is designed so that curl is a first-class publisher — no client library is required, and every example on this page is a plain HTTP request you can paste into a terminal."} -->
+
+<p>All endpoints are versioned under <code>/api/v1</code>. <code>/healthz</code>
+deliberately is not: it is infrastructure, and a container healthcheck should not need
+updating when the API version moves.</p>
+
+<p>The machine-readable contract is served by the running instance:
+<code>/api/openapi.json</code>, with browsable documentation at <code>/api/docs</code>
+and <code>/api/redoc</code>.</p>
+
+<h2 id="auth">Authentication</h2>
+
+<p>Off by default, because the default bind is loopback. It turns itself on as soon as any
+token is configured. Then every <em>write</em> needs one:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>curl -H "Authorization: Bearer $TEST_HUB_TOKEN" …
+curl -H "X-API-Key: $TEST_HUB_TOKEN" …          # same token, same check</code></pre>
+</div>
+
+<p><code>X-API-Key</code> is accepted because a surprising number of CI systems make it
+awkward to set an <code>Authorization</code> header on a generic HTTP step.</p>
+
+<p>Reads stay open even with authentication on — the common deployment is "anyone in the
+team may look, only CI may write". Set
+<code>TEST_HUB_REQUIRE_AUTH_FOR_READS=true</code> to close them too.</p>
+
+<h2 id="errors">Errors</h2>
+
+<p>Every failing endpoint returns the same shape, so a client needs exactly one error
+parser:</p>
+
+<div class="codeblock" data-lang="json">
+<pre><code>{
+  "error": "unknown_format",
+  "message": "no installed adapter recognised this file",
+  "detail": { "installed_adapters": [ … ] }
+}</code></pre>
+</div>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Status</th><th><code>error</code></th><th>Means</th></tr></thead>
+  <tbody>
+    <tr><td>401</td><td><code>unauthorized</code></td><td>Missing, malformed or wrong token. The message is identical for all three on purpose.</td></tr>
+    <tr><td>403</td><td><code>forbidden</code></td><td>Authenticated but not allowed.</td></tr>
+    <tr><td>404</td><td><code>not_found</code></td><td>No such run, test or artifact.</td></tr>
+    <tr><td>409</td><td><code>conflict</code></td><td>A write contradicted one that already landed.</td></tr>
+    <tr><td>413</td><td><code>payload_too_large</code></td><td>Over a configured size limit.</td></tr>
+    <tr><td>415</td><td><code>unknown_format</code></td><td>No adapter recognised the input. <code>detail</code> lists every installed one.</td></tr>
+    <tr><td>422</td><td><code>validation_error</code>, <code>adapter_error</code></td><td>The body did not match the schema, or the format was recognised but unparseable.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="idempotency">Idempotency</h2>
+
+<p>Every write is idempotent, twice over: at the event level through a
+<code>UNIQUE(source, event_id)</code> constraint, and at the batch level through an
+optional <code>X-Idempotency-Key</code> header. Reposting returns
+<code>applied: 0</code> and moves no count. Retry freely — CI steps get retried, and a
+network timeout after the server already committed is a normal Tuesday.</p>
+
+<h2 id="healthz">GET /healthz</h2>
+
+<p>Cheap enough for a container healthcheck every ten seconds, and it touches the database
+— a Test Hub that cannot read its own store is not healthy, however well it serves HTTP.
+Unauthenticated, and contains no secrets, so it is safe to paste into an issue.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Real response">
+<pre><code>$ curl -s localhost:8000/healthz
+{
+    "status": "ok",
+    "version": "0.1.0",
+    "schema_version": 1,
+    "database": "ok",
+    "workspace_id": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+    "live_subscribers": 0,
+    "time": "2026-09-09T03:44:29.301538Z"
+}</code></pre>
+</div>
+
+<p><code>workspace_id</code> is here because a publisher cannot invent it and events carry
+it — the Python SDK fetches it from this endpoint once and caches it.</p>
+
+<h2 id="imports">POST /api/v1/imports</h2>
+
+<p>Upload a finished report. Multipart rather than JSON because that is what
+<code>curl -F</code>, <code>requests</code> and every CI plugin already know how to send,
+and because it lets the file stream instead of being base64'd into a string.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>curl -X POST http://localhost:8000/api/v1/imports \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -F "file=@results.xml" \
+  -F "project=payments-api" \
+  -F "team=payments" \
+  -F "component=checkout" \
+  -F "type=component" \
+  -F "environment=staging" \
+  -F "branch=main" \
+  -F "commit=8f21c0d"</code></pre>
+</div>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>file</code></td><td><strong>Required.</strong> The report. Gzipped files are decompressed transparently.</td></tr>
+    <tr><td><code>project</code></td><td><strong>Required.</strong> A report file does not carry a project key, so it cannot be guessed.</td></tr>
+    <tr><td><code>team</code>, <code>component</code>, <code>name</code></td><td>Ownership and a display name.</td></tr>
+    <tr><td><code>type</code>, <code>trigger</code></td><td>Test type and what caused the run.</td></tr>
+    <tr><td><code>environment</code>, <code>branch</code>, <code>commit</code></td><td>Where and from what.</td></tr>
+    <tr><td><code>framework</code>, <code>language</code></td><td>Free text.</td></tr>
+    <tr><td><code>pipeline_id</code>, <code>pipeline_url</code>, <code>ci_provider</code></td><td>A link back to the build.</td></tr>
+    <tr><td><code>tags</code></td><td>Comma-separated.</td></tr>
+    <tr><td><code>run_id</code></td><td>Import into an existing run. How sharded runs merge.</td></tr>
+    <tr><td><code>format</code></td><td>Force an adapter by name; always beats detection.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>Returns <code>201</code> with an <code>ImportResult</code> — deliberately verbose,
+because "which adapter was chosen" and "how confident was detection" are the first two
+questions asked when an import surprises somebody:</p>
+
+<div class="codeblock" data-lang="json">
+<pre><code>{
+  "schema_version": 1,
+  "run_id": "0f6c4c1e-4a0f-4a51-9a2c-7a9b1c2d3e4f",
+  "project_key": "payments-api",
+  "adapter": "junit-xml",
+  "detection_confidence": 0.9,
+  "created": true,
+  "counts": { "total": 5, "passed": 2, "failed": 1, "error": 1, "skipped": 1,
+              "executed": 4, "pass_rate": 50.0, "failure_rate": 50.0 },
+  "events_applied": 10,
+  "events_ignored": 0,
+  "warnings": [ … ]
+}</code></pre>
+</div>
+
+<h2 id="adapters-endpoint">GET /api/v1/adapters</h2>
+
+<p>What this server can parse. Worth calling before an import fails — the same list
+appears in the body of a <code>415</code>.</p>
+
+<h2 id="runs-create">POST /api/v1/runs</h2>
+
+<p>Open a run to publish into. Idempotent on <code>run_id</code>: re-posting the same id
+returns the existing run rather than erroring, so a retried CI step does not fail because
+its first attempt already announced the run.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Real response, trimmed">
+<pre><code>$ curl -sX POST localhost:8000/api/v1/runs \
+    -H 'content-type: application/json' \
+    -d '{"project_key":"payments-api","test_type":"e2e","team":"payments"}'
+{
+  "id": "3f95291c-7cdb-4c06-811b-2b0840cedee2",
+  "project_key": "payments-api",
+  "team": "payments",
+  "test_type": "e2e",
+  "status": "running",
+  "is_live": true,
+  "schema_version": 1
+}</code></pre>
+</div>
+
+<p>Send <code>"started": false</code> to open it as <code>queued</code> instead.</p>
+
+<h2 id="runs-events">POST /api/v1/runs/{run_id}/events</h2>
+
+<p>Append results as they happen. The body is
+<code>{"events": [ … ]}</code> — CloudEvents envelopes, documented in
+<a href="events.html">the event contract</a>.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>curl -X POST "localhost:8000/api/v1/runs/$RUN/events" \
+  -H 'content-type: application/json' \
+  -H "X-Idempotency-Key: batch-1" \
+  -d @events.json</code></pre>
+</div>
+
+<div class="codeblock" data-lang="json" data-caption="Response">
+<pre><code>{ "run_id": "…", "applied": 1, "ignored": 0, "created_run": false,
+  "counts": { … }, "status": "running" }</code></pre>
+</div>
+
+<p>Post it again and you get <code>{"applied": 0, "ignored": 1}</code> with the counts
+unchanged. Set <code>"sequence": 0</code> on every event to have the server allocate a
+contiguous block; send your own monotonic numbers if you want gap detection, which you
+probably do for a long-running suite.</p>
+
+<h2 id="runs-finish">POST /api/v1/runs/{run_id}/finish</h2>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>curl -X POST "localhost:8000/api/v1/runs/$RUN/finish" \
+  -H 'content-type: application/json' -d '{}'</code></pre>
+</div>
+
+<p>An empty body is the normal case. The final status is <strong>folded from the attempts
+that actually arrived</strong>, not taken from the request — a publisher's own totals
+drift the moment anything is retried. <code>status</code> in the body is honoured only for
+<code>cancelled</code>, which cannot be derived: a cancelled run looks exactly like one
+that stopped reporting.</p>
+
+<h2 id="artifacts">POST /api/v1/runs/{run_id}/artifacts</h2>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>curl -X POST "localhost:8000/api/v1/runs/$RUN/artifacts" \
+  -F "file=@failure.png" -F "kind=screenshot" -F "test_id=$TEST_ID"</code></pre>
+</div>
+
+<p><code>kind</code> is one of <code>screenshot</code>, <code>video</code>,
+<code>log</code>, <code>trace</code>, <code>report</code>, <code>coverage</code>,
+<code>raw_report</code>, <code>other</code>. Storage is content-addressed, so uploading
+the same bytes from fifty shards stores one copy.</p>
+
+<p><code>GET /api/v1/runs/{run_id}/artifacts</code> lists them;
+<code>GET /api/v1/artifacts/{artifact_id}</code> downloads one — always as an attachment,
+with the stored content type and <code>nosniff</code>, because an artifact is
+attacker-supplied content on Test Hub's own origin.</p>
+
+<h2 id="overview">GET /api/v1/overview</h2>
+
+<p>The portfolio answer: counts over a window, per-project health, live runs, recent runs,
+a trend series, and the worst offenders. Bounded by design — the trend is capped at 60
+buckets whatever the window, so a year is 53 points rather than 366 — which makes it cheap
+enough to poll.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>curl -s "localhost:8000/api/v1/overview?window_days=30&amp;team=payments"</code></pre>
+</div>
+
+<p><code>window_days</code> accepts 1–365. Note <code>total_runs</code> (inside the
+window) and <code>total_runs_all_time</code>: when the first is zero and the second is
+not, every run is older than the window, and the dashboard says so rather than showing an
+empty state that looks like an empty installation.</p>
+
+<h2 id="runs-list">GET /api/v1/runs</h2>
+
+<div class="codeblock" data-lang="shell" data-caption="Real response, trimmed">
+<pre><code>$ curl -s "localhost:8000/api/v1/runs?limit=1"
+{
+  "total": 17,
+  "limit": 1,
+  "offset": 0,
+  "runs": [ { "id": "3f95291c-…", "project_key": "payments-api",
+              "team": "payments", "status": "running",
+              "counts": { "total": 0, "pass_rate": null, … } } ]
+}</code></pre>
+</div>
+
+<p><code>pass_rate: null</code> means nothing executed — render it as an em dash, not as
+0%. See <a href="metrics.html">Metrics</a>.</p>
+
+<h3 id="filters">Filters</h3>
+
+<p>The same parameters work here and on <code>/overview</code>, so a dashboard can carry a
+user's selection between them without translating. Each accepts a repeated parameter or a
+comma-separated list: <code>?project=a&amp;project=b</code> and
+<code>?project=a,b</code> are equivalent.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Parameter</th><th>Filters on</th></tr></thead>
+  <tbody>
+    <tr><td><code>project</code>, <code>team</code>, <code>component</code></td><td>Ownership.</td></tr>
+    <tr><td><code>type</code></td><td>Test type.</td></tr>
+    <tr><td><code>environment</code>, <code>branch</code></td><td>Run context.</td></tr>
+    <tr><td><code>status</code></td><td>Run status.</td></tr>
+    <tr><td><code>tag</code></td><td>User-defined tags.</td></tr>
+    <tr><td><code>search</code></td><td>Free text over run name, branch, commit and tags.</td></tr>
+    <tr><td><code>live</code></td><td><code>true</code> for runs that are queued or running.</td></tr>
+    <tr><td><code>limit</code>, <code>offset</code></td><td>Paging. <code>limit</code> is 1–500, default 50.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><code>GET /api/v1/facets</code> returns the distinct values available for each of
+these, which is what fills the dashboard's dropdowns.</p>
+
+<h2 id="run-detail">GET /api/v1/runs/{run_id}</h2>
+
+<p>The engineering drill-down, and allowed to be large: the run, its suites with folded
+counts, every test with every attempt, its artifacts, and a comparison against the
+previous <em>comparable</em> run — same project, team, component, test type, environment
+and branch, which is the narrowest slice that makes the comparison honest.</p>
+
+<p>The comparison carries <code>pass_rate_delta</code>, <code>duration_delta_ms</code>,
+<code>total_delta</code> and the <code>newly_failing</code>, <code>newly_passing</code>,
+<code>still_failing</code>, <code>added</code> and <code>removed</code> test-id sets. It
+is <code>null</code> when there is no comparable predecessor. Pass
+<code>?compare=false</code> to skip the work.</p>
+
+<h2 id="test-detail">GET /api/v1/tests/{test_id}</h2>
+
+<p>One stable test identity across runs: its latest result with all attempts, its history,
+<code>flake_rate</code>, <code>failure_rate</code> and
+<code>average_duration_ms</code>. <code>?history=</code> accepts 1–200, default 30.</p>
+
+<p>The id is the stable identity from
+<a href="canonical-schema.html">the canonical schema</a> — the same value in every run
+that executed the test, which is what makes history and flakiness possible at all.</p>
+
+<h2 id="projects">GET /api/v1/projects</h2>
+
+<p>Every project in the workspace, with its key, name, default team and tags.</p>
+
+<h2 id="events-stream">GET /api/v1/events/stream</h2>
+
+<p>Server-Sent Events. One-way, so SSE rather than WebSockets: automatic browser
+reconnection, <code>Last-Event-ID</code> replay and plain HTTP proxying, all for free.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ curl -N localhost:8000/api/v1/events/stream
+retry: 15000
+
+event: hello
+id: 42
+data: {"workspace_id":"b037a4b3-…","replaying":false}
+
+event: test-hub
+id: 43
+data: {"event":{"specversion":"1.0","type":"test.finished", … },"received_at":"…"}
+
+: heartbeat</code></pre>
+</div>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Frame</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>hello</code></td><td>Sent on connect. <code>replaying</code> says whether a <code>Last-Event-ID</code> was honoured.</td></tr>
+    <tr><td><code>test-hub</code></td><td>An applied event, as a full CloudEvent.</td></tr>
+    <tr><td><code>resync</code></td><td>You have been away longer than the replay buffer, or you were too slow to drain. Refetch over REST.</td></tr>
+    <tr><td><code>: heartbeat</code></td><td>A comment frame. It carries no <code>id:</code>, so it cannot advance your cursor past an event you have not seen.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p><code>id:</code> is a bus cursor, not the CloudEvent's own id — a replayed event
+legitimately keeps its identity, so using that as the resume token would be ambiguous.
+Browsers send <code>Last-Event-ID</code> automatically on reconnect; a hand-written client
+should send the last <code>id:</code> it saw.</p>
+
+<div class="note note--warn"><span class="note__title">If the stream never delivers</span>
+The most common cause is a reverse proxy buffering the response. Test Hub sends
+<code>X-Accel-Buffering: no</code>, but nginx needs <code>proxy_buffering off;</code> said
+explicitly — see <a href="deployment.html#proxy">Deployment</a>.</div>

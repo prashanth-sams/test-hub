@@ -1,0 +1,109 @@
+# Test Hub, working on http://127.0.0.1:8000 after `docker compose up -d`.
+#
+# No `version:` key — Compose v2 ignores it and warns about it.
+
+services:
+  test-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Prefer the published image once there is one; `docker compose up --build`
+    # rebuilds from this checkout either way.
+    image: test-hub:local
+    container_name: test-hub
+    restart: unless-stopped
+
+    ports:
+      # The 127.0.0.1 prefix is the entire security model of this file. Written
+      # as "8000:8000" Docker would publish on 0.0.0.0 and — because it inserts
+      # its own DNAT rules ahead of the host firewall — hand an unauthenticated
+      # Test Hub to the network, past ufw/firewalld. Bound to loopback, only
+      # processes on this host can reach it.
+      - "127.0.0.1:8000:8000"
+
+    environment:
+      # Safe ONLY because of the loopback binding above. The container binds
+      # 0.0.0.0 inside its own network namespace, which Test Hub refuses to do
+      # without auth, so this is the explicit opt-in it asks for. It logs a
+      # warning on every start and puts a banner in the dashboard; that noise is
+      # deliberate, do not suppress it.
+      TEST_HUB_INSECURE_NO_AUTH: "true"
+
+      # ---------------------------------------------------------------------
+      # FOR A REAL DEPLOYMENT, make exactly these three changes:
+      #
+      #   1. Delete TEST_HUB_INSECURE_NO_AUTH above.
+      #   2. Generate a token on a machine that has Test Hub installed
+      #      (or in this container: `docker compose exec test-hub test-hub
+      #      token create --label ci`). It prints the token once — that goes to
+      #      the CI job — and a `pbkdf2_sha256$<iterations>$<salt>$<hash>` line,
+      #      which is what the server stores. Uncomment and paste the hash
+      #      below, DOUBLING every `$` (see the note under it). Comma-separate
+      #      several so tokens can be rotated without downtime.
+      #   3. Change the port line to "8000:8000" only once something in front
+      #      of it terminates TLS; Test Hub speaks plain HTTP and a bearer
+      #      token on plain HTTP over a network is a token you have given away.
+      #      Behind a reverse proxy on a sub-path, also set TEST_HUB_ROOT_PATH.
+      #
+      # TEST_HUB_API_TOKEN_HASHES: "pbkdf2_sha256$$120000$$SALT$$HASH"
+      #
+      # THE `$$` IS NOT A TYPO, AND THIS IS THE ONE THAT BITES. Compose treats a
+      # single `$` as the start of a variable reference, so the four-field hash
+      # above pasted verbatim becomes `pbkdf2_sha256$120000` — Compose resolves
+      # `$SALT` and `$HASH` to nothing and silently truncates it. The server then
+      # rejects every token with a message about the token, not about the hash,
+      # and you go looking in the wrong place. Write `$$` for each literal `$`.
+      #
+      # This applies to the `.env` file beside this one and to `env_file:` too —
+      # Compose interpolates those as well, so a hash there also needs `$$`.
+      # Verify before you deploy, with:
+      #
+      #   docker compose config | grep TEST_HUB_API_TOKEN_HASHES
+      #
+      # which re-escapes on output: you should see four `$$`-separated fields.
+      #
+      # ---------------------------------------------------------------------
+
+      TEST_HUB_LOG_FORMAT: "json"
+      TEST_HUB_LOG_LEVEL: "info"
+
+    volumes:
+      # A named volume, not a bind mount: results survive `docker compose down`
+      # and `up` again, and the uid-10001 ownership baked into the image is
+      # carried over automatically instead of needing a chown on the host.
+      # Back it up with:
+      #   docker run --rm -v test-hub-data:/data -v "$PWD:/backup" \
+      #       busybox tar czf /backup/test-hub-data.tgz /data
+      - test-hub-data:/data
+
+    healthcheck:
+      # Repeated from the image so it still applies if someone runs a published
+      # tag that predates the HEALTHCHECK, and so `restart: unless-stopped`
+      # has something to act on.
+      test:
+        - CMD
+        - python
+        - -c
+        - import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status == 200 else 1)
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+    # Test Hub writes only to /data and never shells out; nothing else in the
+    # filesystem needs to be writable.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    security_opt:
+      - no-new-privileges:true
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  test-hub-data:
+    name: test-hub-data

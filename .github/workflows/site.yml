@@ -1,0 +1,116 @@
+# Build and publish the documentation website.
+#
+# The site is committed in built form under `site/docs/`, so that it can be
+# served by GitHub Pages and read straight from a clone with no build step. That
+# only stays true if a stale build fails review, which is what the `check` job
+# below is for: on a pull request it rebuilds and diffs, and a content change
+# that was not rebuilt is a red check rather than a silently outdated page.
+
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Not cancel-in-progress for the deploy: cancelling half way through a Pages
+  # deployment can leave the site on a partial upload.
+  group: site-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Built output is current
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # No setup-python step: the generator is standard library only, and the
+      # runner's system Python is enough. If this job ever needs a pip install,
+      # that is a bug in tools/build.py, not a missing step here.
+      - name: Rebuild and compare
+        working-directory: site
+        run: python3 tools/build.py --check
+
+      - name: Check for external origins
+        working-directory: site
+        # The site must open the same way from file:// and from Pages. A webfont
+        # or a CDN script breaks that quietly — the page still renders for the
+        # person who added it, because their browser has it cached.
+        run: |
+          set -euo pipefail
+          if grep -rnoE '(src|href)="(https?:)?//[^"]+' docs/ index.html 2>/dev/null \
+             | grep -vE 'github\.com|pypi\.org|127\.0\.0\.1|localhost'; then
+            echo "::error::the built site references an external origin"
+            exit 1
+          fi
+          echo "no external origins"
+
+      - name: Check internal links resolve
+        working-directory: site
+        run: |
+          python3 - <<'PY'
+          import re, sys
+          from pathlib import Path
+
+          root = Path(".")
+          broken = []
+          for page in list(root.glob("docs/*.html")) + list(root.glob("*.html")):
+              html = page.read_text(encoding="utf-8")
+              for href in re.findall(r'href="([^"#?][^"]*)"', html):
+                  if href.startswith(("http://", "https://", "mailto:", "//", "#")):
+                      continue
+                  target = (page.parent / href.split("#")[0].split("?")[0]).resolve()
+                  if not target.exists():
+                      broken.append(f"{page}: {href}")
+          if broken:
+              print("::error::broken internal links")
+              for item in sorted(set(broken)):
+                  print("  " + item)
+              sys.exit(1)
+          print("every internal link resolves")
+          PY
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        working-directory: site
+        run: python3 tools/build.py
+
+      - uses: actions/configure-pages@v5
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # `site/` and not the repository root: nothing else in this repository
+          # should be published, least of all the demo databases a contributor
+          # may have left lying about.
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

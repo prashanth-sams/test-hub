@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invented fixture: a run that collected nothing. Valid, and should not become "passed". -->
+<testsuites name="ledger-worker nightly" tests="0" failures="0" errors="0" skipped="0" time="0.0">
+  <testsuite name="com.example.ledger.ReconciliationIT" tests="0" failures="0" errors="0"
+             skipped="0" time="0.0" timestamp="2026-03-14T03:00:00Z">
+    <properties>
+      <property name="branch" value="main"/>
+      <property name="environment" value="nightly"/>
+    </properties>
+  </testsuite>
+</testsuites>

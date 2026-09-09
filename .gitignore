@@ -1,0 +1,55 @@
+# --- Python build & install artefacts -------------------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+__pycache__/
+*.py[cod]
+*.so
+pip-wheel-metadata/
+
+# --- Environments ---------------------------------------------------------
+.venv/
+venv/
+env/
+.python-version
+.env
+.env.*
+!.env.example
+
+# --- Test & type-check caches --------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# --- Test Hub's own runtime data -----------------------------------------
+# `test-hub serve` normally writes to the platform data dir, but pointing
+# TEST_HUB_DATA_DIR at the checkout is the usual way to debug, so keep the
+# database, the artifact tree and exported snapshots out of commits.
+data/
+*.db
+*.db-wal
+*.db-shm
+test-hub.db*
+artifacts/
+test-hub-report.html
+test-hub-export*.html
+
+# --- Editors & OS ---------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# --- Documentation site ---------------------------------------------------
+# site/docs/ is the BUILT site and IS committed — GitHub Pages serves it
+# straight from the repository. Nothing under site/ is ignored on purpose.

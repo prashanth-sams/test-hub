@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invented fixture: a bare <testsuite> root with no <testsuites> wrapper. -->
+<testsuite name="checkout-service smoke" tests="3" failures="0" errors="0" skipped="0" time="1,842"
+           timestamp="2026-03-13T06:00:00Z">
+  <testcase name="homepage renders" classname="smoke.Homepage" time="0,421"/>
+  <testcase name="cart badge shows item count" classname="smoke.Cart" time="0,610"/>
+  <testcase name="checkout button is enabled" classname="smoke.Cart" time="0,811"/>
+</testsuite>

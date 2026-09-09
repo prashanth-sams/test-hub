@@ -1,0 +1,160 @@
+{
+  "kind": "test-hub-report",
+  "schema_version": 1,
+  "run": {
+    "id": "4f9a2c11-8b3d-4e77-9c0a-2d5e6f7a8b90",
+    "name": "nightly e2e",
+    "team": "checkout",
+    "component": "checkout-service",
+    "test_type": "e2e",
+    "trigger": "schedule",
+    "status": "failed",
+    "started_at": "2026-03-15T01:15:00Z",
+    "finished_at": "2026-03-15T01:19:42Z",
+    "tags": ["nightly", "e2e"],
+    "metadata": {"shard": "3/8", "grid": "selenium-grid-b"},
+    "context": {
+      "framework": "playwright",
+      "framework_version": "1.44.0",
+      "language": "typescript",
+      "language_version": "5.4.5",
+      "environment": "staging",
+      "branch": "main",
+      "commit_sha": "8f21c0d4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0",
+      "commit_message": "checkout: retry the rate service once before failing",
+      "ci_provider": "github-actions",
+      "pipeline_id": "4417",
+      "pipeline_url": "https://ci.example.test/checkout-service/runs/4417",
+      "hostname": "runner-e2e-03",
+      "os": "ubuntu-24.04",
+      "executor": "nightly-bot"
+    }
+  },
+  "suites": [
+    {
+      "path": "specs/checkout",
+      "name": "checkout",
+      "started_at": "2026-03-15T01:15:04Z",
+      "finished_at": "2026-03-15T01:17:35Z",
+      "duration_ms": 151000,
+      "metadata": {"browser": "chromium"}
+    },
+    {
+      "path": "specs/checkout/payment",
+      "name": "payment",
+      "parent_path": "specs/checkout",
+      "duration_ms": 96400
+    },
+    {
+      "path": "specs/account",
+      "name": "account",
+      "duration_ms": 12800
+    }
+  ],
+  "tests": [
+    {
+      "name": "adds a product to the cart",
+      "class_name": "CheckoutFlow",
+      "suite_path": "specs/checkout",
+      "status": "passed",
+      "duration_ms": 4120,
+      "file": "specs/checkout/flow.spec.ts",
+      "owner": "checkout",
+      "tags": ["smoke"],
+      "markers": ["chromium"],
+      "worker": "worker-1",
+      "started_at": "2026-03-15T01:15:04Z",
+      "finished_at": "2026-03-15T01:15:08.120Z"
+    },
+    {
+      "name": "declines an expired card",
+      "class_name": "CheckoutPayment",
+      "suite_path": "specs/checkout/payment",
+      "params": {"currency": "EUR", "network": "visa"},
+      "status": "failed",
+      "duration_ms": 8120,
+      "file": "specs/checkout/payment.spec.ts",
+      "worker": "worker-2",
+      "failure": {
+        "type": "AssertionError",
+        "message": "expected the payment page to show 402, saw 500",
+        "stack_trace": "AssertionError: expected 402, received 500\n    at PaymentPage.expectDecline (specs/checkout/payment.spec.ts:88:14)\n    at async Object.<anonymous> (specs/checkout/payment.spec.ts:61:5)",
+        "expected": "402 Payment Required",
+        "actual": "500 Internal Server Error"
+      },
+      "stdout": "POST /v1/authorizations -> 500 in 812ms",
+      "stderr": "rate-service upstream returned 503",
+      "logs": "01:16:44 payment.retry attempt=1 backoff=500ms\n01:16:45 payment.retry attempt=2 backoff=1000ms"
+    },
+    {
+      "name": "recovers after a transient gateway timeout",
+      "class_name": "CheckoutPayment",
+      "suite_path": "specs/checkout/payment",
+      "params": {"currency": "USD", "network": "mastercard"},
+      "file": "specs/checkout/payment.spec.ts",
+      "attempts": [
+        {
+          "status": "failed",
+          "duration_ms": 30150,
+          "worker": "worker-2",
+          "failure": {
+            "type": "TimeoutError",
+            "message": "Timeout 30000ms exceeded waiting for #order-confirmation",
+            "stack_trace": "TimeoutError: locator.waitFor: Timeout 30000ms exceeded.\n    at PaymentPage.awaitConfirmation (specs/checkout/payment.spec.ts:104:20)"
+          }
+        },
+        {
+          "status": "failed",
+          "duration_ms": 30110,
+          "worker": "worker-2",
+          "failure": {
+            "type": "TimeoutError",
+            "message": "Timeout 30000ms exceeded waiting for #order-confirmation",
+            "stack_trace": "TimeoutError: locator.waitFor: Timeout 30000ms exceeded.\n    at PaymentPage.awaitConfirmation (specs/checkout/payment.spec.ts:104:20)"
+          }
+        },
+        {
+          "status": "passed",
+          "duration_ms": 6240,
+          "worker": "worker-2",
+          "stdout": "order ORD-2026-0315-88421 confirmed"
+        }
+      ]
+    },
+    {
+      "name": "keeps the basket after a session refresh",
+      "class_name": "AccountSession",
+      "suite_path": "specs/account",
+      "attempt_number": 1,
+      "status": "failed",
+      "duration_ms": 5200,
+      "failure": {
+        "type": "AssertionError",
+        "message": "basket was empty after refresh"
+      }
+    },
+    {
+      "name": "keeps the basket after a session refresh",
+      "class_name": "AccountSession",
+      "suite_path": "specs/account",
+      "attempt_number": 2,
+      "status": "passed",
+      "duration_ms": 4980
+    },
+    {
+      "name": "shows the loyalty banner",
+      "class_name": "AccountSession",
+      "suite_path": "specs/account",
+      "status": "skipped",
+      "duration_ms": 0,
+      "skip_reason": "loyalty tiers are behind the LOYALTY_V2 flag"
+    },
+    {
+      "name": "renders the address book",
+      "class_name": "AccountSession",
+      "suite_path": "specs/account",
+      "status": "bananas",
+      "duration_ms": 1100
+    }
+  ]
+}

@@ -1,0 +1,152 @@
+<!--META {"title": "FAQ", "eyebrow": "Project", "description": "The questions people actually ask about Test Hub, answered from the code.", "lede": "Short answers with links to the long ones. If something here is wrong, the code is the authority and an issue is welcome."} -->
+
+<h2 id="frameworks">Does it work with my framework?</h2>
+
+<p>If it can write JUnit/xUnit XML — pytest, JUnit, Surefire, Gradle, Jest, Playwright,
+PHPUnit, <code>gotestsum</code>, Mocha, and most others — yes, today, with no plugin.
+If it cannot, write <a href="canonical-schema.html">Test Hub's canonical JSON</a> from a
+twenty-line script, or <a href="adapters.html">write an adapter</a>.</p>
+
+<p>Test Hub deliberately does <em>not</em> claim to accept "any JSON" or "any XML". A
+format that guesses produces silently wrong numbers, which is worse than a refusal.
+Unrecognised input returns a <code>415</code> listing what this server does accept.</p>
+
+<h2 id="python-on-agent">Do I need Python on the build agent?</h2>
+
+<p>No. The REST API is the product and <code>curl</code> is a first-class publisher:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>curl -X POST "$HUB/api/v1/imports" \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -F "file=@results.xml" -F "project=payments-api" -F "type=component"</code></pre>
+</div>
+
+<p>The <a href="python-sdk.html">Python SDK</a> is a convenience for people who already
+have Python, never a requirement.</p>
+
+<h2 id="publish-twice">What happens if I publish the same report twice?</h2>
+
+<p>Without a <code>--run-id</code>, you get two runs — which is correct, because two
+genuine executions of the same suite are two runs. With the same <code>--run-id</code>,
+the second import applies zero events and changes no count:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub ingest report.json -p storefront-web --run-id 3f2a91c4-… --json | jq '{events_applied, events_ignored}'
+{ "events_applied": 0, "events_ignored": 12 }</code></pre>
+</div>
+
+<p>Every write is idempotent twice over: <code>UNIQUE(source, event_id)</code> at the
+event level, and <code>X-Idempotency-Key</code> at the batch level. Retry freely.</p>
+
+<h2 id="shards">How do I make four parallel shards into one run?</h2>
+
+<p>Generate a UUID once before the shards start and pass it to every one as
+<code>--run-id</code>. Order does not matter, and re-running a single shard is safe.
+Worked examples for both
+<a href="ci-integrations.html">GitHub Actions and Jenkins</a>.</p>
+
+<h2 id="dash-pass-rate">Why does my pass rate show as "—"?</h2>
+
+<p>Because nothing executed. The pass-rate denominator excludes skipped and cancelled
+tests, so a run where everything was skipped has no pass rate at all. Showing
+<code>0%</code> would read as total failure, which is the opposite of the truth. See
+<a href="metrics.html">Metrics</a>.</p>
+
+<h2 id="retry-count">Why does a retried test count once?</h2>
+
+<p>Because it is one test. A retry is recorded as a second <em>attempt</em>, never as a
+second test and never as an overwrite of the first. The test contributes once to the
+counts through its last attempt, so a test that failed and then passed is green — and
+because the earlier attempt is still there, it is also flaky. Counting it twice would
+inflate the total and make the pass rate wrong.</p>
+
+<h2 id="flaky-green">A test shows 100% flake rate but its history is all green. Why?</h2>
+
+<p>Because it passes only when it is retried. Flakiness is measured two ways: within a
+run (the attempts disagreed) and across runs (the outcome disagreed with its own
+history). A test that fails then passes on every single run is green every time and flaky
+every time — which is exactly the thing worth telling you about.</p>
+
+<h2 id="refuses-bind">Why does it refuse to start on 0.0.0.0?</h2>
+
+<p>Because you did not configure authentication, and a Test Hub reachable from a network
+with no authentication lets anyone who can reach the port read and write every test
+result. Either create a token, or say <code>--insecure-no-auth</code> and accept a
+warning on every start. There is no silent path to an open instance.</p>
+
+<h2 id="where-data">Where does the data live, and how big does it get?</h2>
+
+<p>Under <code>TEST_HUB_DATA_DIR</code> — a platform data directory by default, listed in
+<a href="configuration.html">Configuration</a>. One SQLite file plus a
+content-addressed <code>artifacts/</code> tree.</p>
+
+<p>Size is driven almost entirely by captured output, not by test counts: a run of a few
+thousand tests with no logs is small, and one test with a 200 KiB stack trace is not.
+Text fields are capped by <code>TEST_HUB_MAX_TEXT_FIELD_BYTES</code> (256 KiB by
+default) and truncation is flagged rather than silent. Artifacts are deduplicated by
+SHA-256, so fifty shards uploading the same screenshot store one copy.</p>
+
+<h2 id="postgres">Can I use PostgreSQL?</h2>
+
+<p>Not in this release. Storage sits behind <code>RunRepository</code>,
+<code>EventRepository</code> and <code>ArtifactStore</code> precisely so that it can,
+and <a href="deployment.html">Deployment</a> describes what would change. The shipped
+implementation is SQLite because <code>pip install</code> and run — with no services —
+is worth more for a first release than horizontal write throughput.</p>
+
+<h2 id="offline">Does the offline report phone home?</h2>
+
+<p>No. It has no external references of any kind: the CSS, the JavaScript and the data are
+all inlined, and CI fails the build if any <code>src</code> or <code>href</code> in the
+output points off-origin. Open it on a plane.</p>
+
+<p>It is also the <em>same</em> dashboard code as the live one, behind a different data
+provider — the exporter transforms the dashboard's own <code>index.html</code> rather
+than rendering a parallel template, so the two cannot drift apart.</p>
+
+<h2 id="no-node">Why is there no Node, no bundler, no framework?</h2>
+
+<p>Four reasons, in order of how much they mattered: ES modules do not load over
+<code>file://</code>, so the offline report could not be one file; a Content-Security-Policy
+of <code>default-src 'none'</code> is only possible with no inline scripts and no remote
+origins; a Python package that needs <code>npm</code> to build is a packaging liability;
+and the whole application is about ten small files, which does not need a framework.</p>
+
+<h2 id="one-worker">Why only one server worker?</h2>
+
+<p>The live-update bus is in-process. Two workers would hold two buses, and half the
+connected dashboards would miss half the events. There is deliberately no
+<code>--workers</code> flag. Replacing the bus with Redis Streams or NATS is the fix, and
+the <code>EventBus</code> protocol is where it goes.</p>
+
+<h2 id="not-included">What is deliberately not in this release?</h2>
+
+<p>Test authoring or manual test management; test execution and orchestration;
+AI-generated failure analysis; SSO, SAML and SCIM; full multi-tenancy; Kubernetes
+manifests; licence enforcement; and notifications or issue-tracker integrations.</p>
+
+<p>The extension points are in place for several of these — every row is scoped to a
+workspace from the first migration, and authentication sits behind an interface — but
+none of them were allowed to delay a working vertical slice.</p>
+
+<h2 id="compare">How does it compare with what I already have?</h2>
+
+<p>If one framework in one repository is all you have, a per-framework HTML reporter is
+simpler and you should use one. Test Hub earns its place when results arrive from several
+languages, several teams and several pipelines, and nobody can answer "is the suite
+healthier than last week?" without opening six tabs.</p>
+
+<h2 id="help">Something is wrong. Where do I look?</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Symptom</th><th>Look at</th></tr></thead>
+  <tbody>
+    <tr><td>Import rejected</td><td>The error body lists every installed adapter. <a href="adapters.html">Adapters</a>.</td></tr>
+    <tr><td>Numbers look wrong</td><td><a href="metrics.html">Metrics</a> — the formulas are written out, with worked examples.</td></tr>
+    <tr><td>Dashboard not updating</td><td>The connection pill in the header. <a href="rest-api.html#events-stream">The stream</a> and the <code>proxy_buffering</code> trap in <a href="deployment.html">Deployment</a>.</td></tr>
+    <tr><td>Server will not start</td><td>Exit code 78 is a configuration error and the message says what to change.</td></tr>
+    <tr><td>Anything else</td><td><code>GET /healthz</code> reports the version, schema version, database reachability and workspace id, and contains no secrets — safe to paste into an issue.</td></tr>
+  </tbody>
+</table>
+</div>

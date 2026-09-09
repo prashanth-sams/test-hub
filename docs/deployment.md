@@ -1,0 +1,574 @@
+# Deployment
+
+Running Test Hub for a team, rather than for yourself. Everything here is about a
+single instance serving a group of people and their CI — which is what the first
+release is built for. When you outgrow it, [scaling.md](scaling.md) says what
+replaces which piece.
+
+Three decisions, in this order:
+
+1. **Where does it run?** A container, or a `pip install` under a service
+   manager. Both are supported; the container is the one with a tested recipe.
+2. **How is it authenticated?** Anything not on loopback needs tokens. Test Hub
+   refuses to start otherwise — see [security.md](security.md#binding).
+3. **What terminates TLS?** Test Hub speaks plain HTTP and always will. A bearer
+   token on plain HTTP across a network is a token you have given away.
+
+## Docker
+
+The [`Dockerfile`](../Dockerfile) is two stages. Stage one builds a wheel from
+the checkout; stage two installs *only* that wheel into a fresh
+`python:3.12-slim`. The runtime image therefore contains exactly what
+`pip install test-hub` gives a stranger — which makes the image a continuous test
+that the wheel is installable and complete, and is why a missing data file or an
+entry point that does not resolve shows up here rather than in a bug report.
+
+```shell
+$ docker build -t test-hub .
+$ docker run --rm -p 127.0.0.1:8000:8000 -v test-hub-data:/data \
+    -e TEST_HUB_INSECURE_NO_AUTH=true test-hub
+```
+
+Things in the image worth knowing before you change them:
+
+- **It binds `0.0.0.0`**, because a container that binds `127.0.0.1` is a
+  container you cannot reach. Inside its own network namespace that is still not
+  a public interface — but Test Hub cannot know that, so a bare `docker run`
+  with no token configuration exits **78** with a message telling you what to do.
+  That is working as designed. Give it token hashes, or opt out explicitly with
+  `TEST_HUB_INSECURE_NO_AUTH=true` *and* publish the port to loopback only.
+- **It runs as uid 10001, gid 0**, non-system and non-root. `VOLUME ["/data"]` is
+  declared *after* the `chown`, so a fresh named or anonymous volume is seeded
+  with the right ownership; declared before, the volume would come up root-owned
+  and the service would fail to write its database.
+- **`WORKDIR` is `/data`.** Not cosmetic: `docker compose exec test-hub test-hub
+  export -o report.html` would otherwise write to `/`, which the Compose file
+  mounts read-only. Landing on the volume is what lets you retrieve the file.
+- **The healthcheck uses `python -c urllib.request`**, not `curl`. The slim base
+  has no curl, and adding one is 5 MB and another CVE feed for something the
+  runtime already does.
+- **No token is baked in, and none ever should be.** An image layer is readable
+  by anyone who can pull it and survives every `docker rmi` of the tag.
+- [`.dockerignore`](../.dockerignore) keeps `data/`, `*.db`, `artifacts/` and
+  `.env` out of the build context. Copying a laptop database into an image would
+  also copy every secret its test output ever leaked.
+
+## Compose
+
+[`docker-compose.yml`](../docker-compose.yml) is a working local deployment.
+Verified with the Compose CLI (no Docker daemon was available in the environment
+these docs were written in, so the image was **not** built or run here — only the
+file was parsed and validated):
+
+```shell
+$ docker compose config
+name: test-hub
+services:
+  test-hub:
+    build:
+      context: /Users/…/test-hub
+      dockerfile: Dockerfile
+    container_name: test-hub
+    environment:
+      TEST_HUB_INSECURE_NO_AUTH: "true"
+      TEST_HUB_LOG_FORMAT: json
+      TEST_HUB_LOG_LEVEL: info
+    healthcheck:
+      test: [CMD, python, -c, "import sys, urllib.request; sys.exit(0 if …/healthz… else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    image: test-hub:local
+    ports:
+      - mode: ingress
+        host_ip: 127.0.0.1
+        target: 8000
+        published: "8000"
+        protocol: tcp
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    …
+```
+
+Two lines carry the whole security model of that file.
+
+**`"127.0.0.1:8000:8000"`.** Written as `"8000:8000"`, Docker publishes on
+`0.0.0.0` and — because it inserts its own DNAT rules *ahead* of the host
+firewall — hands an unauthenticated Test Hub to the network, straight past
+`ufw` or `firewalld`. This is the single most common way a development Compose
+file becomes an incident. Only widen it once something in front terminates TLS
+and authenticates.
+
+**`TEST_HUB_INSECURE_NO_AUTH: "true"`.** Safe *only* because of the line above.
+It logs a warning on every start and banners the dashboard; that noise is
+deliberate.
+
+Also set: `read_only: true` with a 64 MB tmpfs on `/tmp` (Test Hub writes only to
+`/data` and never shells out), `no-new-privileges`, log rotation at 10 MB × 3
+files, and a named volume rather than a bind mount so the uid-10001 ownership
+baked into the image carries over without a host-side `chown`.
+
+### Turning it into a real deployment
+
+Three changes:
+
+1. Delete `TEST_HUB_INSECURE_NO_AUTH`.
+2. Generate a token and configure its **hash**:
+   ```shell
+   $ docker compose exec test-hub test-hub token create --label ci
+   ```
+   The token goes to the CI job; the `pbkdf2_sha256$…` line goes in the Compose
+   file. Comma-separate several so tokens can be rotated without downtime.
+3. Widen the published port only once TLS terminates in front of it, and set
+   `TEST_HUB_ROOT_PATH` if the proxy mounts Test Hub on a sub-path.
+
+**The `$$` trap, and it is a real one.** Compose treats a single `$` as the start
+of a variable reference, so a four-field PBKDF2 hash pasted verbatim is silently
+truncated. Verified:
+
+```yaml
+environment:
+  SINGLE: "pbkdf2_sha256$120000$SALT$HASH"
+  DOUBLED: "pbkdf2_sha256$$120000$$SALT$$HASH"
+```
+
+```shell
+$ docker compose config | grep -A2 environment
+    environment:
+      DOUBLED: pbkdf2_sha256$$120000$$SALT$$HASH
+      SINGLE: pbkdf2_sha256$$120000
+```
+
+`SINGLE` lost everything after the second field, because `$SALT` and `$HASH`
+resolved to nothing. (`docker compose config` re-escapes on output, so `$$` in
+that listing means one literal `$`.) The server then rejects every token with a
+message about the *token*, and you go looking in the wrong place. Write `$$` for
+each literal `$`, and check with `docker compose config | grep
+TEST_HUB_API_TOKEN_HASHES` before you deploy. The same applies to the `.env` file
+beside the Compose file and to `env_file:` — Compose interpolates those too.
+
+## Without Docker
+
+```shell
+$ python -m venv /opt/test-hub
+$ /opt/test-hub/bin/pip install test-hub
+$ /opt/test-hub/bin/test-hub token create --label ci
+```
+
+A systemd unit, minimal and sufficient:
+
+```ini
+[Unit]
+Description=Test Hub
+After=network.target
+
+[Service]
+Type=exec
+User=test-hub
+Environment=TEST_HUB_DATA_DIR=/var/lib/test-hub
+Environment=TEST_HUB_HOST=127.0.0.1
+Environment=TEST_HUB_PORT=8000
+Environment=TEST_HUB_LOG_FORMAT=json
+EnvironmentFile=/etc/test-hub/tokens.env
+ExecStart=/opt/test-hub/bin/test-hub serve
+Restart=on-failure
+RestartSec=5s
+
+# Test Hub writes only to its data directory.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/test-hub
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`/etc/test-hub/tokens.env` holds one line — `TEST_HUB_API_TOKEN_HASHES=pbkdf2_sha256$…`
+— and should be mode `0600`, owned by root. No `$$` doubling here: systemd's
+`EnvironmentFile` does not interpolate. That trap is Compose's alone.
+
+Add `RestartSec` and *not* `Restart=always`: a `configuration_error` exits 78,
+and a supervisor that restarts a misconfiguration forever will hide it.
+
+**Do not run more than one worker.** The live-update bus is in-process; two
+workers means two buses and half the dashboards missing half the events. There is
+no `--workers` flag on `test-hub serve` for this reason.
+[scaling.md](scaling.md#the-bus) explains what to replace when that bites.
+
+## Persistent data
+
+Everything Test Hub keeps lives under `TEST_HUB_DATA_DIR` (`/data` in the image):
+
+```
+/var/lib/test-hub/
+├── test-hub.db          the database
+├── test-hub.db-wal      the write-ahead log — part of the database
+├── test-hub.db-shm      the shared-memory index — part of the database
+└── artifacts/
+    ├── .incoming/       partial uploads, safe to delete when nothing is running
+    └── aa/bb/<sha256>   content-addressed blobs
+```
+
+`ensure_directories()` chmods the data directory to `0700` and blobs are written
+`0600`, where the platform supports it. One volume covers both the database and
+the artifacts; keeping them apart is possible with `TEST_HUB_ARTIFACTS_DIR` and
+buys you nothing unless the blobs need different storage.
+
+**The database is three files, not one.** That is the single most important
+sentence on this page for anyone writing a backup script.
+
+## Backups
+
+<a id="backups"></a>
+
+WAL mode means committed data lives in `test-hub.db-wal` until a checkpoint moves
+it into `test-hub.db`. Copying the `.db` alone, while the service is running,
+gives you a database that is internally consistent and **missing recent writes**.
+Demonstrated on a live instance:
+
+```shell
+$ cp /var/lib/test-hub/test-hub.db /tmp/naive.db
+$ sqlite3 /tmp/naive.db 'select count(*) from runs;'
+31
+$ curl -s "$HUB/api/v1/runs?limit=1" | jq .total
+38
+```
+
+Seven runs were sitting in the WAL. Nothing errored; the copy just quietly
+predates them.
+
+Two correct options.
+
+**Online, with `.backup`.** SQLite's backup API takes a consistent snapshot of a
+live database, WAL included, without stopping anything:
+
+```shell
+$ sqlite3 /var/lib/test-hub/test-hub.db ".backup '/backup/test-hub-$(date +%F).db'"
+$ sqlite3 /backup/test-hub-$(date +%F).db 'select count(*) from runs; pragma integrity_check;'
+38
+ok
+```
+
+That is the same instant as the previous listing, and it captured all 38.
+`.backup` produces a single file with no `-wal` beside it, which is exactly what
+you want to restore from.
+
+**Offline, with a stop.** Stop the service, then copy all three files together —
+or copy just the `.db` after a clean shutdown, which checkpoints and removes the
+WAL.
+
+Whichever you choose, the artifacts are a separate, easy problem: they are
+content-addressed and immutable, so `rsync -a` or a tarball is safe at any time,
+and an artifact that arrives during the copy simply lands in the next one.
+
+```shell
+# Everything, from a Compose deployment, with the service running.
+$ docker compose exec -T test-hub \
+    sqlite3 /data/test-hub.db ".backup '/data/backup.db'"
+$ docker run --rm -v test-hub-data:/data -v "$PWD:/backup" busybox \
+    tar czf /backup/test-hub-$(date +%F).tgz /data/backup.db /data/artifacts
+$ docker compose exec -T test-hub rm /data/backup.db
+```
+
+**Restoring** is a file copy with the service stopped: put the backed-up `.db` in
+place as `test-hub.db`, delete any stale `-wal` and `-shm` beside it, restore the
+artifact tree, and start. If the artifact tree is older than the database, the
+rows will reference blobs that are not there and downloads will 404 — the run
+data itself is unaffected. Restore artifacts first if you are doing them
+separately.
+
+## Reverse proxy
+
+<a id="reverse-proxy"></a>
+
+### The SSE buffering trap
+
+nginx buffers proxied responses by default. Applied to `/api/v1/events/stream`,
+that turns a live stream into a stream that arrives all at once, at the end — the
+dashboard connects, shows nothing for minutes, then everything at once, and
+nothing in any log says why.
+
+Test Hub already sends `X-Accel-Buffering: no` on that response, verified on the
+wire:
+
+```
+$ curl -sD - -o /dev/null --max-time 2 http://127.0.0.1:8123/api/v1/events/stream
+HTTP/1.1 200 OK
+content-type: text/event-stream; charset=utf-8
+cache-control: no-cache, no-transform
+connection: keep-alive
+x-accel-buffering: no
+transfer-encoding: chunked
+```
+
+nginx honours that header, so a plain `proxy_pass` mostly works. **Set
+`proxy_buffering off` anyway**, for two reasons: the header is nginx-specific and
+does nothing for HAProxy, Traefik, Caddy or an ingress controller, and it is
+easily lost — an intermediate proxy, a `proxy_hide_header`, or a CDN in front
+will drop it and you will be debugging an invisible failure. Belt and braces on
+the one path where the failure mode is silence.
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name test-hub.internal;
+
+    ssl_certificate     /etc/ssl/certs/test-hub.crt;
+    ssl_certificate_key /etc/ssl/private/test-hub.key;
+
+    # Reports are up to TEST_HUB_MAX_REPORT_BYTES; nginx defaults to 1 MB and
+    # answers 413 itself, with an HTML body no publisher can parse.
+    client_max_body_size 128m;
+
+    location / {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    # Server-Sent Events. Everything in this block exists because of a specific
+    # failure mode.
+    location /api/v1/events/stream {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Connection        "";   # keep-alive to the upstream
+
+        proxy_buffering    off;    # or the stream arrives at the end, all at once
+        proxy_cache        off;
+        chunked_transfer_encoding on;
+
+        # Heartbeats are every 15s by default (TEST_HUB_SSE_HEARTBEAT_SECONDS).
+        # A read timeout shorter than that disconnects an idle-but-healthy
+        # stream; one hour means a genuinely dead upstream is still noticed.
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+}
+```
+
+`proxy_set_header Connection ""` is needed because nginx sends `Connection:
+close` upstream by default under HTTP/1.1, which defeats keep-alive on a
+long-lived stream.
+
+Do not add security headers at the proxy. Test Hub sends its own CSP,
+`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`,
+`Cross-Origin-Opener-Policy` and `Permissions-Policy` on every response,
+including the static dashboard; a second, weaker set from the proxy is how a
+restrictive CSP becomes a permissive one. Check with `curl -sI` after any proxy
+change.
+
+### Caddy
+
+Caddy does not buffer streaming responses by default, which makes this short:
+
+```caddy
+test-hub.internal {
+    reverse_proxy 127.0.0.1:8000 {
+        flush_interval -1        # never buffer; required for SSE
+    }
+    request_body {
+        max_size 128MB
+    }
+}
+```
+
+TLS is automatic. `flush_interval -1` is the SSE line.
+
+### A sub-path
+
+Serving Test Hub at `https://ci.internal/test-hub/` needs
+`TEST_HUB_ROOT_PATH=/test-hub` so the app generates correct URLs, plus the
+matching proxy rewrite. Prefer a subdomain if you have the choice — a sub-path is
+one more thing that can be subtly wrong, and the failure shows up as a dashboard
+that loads and then cannot fetch anything.
+
+### TLS
+
+Terminate it at the proxy. Test Hub has no TLS listener and no plan for one.
+Everything about the deployment assumes the hop between the proxy and Test Hub is
+loopback or a trusted private network; if it is not, encrypt that hop too.
+
+## Upgrades and migrations
+
+```shell
+$ pip install -U test-hub          # or: docker compose pull && docker compose up -d
+```
+
+**Migrations run themselves.** Every entry point — `serve`, `ingest`, `export`,
+`demo` — calls `Database.upgrade()`, which runs Alembic to head against the
+packaged migration scripts before doing anything else. A user who upgrades and
+runs `serve` never needs to learn that Alembic exists. The migration environment
+resolves the script location from inside the installed package rather than from
+`alembic.ini`, so this works from a wheel where the repo's ini file does not
+exist.
+
+Check what a database is stamped with:
+
+```shell
+$ sqlite3 /var/lib/test-hub/test-hub.db 'select version_num from alembic_version;'
+0001_initial
+```
+
+The upgrade procedure that respects the fact that migrations are one-way:
+
+1. **Back up first** (see [above](#backups)). There is no downgrade path tested
+   for the first release, and the safe rollback is "restore the backup and
+   reinstall the old version".
+2. Stop the service. A migration on a live database is a write, and it will
+   queue behind — or block — every publisher.
+3. Upgrade the package or pull the image.
+4. Start. Watch the first few log lines for the Alembic revision.
+
+**Downgrading Test Hub after an upgrade that migrated the schema will not work.**
+The old code does not know the new schema. Restore the backup.
+
+**A database created by `create_all()`** — which is what the test suite and the
+demo seeder use for speed — is stamped at head at creation, so it can still be
+upgraded later instead of failing on the first migration with "table already
+exists".
+
+## Configuration reference
+
+Everything is `TEST_HUB_` + the setting name, from the environment, a `.env` file
+beside the working directory, or a CLI flag. Flags beat the environment; the
+environment beats `.env`.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `TEST_HUB_HOST` | `127.0.0.1` | Anything else requires tokens or `--insecure-no-auth`. |
+| `TEST_HUB_PORT` | `8000` | |
+| `TEST_HUB_ROOT_PATH` | `""` | Set when behind a proxy on a sub-path. |
+| `TEST_HUB_DATA_DIR` | platform user-data dir | `/data` in the image. |
+| `TEST_HUB_DATABASE_URL` | SQLite inside `data_dir` | The interfaces support other backends; only SQLite ships. |
+| `TEST_HUB_ARTIFACTS_DIR` | `data_dir/artifacts` | |
+| `TEST_HUB_SQLITE_BUSY_TIMEOUT_MS` | `10000` | How long a writer waits behind another writer. |
+| `TEST_HUB_API_TOKEN_HASHES` | — | Comma-separated, or a JSON array. The preferred form. |
+| `TEST_HUB_API_TOKENS` | — | Plaintext; hashed at startup. Use the hashes instead. |
+| `TEST_HUB_AUTH_ENABLED` | auto | Turns itself on when any token is configured. |
+| `TEST_HUB_REQUIRE_AUTH_FOR_READS` | `false` | Reads are open by default even with auth on. |
+| `TEST_HUB_INSECURE_NO_AUTH` | `false` | Explicit opt-in to an unauthenticated non-loopback bind. |
+| `TEST_HUB_CORS_ALLOW_ORIGINS` | — | Empty means no CORS headers at all. |
+| `TEST_HUB_TRUSTED_HOSTS` | — | Adds Starlette's `TrustedHostMiddleware`. |
+| `TEST_HUB_CSP` | restrictive | Only loosen it if you know why. |
+| `TEST_HUB_REDACTION_PATTERNS` | see [security.md](security.md#adding-your-own) | Replaces the defaults; a pattern containing a comma must use the JSON-array form. |
+| `TEST_HUB_MAX_REPORT_BYTES` | 64 MiB | Also raise `client_max_body_size` in the proxy. |
+| `TEST_HUB_MAX_ARTIFACT_BYTES` | 128 MiB | |
+| `TEST_HUB_MAX_TEXT_FIELD_BYTES` | 256 KiB | Per stack trace or log body. |
+| `TEST_HUB_MAX_EVENTS_PER_BATCH` | `5000` | |
+| `TEST_HUB_STORE_RAW_REPORTS` | `true` | Keeps the original upload as an artifact. Turn off to save a write and a file per import. |
+| `TEST_HUB_SSE_HEARTBEAT_SECONDS` | `15` | Keep the proxy's read timeout comfortably above this. |
+| `TEST_HUB_SSE_REPLAY_BUFFER` | `1000` | Events kept per workspace for `Last-Event-ID`. |
+| `TEST_HUB_SSE_MAX_CLIENTS` | `200` | |
+| `TEST_HUB_HISTORY_WINDOW_DAYS` | `30` | |
+| `TEST_HUB_FLAKY_WINDOW_RUNS` | `20` | |
+| `TEST_HUB_LOG_LEVEL` | `info` | |
+| `TEST_HUB_LOG_FORMAT` | `text` | `json` for a log shipper. |
+
+**List-valued settings** (`API_TOKENS`, `API_TOKEN_HASHES`, `CORS_ALLOW_ORIGINS`,
+`TRUSTED_HOSTS`, `REDACTION_PATTERNS`) accept both `a,b,c` and `["a","b","c"]`
+from the environment. Use the JSON form when a value itself contains a comma —
+which for a regex `{8,64}` quantifier it will.
+
+## Operating it
+
+**Logs.** `TEST_HUB_LOG_FORMAT=json` gives one JSON object per line with `ts`,
+`level`, `logger` and `message`. Uvicorn's access log is off by default because it
+duplicates Test Hub's own logging and is noisy in a terminal that is also showing
+test output; if you need per-request logs, take them from the reverse proxy,
+which is also the only place you will get a client IP.
+
+Everything logged passes through the same redaction as stored test output.
+
+**Health.** `GET /healthz` touches the database and returns
+`{"status": "ok"|"degraded", "database": "ok"|"error", "live_subscribers": N, …}`
+with HTTP 200 either way — a healthcheck that raises tells you nothing. Alert on
+the body, not the status code. `live_subscribers` is how many dashboards are
+watching, which is a cheap way to notice that the SSE path broke.
+
+**What to watch.** Data-directory free space (nothing is ever deleted), import
+latency at p95 (the single-writer queue shows up here first —
+[scaling.md](scaling.md)), and `status != "ok"`.
+
+## Packaging name
+
+<a id="packaging-name"></a>
+
+`test-hub` is a good distribution name and a risky one. PyPI rejects an upload
+whose name is "too similar to an existing project": PEP 503 normalisation folds
+runs of `-`, `_` and `.` together and lowercases, so `test_hub`, `testhub` and
+`Test.Hub` are all the same name to it. That rejection arrives at the worst
+possible moment — mid-release, with a tag already pushed.
+
+[`tools/set_dist_name.py`](../tools/set_dist_name.py) is the pre-agreed escape
+hatch. It renames the *distribution* and nothing else:
+
+| | | |
+|---|---|---|
+| Distribution name | `pip install test-hub` | **this is what changes** |
+| Import package | `import test_hub` | never changes |
+| Console script | `test-hub …` | never changes |
+
+So a rename is invisible to users' code and to their shell. It changes the row on
+PyPI and the string in `pip install`.
+
+```shell
+$ python tools/set_dist_name.py --show
+test-hub
+
+$ python tools/set_dist_name.py testhub-io --dry-run
+--- /path/to/test-hub/pyproject.toml  (line 10)
+  before: test-hub   (PyPI compares this as 'test-hub')
+  after:  testhub-io   (PyPI compares this as 'testhub-io')
+
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -8,5 +8,5 @@
+ # — it rewrites this field and nothing else. The import package (`test_hub`) and
+ # the console script (`test-hub`) are unaffected by that change.
+-name = "test-hub"
++name = "testhub-io"
+ dynamic = ["version"]
+
+dry run — nothing written
+
+$ python tools/set_dist_name.py testhub-io      # actually write it
+```
+
+It rewrites exactly one line: the `name = "..."` assignment inside the
+`[project]` table. Not `[tool.poetry] name`, not `name` inside
+`[[project.authors]]`, not a `[project]`-looking table inside a comment. Before
+writing it re-reads its own output and asserts that precisely one line differs;
+if anything else moved it writes nothing and exits 3. A formatting-preserving
+line edit rather than a TOML round-trip, because `tomllib` cannot write and every
+library that can will also reflow comments, reorder keys and normalise quotes
+across a file full of deliberate prose.
+
+Bad input is rejected before anything is touched:
+
+```shell
+$ python tools/set_dist_name.py 'not a name!'
+error: 'not a name!' is not a valid PEP 508 distribution name. Names must start and end
+with a letter or digit and may contain only letters, digits, '-', '_' and '.' in between.
+$ echo $?
+2
+```
+
+Exit codes: `0` changed or already correct, `2` invalid name or malformed
+`pyproject.toml`, `3` the safety check tripped — which means the file is not what
+the script expected and a human should look at it rather than retrying with a
+different argument.
+
+After a rename: run `python -m build` to confirm the wheel is named as expected,
+update the PyPI Trusted Publisher to the new project name **before** tagging a
+release, and note the change in `CHANGELOG.md` so users learn why
+`pip install test-hub` stopped finding new versions.

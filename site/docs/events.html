@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event contract · Test Hub</title>
+<meta name="description" content="The CloudEvents 1.0 envelope, the eight event types and their payloads, sequence-number semantics, and the two independent idempotency mechanisms.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="Event contract · Test Hub">
+<meta property="og:description" content="The CloudEvents 1.0 envelope, the eight event types and their payloads, sequence-number semantics, and the two independent idempotency mechanisms.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/events.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html">Docs</a><a href="../docs/dashboard-tour.html">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html">CLI</a><a href="../docs/deployment.html">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link" href="../docs/getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link" href="../docs/dashboard-tour.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link" href="../docs/cli-reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link" href="../docs/configuration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link" href="../docs/python-sdk.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link is-active" href="../docs/events.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link" href="../docs/metrics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link" href="../docs/deployment.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link" href="../docs/ci-integrations.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link" href="../docs/contributing.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>Event contract</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Contracts</span>
+  <h1>Event contract</h1>
+  <p class="lede">Every write into Test Hub becomes a domain event, and events are the only thing that changes state. This page is the wire contract: what the envelope looks like on the network, what each of the eight types carries, and exactly what happens when you post the same thing twice.</p>
+</header>
+<p>A JUnit XML file dropped on the CLI, a <code>POST /api/v1/imports</code> from a Jenkins
+job and a live publisher streaming results as they happen all converge on the same list of
+events and the same <code>apply_events</code> call. Nothing else in the codebase writes a
+run, a test or an attempt. That is what makes reposting safe, what makes a retry a fact
+rather than an overwrite, and what makes the counts recomputable from the log at any time.</p>
+
+<p>The types are declared and validated in
+<code>src/test_hub/domain/events.py</code>, so everything below is enforced at the boundary
+rather than merely documented. A publisher in any language only has to produce this JSON.</p>
+
+<h2 id="envelope">The envelope</h2>
+
+<p>The outer shape is CloudEvents 1.0 in structured JSON mode — the seven core attributes —
+plus four Test Hub extension attributes and the typed <code>data</code> payload.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Attribute</th><th>Type</th><th>Required</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td><code>specversion</code></td><td><code>"1.0"</code></td><td>defaulted</td>
+      <td>A literal. It is typed <code>Literal["1.0"]</code>, so <code>"1.1"</code> is a validation error, not a negotiation.</td></tr>
+    <tr><td><code>id</code></td><td>UUID</td><td>generated</td>
+      <td>Unique <em>within a source</em>. With <code>source</code> it is the idempotency key of one event.</td></tr>
+    <tr><td><code>source</code></td><td>string, 1–512</td><td>defaulted</td>
+      <td>Who produced it. Test Hub's own producers use <code>urn:test-hub:cli-ingest</code>, <code>urn:test-hub:api-import</code> and <code>urn:test-hub:api</code>; the default is <code>https://test-hub.dev/source/unknown</code>.</td></tr>
+    <tr><td><code>type</code></td><td>enum</td><td><b>yes</b></td>
+      <td>One of the eight types below. The set is closed.</td></tr>
+    <tr><td><code>time</code></td><td>RFC 3339, aware</td><td>defaults to now</td>
+      <td>When the fact happened. A naive timestamp is rejected outright.</td></tr>
+    <tr><td><code>datacontenttype</code></td><td>string</td><td>defaulted</td>
+      <td><code>application/json</code>.</td></tr>
+    <tr><td><code>subject</code></td><td>string or null</td><td>no</td>
+      <td>A free-text hint. Adapters set it to a project key, a suite path or a test's full name. Nothing reads it; it is there for a human tailing a log.</td></tr>
+    <tr><td><code>schemaversion</code></td><td>int</td><td>defaulted</td>
+      <td>Canonical schema version. This build speaks <code>1</code> and refuses anything else.</td></tr>
+    <tr><td><code>workspaceid</code></td><td>UUID</td><td><b>yes</b></td>
+      <td>Tenancy. The API checks it against the server's own workspace.</td></tr>
+    <tr><td><code>runid</code></td><td>UUID</td><td><b>yes</b></td>
+      <td>Which run this event belongs to.</td></tr>
+    <tr><td><code>sequence</code></td><td>int ≥ 0</td><td><b>yes</b></td>
+      <td>Ordering within the run. Not global, not a clock. <code>0</code> asks the server to allocate one.</td></tr>
+    <tr><td><code>data</code></td><td>object</td><td>yes</td>
+      <td>The typed payload, validated against <code>type</code>.</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="extension-names">Why <code>workspaceid</code> and not <code>workspace_id</code></h3>
+
+<p>CloudEvents requires extension attribute names to be made of lowercase letters and digits
+only — no underscores. That is why the field names, and therefore what goes out on the wire,
+are <code>workspaceid</code>, <code>runid</code> and <code>schemaversion</code>.
+<code>sequence</code> was already legal and is spelled the same either way.</p>
+
+<p>Writing those by hand is unpleasant, so <b>the readable spellings are accepted on input</b>.
+<code>workspace_id</code>, <code>run_id</code> and <code>schema_version</code> are Pydantic
+validation aliases: either form parses, and only the lowercase form is ever emitted.</p>
+
+<div class="codeblock" data-lang="python" data-caption="Readable in, lowercase out"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">Readable in, lowercase out</span></div>
+<pre><code>&gt;&gt;&gt; event = DomainEvent.model_validate({
+...     "specversion": "1.0",
+...     "id": "22222222-3333-4444-8555-666666666666",
+...     "source": "urn:test-hub:ci",
+...     "type": "run.started",
+...     "time": "2026-09-08T01:15:00Z",
+...     "workspace_id": "4f9c1b2e-6a7d-5c3b-8e1f-2d3a4b5c6d7e",
+...     "run_id": "9b1d1a44-0f3e-4a1f-8f2a-7c6b5d4e3f21",
+...     "schema_version": 1,
+...     "sequence": 2,
+...     "data": {"started_at": "2026-09-08T01:15:00Z"},
+... })
+&gt;&gt;&gt; sorted(event.model_dump(mode="json"))
+['data', 'datacontenttype', 'id', 'runid', 'schemaversion', 'sequence',
+ 'source', 'specversion', 'subject', 'time', 'type', 'workspaceid']</code></pre>
+</div>
+
+<p>Python code never has to type the ugly form either: <code>event.workspace_id</code>,
+<code>event.run_id</code> and <code>event.schema_version</code> are read-only properties over
+the extension fields. The one place the raw spelling matters is when you are writing JSON for
+a language that has no such helper — and there, either spelling works.</p>
+
+<div class="note note--warn"><span class="note__title">Aliases, not synonyms</span>The aliases
+are accepted, not preserved. If you round-trip an event through Test Hub and compare it byte
+for byte with what you sent, the extension keys will have changed spelling. Compare on
+<code>(source, id)</code> instead — that is the pair the store treats as identity.</div>
+
+<h3 id="strict-validation">Unknown fields are refused, and so is an unknown version</h3>
+
+<p><code>DomainEvent</code> is <code>extra="forbid"</code>, and so is every payload model. A
+publisher that sends <code>durationMs</code> instead of <code>duration_ms</code> gets a 422
+naming the field, rather than a silently dropped value and a wrong duration on the
+dashboard:</p>
+
+<div class="codeblock" data-lang="output" data-caption="Real 422 body from POST /api/v1/runs/{id}/events"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">Real 422 body from POST /api/v1/runs/{id}/events</span></div>
+<pre><code>{
+  "error": "validation_error",
+  "message": "the request body did not match the expected schema",
+  "detail": {
+    "errors": [
+      {
+        "type": "extra_forbidden",
+        "loc": ["body", "events", "0", "durationMs"],
+        "msg": "Extra inputs are not permitted",
+        "input": 12
+      }
+    ]
+  }
+}</code></pre>
+</div>
+
+<p>This is the single most useful property of the contract during a first integration, and it
+is worth not loosening. The cost is real and worth stating: a publisher written against a
+future Test Hub that adds a field cannot send that field to an older server. That is the
+trade — a loud failure on the new field instead of a quiet loss of it.</p>
+
+<p>A <code>schemaversion</code> this build does not speak is refused for the same reason:</p>
+
+<div class="codeblock" data-lang="output" data-caption="DomainEvent.model_validate({…, &quot;schema_version&quot;: 2, …})"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">DomainEvent.model_validate({…, &quot;schema_version&quot;: 2, …})</span></div>
+<pre><code>1 validation error for DomainEvent
+schemaversion
+  Value error, unsupported schema_version 2; this build speaks 1
+  [type=value_error, input_value=2, input_type=int]</code></pre>
+</div>
+
+<p>An older Test Hub reading a newer event cannot know which fields changed meaning. A failed
+import is recoverable by re-running the step; a wrong pass rate that nobody questions is not.
+Two more envelope-level rejections worth knowing, both real:
+<code>"time": "2026-09-08T01:15:00"</code> (no offset) gives <em>Input should have timezone
+info</em>, and <code>"sequence": -1</code> gives <em>Input should be greater than or equal to
+0</em>.</p>
+
+<h2 id="sequence">Sequence numbers</h2>
+
+<p><code>sequence</code> is a monotonically increasing integer <b>within one run</b>, assigned
+by the publisher. It is not global, it is not a timestamp, and it does not have to be dense.</p>
+
+<p>It exists for two jobs. A consumer uses it to notice a gap — a batch that never arrived
+leaves a hole. The server uses it to apply out-of-order arrivals deterministically:
+<code>apply_events</code> sorts the batch by <code>(sequence, time)</code> before dispatching,
+so a batch shuffled by a proxy or a thread pool lands in the order the publisher meant.</p>
+
+<p><code>sequence</code> is <code>ge=0</code>, and <code>0</code> has a special meaning on the
+way in: <b>server, allocate one for me</b>. <code>RunService._assign_sequences</code> fills the zeros from the run's current
+high-water mark, inside the same transaction that applies the batch, so two publishers posting
+concurrently receive disjoint blocks rather than both starting at 1.</p>
+
+<div class="codeblock" data-lang="python" data-caption="src/test_hub/service/runs.py, abridged"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">src/test_hub/service/runs.py, abridged</span></div>
+<pre><code>if all(event.sequence &gt; 0 for event in events):
+    return events                              # nothing to do
+cursor = uow.events.next_sequence(run_id)      # max(sequence) + 1, or 1
+for event in events:
+    if event.sequence &gt; 0:
+        keep the publisher's number
+    else:
+        assign cursor; cursor += 1</code></pre>
+</div>
+
+<p>Read that carefully, because it means <b>a batch that mixes zeros with real numbers keeps
+both</b>. The publisher's numbers are honoured <em>and</em> the zeros are allocated from the
+high-water mark, and nothing checks that the two ranges do not overlap. Here is that
+happening — four events posted to a fresh run (whose <code>run.queued</code> and
+<code>run.started</code> already took 1 and 2) with sequences 3, 0, 4, 0:</p>
+
+<div class="codeblock" data-lang="output" data-caption="The events table for that run, ordered by sequence"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">The events table for that run, ordered by sequence</span></div>
+<pre><code>  sequence 1  run.queued
+  sequence 2  run.started
+  sequence 3  test.finished    a      &lt;- the publisher's own 3
+  sequence 3  test.finished    b      &lt;- allocated from the high-water mark
+  sequence 4  test.finished    c      &lt;- the publisher's own 4
+  sequence 4  test.finished    d      &lt;- allocated</code></pre>
+</div>
+
+<p>Nothing is corrupted by that: <code>sequence</code> is not unique, and the fold is keyed on
+<code>(run, test, attempt_number)</code>, so the counts are right. What you lose is the log's
+readability and any hope of gap detection.</p>
+
+<div class="note note--tip"><span class="note__title">Pick one and stick to it</span>Send all
+zeros or all real numbers. If you want gap detection — and a suite streaming for an hour is
+exactly where a silently dropped batch matters — number your own events, because a consumer
+cannot notice a hole in a sequence the server invented.</div>
+
+<p><code>EventRepository.list_events(run_id, after_sequence=0)</code> replays a run's log
+oldest first. <code>after_sequence</code> is exclusive, with one deliberate exception: the
+default <code>0</code> means "from the beginning" rather than "after sequence zero", so a
+publisher that legitimately numbered its first event <code>0</code> does not have it swallowed
+by the default argument.</p>
+
+<div class="note note--warn"><span class="note__title">Not the same as the SSE cursor</span>The
+<code>id:</code> line on the Server-Sent Events stream is a <em>bus</em> cursor: global to the
+workspace, assigned when the event is published to subscribers, and unrelated to any run's
+sequence numbers. In a quiet workspace the two happen to line up, which is exactly how people
+come to rely on it. See <a href="#sse">the stream section</a>.</div>
+
+<h2 id="idempotency">Idempotency</h2>
+
+<p>Two independent mechanisms at two granularities. You want both, and they answer different
+questions.</p>
+
+<h3 id="per-event">Per event: <code>UNIQUE(source, event_id)</code></h3>
+
+<p>The <code>events</code> table carries <code>UNIQUE(source, event_id)</code>. Before applying
+a batch, <code>SqlEventRepository._existing_keys</code> selects the <code>(source, id)</code>
+pairs already stored and skips those events, counting them as <code>ignored</code>. Reposting
+is accepted and is a no-op <em>by construction</em>, not because an endpoint remembered to
+check. The same set catches duplicates <em>within</em> one batch, so a publisher that appends
+the same event twice before flushing also gets one row.</p>
+
+<p><code>id</code> alone cannot be the key. A CloudEvents <code>id</code> is only required to
+be unique within its <code>source</code>, so two publishers are both entitled to call their
+first event <code>1</code>. <code>DomainEvent.dedupe_key()</code> renders the pair as
+<code>f"{source}\x1f{id}"</code> — a unit separator, because it cannot occur in either half.</p>
+
+<p>The canonical-JSON and JUnit adapters lean on this deliberately. They derive event ids as
+<code>uuid5(TEST_HUB_NAMESPACE, f"{source}\x1f{run_id}\x1f{sequence}\x1f{type}")</code> rather
+than randomly, so importing the same file twice against the same run applies zero events:</p>
+
+<div class="codeblock" data-lang="shell" data-caption="tests/fixtures/canonical/report.json, whose run block declares an id"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">tests/fixtures/canonical/report.json, whose run block declares an id</span></div>
+<pre><code>$ test-hub ingest tests/fixtures/canonical/report.json --project checkout-service --json</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="First import, then the identical command again"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">First import, then the identical command again</span></div>
+<pre><code>  "created": true,   "events_applied": 18, "events_ignored": 0,
+  "suites_imported": 3, "tests_imported": 6, "attempts_imported": 9
+
+  "created": false,  "events_applied": 0,  "events_ignored": 18,
+  "suites_imported": 0, "tests_imported": 0, "attempts_imported": 0</code></pre>
+</div>
+
+<p>Eighteen events ignored, nothing imported, same run, and the counts did not move.</p>
+
+<div class="note note--warn"><span class="note__title">The qualifier matters</span>A report
+with no <code>run.id</code> gets a fresh random run id on every import, therefore fresh event
+ids, therefore a second run. If you want repeatable imports, put a stable <code>id</code> in
+the run block or pass <code>--run-id</code>.</div>
+
+<h3 id="per-batch">Per batch: <code>X-Idempotency-Key</code></h3>
+
+<p><code>POST /api/v1/runs/{id}/events</code> and <code>POST /api/v1/imports</code> both accept
+an <code>X-Idempotency-Key</code> header. The first request stores the key with a summary of
+what it did; a later request carrying the same key short-circuits before doing any work and
+returns <code>applied: 0</code> with <code>ignored</code> equal to the size of the batch it was
+handed.</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ curl -sX POST "$HUB/api/v1/runs/$RUN/events" \
+    -H 'content-type: application/json' \
+    -H 'X-Idempotency-Key: doc-batch-1' \
+    -d @events.json</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="The same call, three times: with the key, with the key again, then with no key at all"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">The same call, three times: with the key, with the key again, then with no key at all</span></div>
+<pre><code>{"applied":5,"ignored":0,"created_run":false,"counts":{"total":1,…,"flaky":1,"retried":1,
+  "completed":1,"executed":1,"pass_rate":100.0,"failure_rate":0.0},"status":"running"}
+
+{"applied":0,"ignored":5,…}      # replayed from the stored key, no work done
+
+{"applied":0,"ignored":5,…}      # no key: the per-event UNIQUE caught all five</code></pre>
+</div>
+
+<p>Those last two lines look identical and are not. The keyed call short-circuits on a single
+primary-key lookup in <code>idempotency_keys</code> and never sorts or dispatches anything; the
+unkeyed one sorts the batch, queries for the five existing <code>(source, id)</code> pairs, and
+only then discovers it has nothing to do. For a retried CI step you want the key: it returns the
+original answer instead of redoing the work, and — crucially — instead of returning
+"0 applied" for a reason the caller could read as a failure.</p>
+
+<div class="note note--warn"><span class="note__title">Trap: the key is global, not scoped to a
+run</span>The <code>idempotency_keys</code> table has <code>key</code> as its primary key, with
+no workspace and no run in it. Posting a <em>different</em> batch to a <em>different</em> run
+under a key that has been used before silently discards the batch.</div>
+
+<div class="codeblock" data-lang="output" data-caption="Two runs, two different batches, one reused key"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">Two runs, two different batches, one reused key</span></div>
+<pre><code>run1 batch A (X-Idempotency-Key: pipeline-42-batch-1)  -&gt;  applied 5  ignored 0
+run2 batch B (X-Idempotency-Key: pipeline-42-batch-1)  -&gt;  applied 0  ignored 5
+
+$ curl -s "$HUB/api/v1/runs/$run2" | jq .counts.total
+0</code></pre>
+</div>
+
+<p>The reply to the second call even echoes <code>run_id</code> of <em>run2</em> — the route
+builds the response from the URL and then reads that run's counts — so it reads as a normal,
+successful replay for the run you addressed, while run 2 has nothing in it. Derive the key from
+something unique per batch, the pipeline id plus a batch number, rather than reusing a constant
+like <code>batch-1</code> across jobs.</p>
+
+<p>Opening a run needs no key at all. <code>POST /api/v1/runs</code> with a
+<code>run_id</code> you chose returns the existing run unchanged — same id, same
+<code>created_at</code> — instead of erroring, so a retried "announce the run" step is safe on
+its own terms.</p>
+
+<h2 id="types">The eight event types</h2>
+
+<p>The set is closed. Adding one is a wire-contract change and needs a
+<code>SCHEMA_VERSION</code> bump, because dashboards and adapters both switch on it.</p>
+
+<div class="codeblock" data-lang="text" data-caption="The usual order; * repeats, ? optional"><div class="codeblock__head"><span class="codeblock__lang">text</span><span class="codeblock__cap">The usual order; * repeats, ? optional</span></div>
+<pre><code>run.queued → run.started → suite.started* → test.started? → test.finished*
+           → suite.finished* → artifact.published* → run.finished</code></pre>
+</div>
+
+<p>Only <code>test.finished</code> is genuinely load-bearing. A publisher that emits nothing
+but <code>run.queued</code>, a stream of <code>test.finished</code> and
+<code>run.finished</code> produces a complete, correct run. Everything else buys you fidelity:
+a suite tree, a live "running" indicator, attached files.</p>
+
+<p>Every JSON example below is a real frame captured from
+<code>GET /api/v1/events/stream</code> during the worked run at the bottom of this page, with
+only the SSE wrapper removed and whitespace added.</p>
+
+<h3 id="run-queued"><code>run.queued</code></h3>
+
+<p>The run exists and is expected to start. It carries the whole of the run's metadata, because
+for many publishers this is the only event sent before results begin arriving, and the
+dashboard should be able to draw the run — project, branch, pipeline — while it is still
+empty.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>project_key</code></td><td>string</td><td>Required. The only required field.</td></tr>
+    <tr><td><code>name</code></td><td>string or null</td><td>Human-readable run name.</td></tr>
+    <tr><td><code>team</code> <code>component</code></td><td>string or null</td><td>Ownership facets; they are what the dashboard filters on.</td></tr>
+    <tr><td><code>test_type</code></td><td><code>TestType</code></td><td>Defaults to <code>other</code>.</td></tr>
+    <tr><td><code>trigger</code></td><td><code>TriggerType</code></td><td><code>manual</code>, <code>push</code>, <code>pull_request</code>, <code>schedule</code>, <code>api</code>, <code>retry</code>, <code>local</code>, <code>unknown</code>. Defaults to <code>unknown</code>.</td></tr>
+    <tr><td><code>context</code></td><td><code>RunContext</code></td><td>Framework, language, environment, branch, commit, pipeline, host, executor. Every field optional.</td></tr>
+    <tr><td><code>tags</code></td><td>list of string</td><td></td></tr>
+    <tr><td><code>metadata</code></td><td>object</td><td>Free-form.</td></tr>
+    <tr><td><code>expected_tests</code></td><td>int or null</td><td>The collected count, when the framework knows it before it starts.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="json"><div class="codeblock__head"><span class="codeblock__lang">json</span></div>
+<pre><code>{
+  "specversion": "1.0",
+  "id": "e761b928-f70c-40bc-aaeb-92e976a6bde8",
+  "source": "urn:test-hub:api",
+  "type": "run.queued",
+  "time": "2026-09-09T03:28:35.117041Z",
+  "datacontenttype": "application/json",
+  "subject": null,
+  "schemaversion": 1,
+  "workspaceid": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+  "runid": "c863fdf4-614f-45df-be15-3af522f4d7d7",
+  "sequence": 1,
+  "data": {
+    "project_key": "storefront-web",
+    "name": null,
+    "team": "payments",
+    "component": "checkout",
+    "test_type": "e2e",
+    "trigger": "unknown",
+    "context": {
+      "framework": "playwright", "framework_version": null,
+      "language": null, "language_version": null,
+      "environment": "staging", "branch": "main",
+      "commit_sha": null, "commit_message": null,
+      "pipeline_id": null, "pipeline_url": null, "ci_provider": null,
+      "hostname": null, "os": null, "executor": null
+    },
+    "tags": [],
+    "metadata": {},
+    "expected_tests": null
+  }
+}</code></pre>
+</div>
+
+<h3 id="run-started"><code>run.started</code></h3>
+
+<p>Execution has begun. <code>started_at</code> is the only required field;
+<code>project_key</code> and <code>context</code> are there so that a publisher which skipped
+<code>run.queued</code> still ends up with a usable run rather than one labelled with nothing.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>started_at</code></td><td>timestamp</td><td>Required, timezone-aware. This is what the run's wall-clock duration is measured from.</td></tr>
+    <tr><td><code>project_key</code></td><td>string or null</td><td></td></tr>
+    <tr><td><code>context</code></td><td><code>RunContext</code> or null</td><td></td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="json"><div class="codeblock__head"><span class="codeblock__lang">json</span></div>
+<pre><code>{
+  "specversion": "1.0",
+  "id": "5c036ec8-eaf1-42cb-8d73-87a42a26011f",
+  "source": "urn:test-hub:api",
+  "type": "run.started",
+  "time": "2026-09-09T03:28:35.117041Z",
+  "datacontenttype": "application/json",
+  "subject": null,
+  "schemaversion": 1,
+  "workspaceid": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+  "runid": "c863fdf4-614f-45df-be15-3af522f4d7d7",
+  "sequence": 2,
+  "data": {
+    "started_at": "2026-09-09T03:28:35.117041Z",
+    "project_key": "storefront-web",
+    "context": null
+  }
+}</code></pre>
+</div>
+
+<h3 id="suite-started"><code>suite.started</code></h3>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>suite_id</code></td><td>UUID</td><td>Required. The stable suite identity — a UUIDv5 over project and path.</td></tr>
+    <tr><td><code>name</code></td><td>string</td><td>Required. What to show.</td></tr>
+    <tr><td><code>path</code></td><td>string</td><td>Required. The grouping key; nested suites use <code>parent/child</code>.</td></tr>
+    <tr><td><code>parent_id</code></td><td>UUID or null</td><td>The parent suite's identity, if you want a tree rather than a flat list.</td></tr>
+    <tr><td><code>started_at</code></td><td>timestamp or null</td><td></td></tr>
+    <tr><td><code>metadata</code></td><td>object</td><td></td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="json"><div class="codeblock__head"><span class="codeblock__lang">json</span></div>
+<pre><code>{
+  "specversion": "1.0",
+  "id": "cccccccc-0000-4000-8000-000000000001",
+  "source": "urn:test-hub:ci",
+  "type": "suite.started",
+  "time": "2026-09-08T21:31:00Z",
+  "datacontenttype": "application/json",
+  "subject": null,
+  "schemaversion": 1,
+  "workspaceid": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+  "runid": "c863fdf4-614f-45df-be15-3af522f4d7d7",
+  "sequence": 3,
+  "data": {
+    "suite_id": "ef54fbfe-82d2-5a49-b14f-8172db827cea",
+    "name": "checkout",
+    "path": "specs/checkout",
+    "started_at": "2026-09-08T21:31:00Z"
+  }
+}</code></pre>
+</div>
+
+<h3 id="test-started"><code>test.started</code></h3>
+
+<p>Optional, and the only event you can skip without losing information. Send it if you want a
+test to appear as <span class="st st--running">running</span> on the dashboard while it
+executes; omit it and the test appears only once it finishes. It creates the attempt row with
+status <code>running</code>, and the matching <code>test.finished</code> updates that same row
+rather than creating a second one — matched on
+<code>(run, test, attempt_number)</code>, which is why the attempt number has to agree.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>suite_id</code></td><td>UUID</td><td>Required.</td></tr>
+    <tr><td><code>name</code></td><td>string</td><td>Required.</td></tr>
+    <tr><td><code>suite_path</code></td><td>string</td><td>Required.</td></tr>
+    <tr><td><code>test_id</code></td><td>UUID or null</td><td>The stable test identity. Omit it and the server derives it from the identity components with <code>test_identity()</code>.</td></tr>
+    <tr><td><code>class_name</code> <code>params</code> <code>full_name</code> <code>file</code> <code>owner</code></td><td>string or null</td><td>Identity and display. <code>params</code> is the canonical normalized form — see <a href="canonical-schema.html#identity">identity</a>.</td></tr>
+    <tr><td><code>tags</code> <code>markers</code></td><td>list of string</td><td></td></tr>
+    <tr><td><code>attempt_number</code></td><td>int ≥ 1</td><td>Defaults to 1.</td></tr>
+    <tr><td><code>started_at</code></td><td>timestamp or null</td><td></td></tr>
+    <tr><td><code>worker</code></td><td>string or null</td><td>xdist worker or shard id. Deliberately <em>not</em> part of the test's identity.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="json"><div class="codeblock__head"><span class="codeblock__lang">json</span></div>
+<pre><code>{
+  "specversion": "1.0",
+  "id": "cccccccc-0000-4000-8000-000000000002",
+  "source": "urn:test-hub:ci",
+  "type": "test.started",
+  "time": "2026-09-08T21:31:00Z",
+  "datacontenttype": "application/json",
+  "subject": null,
+  "schemaversion": 1,
+  "workspaceid": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+  "runid": "c863fdf4-614f-45df-be15-3af522f4d7d7",
+  "sequence": 4,
+  "data": {
+    "test_id": "72b4ac40-333b-50f2-9519-7b0bad62c78c",
+    "suite_id": "ef54fbfe-82d2-5a49-b14f-8172db827cea",
+    "name": "retries a flaky redirect",
+    "suite_path": "specs/checkout",
+    "attempt_number": 1,
+    "started_at": "2026-09-08T21:31:01Z"
+  }
+}</code></pre>
+</div>
+
+<h3 id="test-finished"><code>test.finished</code></h3>
+
+<p>The event that carries a result: everything from <code>test.started</code>, plus the
+outcome.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td colspan="3"><em>every identity field from <code>test.started</code></em></td></tr>
+    <tr><td><code>attempt_number</code></td><td>int ≥ 1</td><td><b>A retry is a second <code>test.finished</code> with this incremented — never a correction of the first.</b></td></tr>
+    <tr><td><code>status</code></td><td><code>TestStatus</code></td><td>Required. One of the ten canonical statuses.</td></tr>
+    <tr><td><code>original_status</code></td><td>string or null</td><td>Exactly what the source report called it, kept beside the normalized value so nothing is lost in translation.</td></tr>
+    <tr><td><code>started_at</code> <code>finished_at</code></td><td>timestamp or null</td><td></td></tr>
+    <tr><td><code>duration_ms</code></td><td>int ≥ 0 or null</td><td>Derived from the two timestamps when they are both present and this is absent, and vice versa.</td></tr>
+    <tr><td><code>failure</code></td><td><code>FailureDetail</code> or null</td><td><code>type</code>, <code>message</code>, <code>stack_trace</code>, <code>expected</code>, <code>actual</code>, <code>truncated</code>.</td></tr>
+    <tr><td><code>stdout</code> <code>stderr</code> <code>logs</code></td><td>string or null</td><td>Redacted and truncated on the way into storage.</td></tr>
+    <tr><td><code>skip_reason</code></td><td>string or null</td><td></td></tr>
+    <tr><td><code>worker</code></td><td>string or null</td><td></td></tr>
+    <tr><td><code>metadata</code></td><td>object</td><td></td></tr>
+  </tbody>
+</table></div>
+
+<p>Attempt 1, failing:</p>
+
+<div class="codeblock" data-lang="json"><div class="codeblock__head"><span class="codeblock__lang">json</span></div>
+<pre><code>{
+  "specversion": "1.0",
+  "id": "cccccccc-0000-4000-8000-000000000003",
+  "source": "urn:test-hub:ci",
+  "type": "test.finished",
+  "time": "2026-09-08T21:31:00Z",
+  "datacontenttype": "application/json",
+  "subject": null,
+  "schemaversion": 1,
+  "workspaceid": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+  "runid": "c863fdf4-614f-45df-be15-3af522f4d7d7",
+  "sequence": 5,
+  "data": {
+    "test_id": "72b4ac40-333b-50f2-9519-7b0bad62c78c",
+    "suite_id": "ef54fbfe-82d2-5a49-b14f-8172db827cea",
+    "name": "retries a flaky redirect",
+    "suite_path": "specs/checkout",
+    "attempt_number": 1,
+    "status": "failed",
+    "original_status": "FAILED",
+    "duration_ms": 4100,
+    "failure": {
+      "type": "TimeoutError",
+      "message": "navigation timed out after 4000ms"
+    }
+  }
+}</code></pre>
+</div>
+
+<p>Attempt 2, the retry that passed. Same <code>test_id</code>, <code>attempt_number</code>
+incremented, a fresh event <code>id</code>:</p>
+
+<div class="codeblock" data-lang="json"><div class="codeblock__head"><span class="codeblock__lang">json</span></div>
+<pre><code>{
+  "specversion": "1.0",
+  "id": "cccccccc-0000-4000-8000-000000000004",
+  "source": "urn:test-hub:ci",
+  "type": "test.finished",
+  "time": "2026-09-08T21:31:00Z",
+  "datacontenttype": "application/json",
+  "subject": null,
+  "schemaversion": 1,
+  "workspaceid": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+  "runid": "c863fdf4-614f-45df-be15-3af522f4d7d7",
+  "sequence": 6,
+  "data": {
+    "test_id": "72b4ac40-333b-50f2-9519-7b0bad62c78c",
+    "suite_id": "ef54fbfe-82d2-5a49-b14f-8172db827cea",
+    "name": "retries a flaky redirect",
+    "suite_path": "specs/checkout",
+    "attempt_number": 2,
+    "status": "passed",
+    "duration_ms": 3900
+  }
+}</code></pre>
+</div>
+
+<p>Those two events are the entire mechanism behind flakiness. The fold writes two attempt
+rows, takes the test's effective status from the last one (<code>passed</code>), and sets
+<code>flaky = true</code> because the attempts disagree. Overwriting attempt 1 instead would
+leave a green test and no evidence that anything ever went wrong.
+<a href="metrics.html#flaky">How flakiness is defined.</a></p>
+
+<h3 id="suite-finished"><code>suite.finished</code></h3>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>suite_id</code></td><td>UUID</td><td>Required.</td></tr>
+    <tr><td><code>finished_at</code></td><td>timestamp or null</td><td></td></tr>
+    <tr><td><code>duration_ms</code></td><td>int or null</td><td></td></tr>
+  </tbody>
+</table></div>
+
+<p>Three fields, and one of them is the id. There is deliberately nowhere to put suite-level
+console output, which is a known compromise rather than an oversight: the JUnit adapter works
+around it by lifting a suite-level <code>&lt;system-out&gt;</code> onto
+<code>run.finished</code>'s metadata and raising a <code>suite_output_lifted</code> warning, so
+the text survives and the fact that it was moved is visible.</p>
+
+<div class="codeblock" data-lang="json"><div class="codeblock__head"><span class="codeblock__lang">json</span></div>
+<pre><code>{
+  "specversion": "1.0",
+  "id": "cccccccc-0000-4000-8000-000000000005",
+  "source": "urn:test-hub:ci",
+  "type": "suite.finished",
+  "time": "2026-09-08T21:31:00Z",
+  "datacontenttype": "application/json",
+  "subject": null,
+  "schemaversion": 1,
+  "workspaceid": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+  "runid": "c863fdf4-614f-45df-be15-3af522f4d7d7",
+  "sequence": 7,
+  "data": {
+    "suite_id": "ef54fbfe-82d2-5a49-b14f-8172db827cea",
+    "finished_at": "2026-09-08T21:31:09Z",
+    "duration_ms": 9000
+  }
+}</code></pre>
+</div>
+
+<h3 id="artifact-published"><code>artifact.published</code></h3>
+
+<p>The bytes travel over <code>POST /api/v1/runs/{id}/artifacts</code>; this event records the
+fact and the content address. The SHA-256 digest <em>is</em> the storage key — blobs live at
+<code>artifacts/&lt;aa&gt;/&lt;bb&gt;/&lt;digest&gt;</code> — so the same screenshot uploaded from
+fifty shards is one file on disk. Each upload still gets its own artifact row, its own
+<code>artifact_id</code> and its own <code>artifact.published</code> event; what is shared is
+the content, not the record.</p>
+
+<div class="note note--warn"><span class="note__title">The <code>deduplicated</code> flag is
+not wired up</span><code>ArtifactResponse</code> carries a <code>deduplicated</code> field, and
+the upload route's own docstring says it returns <code>true</code> when the content was already
+stored. In this build it never does — the route constructs the response without it, so it is
+always <code>false</code>. Uploading identical bytes twice and reading that flag will tell you
+nothing; compare the <code>sha256</code> instead, which is correct in both responses.</div>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>artifact_id</code></td><td>UUID</td><td>Required.</td></tr>
+    <tr><td><code>name</code></td><td>string</td><td>Required. A label, never a path.</td></tr>
+    <tr><td><code>kind</code></td><td><code>ArtifactKind</code></td><td><code>screenshot</code>, <code>video</code>, <code>log</code>, <code>trace</code>, <code>report</code>, <code>coverage</code>, <code>raw_report</code>, <code>other</code>.</td></tr>
+    <tr><td><code>content_type</code></td><td>string</td><td>Defaults to <code>application/octet-stream</code>.</td></tr>
+    <tr><td><code>size_bytes</code></td><td>int ≥ 0</td><td>Required.</td></tr>
+    <tr><td><code>sha256</code></td><td>64 hex chars</td><td>Required. Pattern-checked on the envelope and re-validated before it is ever turned into a path, because this is the one field that becomes a filename.</td></tr>
+    <tr><td><code>test_id</code> <code>attempt_id</code></td><td>UUID or null</td><td>What it belongs to. Null means "the run as a whole".</td></tr>
+    <tr><td><code>url</code></td><td>string or null</td><td>Where the API serves it.</td></tr>
+    <tr><td><code>metadata</code></td><td>object</td><td></td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="json"><div class="codeblock__head"><span class="codeblock__lang">json</span></div>
+<pre><code>{
+  "specversion": "1.0",
+  "id": "5b287064-273d-4ff6-b693-3a4d0e782fdd",
+  "source": "https://test-hub.dev/source/unknown",
+  "type": "artifact.published",
+  "time": "2026-09-09T03:29:01.356457Z",
+  "datacontenttype": "application/json",
+  "subject": null,
+  "schemaversion": 1,
+  "workspaceid": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+  "runid": "c863fdf4-614f-45df-be15-3af522f4d7d7",
+  "sequence": 9,
+  "data": {
+    "artifact_id": "6bf9602b-3f2c-4afe-9fba-e876ce41425f",
+    "name": "shot.png",
+    "kind": "screenshot",
+    "content_type": "image/png",
+    "size_bytes": 17,
+    "sha256": "cc20cf458969ddaf4e12d919aa545ac2fcdfae6f19baf2373d5273bf8d44c3aa",
+    "test_id": "72b4ac40-333b-50f2-9519-7b0bad62c78c",
+    "attempt_id": null,
+    "url": "/api/v1/artifacts/6bf9602b-3f2c-4afe-9fba-e876ce41425f",
+    "metadata": {}
+  }
+}</code></pre>
+</div>
+
+<p>Note that <code>source</code>: it is the default
+<code>https://test-hub.dev/source/unknown</code>, not <code>urn:test-hub:api</code> like the
+other server-generated events in the same run, because
+<code>RunService.add_artifact</code> builds its event without passing a source. It is cosmetic
+— dedupe is on the pair, and the pair is still unique — but it does mean a single run's log can
+carry two sources where you would expect one, and a consumer that filters by source will miss
+these.</p>
+
+<h3 id="run-finished"><code>run.finished</code></h3>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>finished_at</code></td><td>timestamp</td><td>Required.</td></tr>
+    <tr><td><code>status</code></td><td><code>RunStatus</code> or null</td><td><b>Advisory.</b> Honoured only to mark a run <code>cancelled</code>; everything else is folded from the attempts.</td></tr>
+    <tr><td><code>duration_ms</code></td><td>int or null</td><td>Also advisory — wall clock from <code>started_at</code> wins whenever it can be computed.</td></tr>
+    <tr><td><code>metadata</code></td><td>object</td><td></td></tr>
+  </tbody>
+</table></div>
+
+<p>"Advisory" is precise, and it is cheap to test. Every row below is a run with exactly one
+test in it, closed with a <code>status</code> the publisher chose:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>What the test did</th><th>What the publisher claimed</th><th>Stored run status</th></tr></thead>
+  <tbody>
+    <tr><td>passed</td><td><code>failed</code></td><td><span class="st st--passed">passed</span></td></tr>
+    <tr><td>passed</td><td><code>error</code></td><td><span class="st st--passed">passed</span></td></tr>
+    <tr><td>passed</td><td><code>cancelled</code></td><td><span class="st st--cancelled">cancelled</span></td></tr>
+    <tr><td>errored</td><td><code>passed</code></td><td><span class="st st--error">error</span></td></tr>
+    <tr><td>xpassed</td><td><code>passed</code></td><td><span class="st st--failed">failed</span></td></tr>
+    <tr><td>no tests at all</td><td>—</td><td><span class="st st--unknown">unknown</span></td></tr>
+  </tbody>
+</table></div>
+
+<p><code>cancelled</code> is the one outcome a publisher can dictate, because a cancelled run
+is indistinguishable from a run that stopped reporting halfway — there is no evidence in the
+results either way. <code>duration_ms</code> is ignored the same way: a run finished with
+<code>{"duration_ms": 999999}</code> stored 5 ms, its real wall clock.</p>
+
+<div class="codeblock" data-lang="json"><div class="codeblock__head"><span class="codeblock__lang">json</span></div>
+<pre><code>{
+  "specversion": "1.0",
+  "id": "a386daec-e56c-4489-93b3-d65c1298f4a8",
+  "source": "urn:test-hub:api",
+  "type": "run.finished",
+  "time": "2026-09-09T03:29:01.343247Z",
+  "datacontenttype": "application/json",
+  "subject": null,
+  "schemaversion": 1,
+  "workspaceid": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+  "runid": "c863fdf4-614f-45df-be15-3af522f4d7d7",
+  "sequence": 8,
+  "data": {
+    "finished_at": "2026-09-09T03:29:01.343215Z",
+    "status": null,
+    "duration_ms": null,
+    "metadata": {}
+  }
+}</code></pre>
+</div>
+
+<h2 id="batches">Batches</h2>
+
+<p><code>EventBatch</code> — the body of <code>POST /api/v1/runs/{id}/events</code> — is
+<code>{"events": [...]}</code> with between 1 and 5000 events, all belonging to the same run.
+The API additionally checks that every event's <code>runid</code> matches the run id in the URL
+and that every <code>workspaceid</code> matches the server's workspace, so a file cannot write
+into another tenant and a copy-pasted URL cannot silently scatter events across runs.</p>
+
+<p>A batch is applied <b>atomically</b>: it lands entirely or not at all, so a partially applied
+batch can never leave the counts half-updated. The whole batch runs inside one
+<code>SqlUnitOfWork</code>, and <code>_refold</code> rewrites the run's derived numbers once at
+the end rather than incrementally. That is a deliberate cost — recomputing is more work than
+adding one to a counter — bought for a specific reason: incremental counters drift, and an
+event applied twice or a shard arriving out of order leaves them wrong in a way nobody notices
+until two pages disagree.</p>
+
+<p>The ceiling is <code>Settings.max_events_per_batch</code> (default 5000) as well as the
+model's own <code>max_length</code>. Exceeding it is a <code>validation_error</code>, not a
+truncation — losing the tail of a batch quietly would be the worst of both.</p>
+
+<h2 id="sse">Reading the stream back over SSE</h2>
+
+<p>Events go out to subscribers on <code>GET /api/v1/events/stream</code> as Server-Sent
+Events. The transport is SSE rather than WebSockets because the traffic is entirely one-way,
+and SSE gives three things for free that would otherwise have to be built: automatic
+reconnection in the browser, <code>Last-Event-ID</code> replay, and passage through any HTTP
+proxy with no upgrade handshake.</p>
+
+<div class="codeblock" data-lang="text" data-caption="The opening of a real stream, captured with curl -sN"><div class="codeblock__head"><span class="codeblock__lang">text</span><span class="codeblock__cap">The opening of a real stream, captured with curl -sN</span></div>
+<pre><code>retry: 15000
+
+event: hello
+id: 0
+data: {"workspace_id":"b037a4b3-53f8-5326-a5d5-f5fad3c31052","replaying":false}
+
+event: test-hub
+id: 3
+data: {"event":{"specversion":"1.0","id":"cccccccc-0000-4000-8000-000000000001",
+       "source":"urn:test-hub:ci","type":"suite.started", … },
+       "received_at":"2026-09-09T03:28:54.321659+00:00"}
+
+: heartbeat</code></pre>
+</div>
+
+<p>The <code>retry:</code> line is sent once, up front, so that a server restart does not
+produce a reconnect storm. The heartbeat is a comment, emitted every
+<code>sse_heartbeat_seconds</code> (default 15). There is a fourth frame, which you will not
+see on a healthy connection:</p>
+
+<div class="codeblock" data-lang="text" data-caption="The resync directive"><div class="codeblock__head"><span class="codeblock__lang">text</span><span class="codeblock__cap">The resync directive</span></div>
+<pre><code>event: resync
+id: 43
+data: {"reason":"cursor_expired","oldest_available":1204}</code></pre>
+</div>
+
+<p>Four things are worth knowing before you write a client.</p>
+
+<ul>
+  <li><b><code>id:</code> is a bus cursor, not the CloudEvent's <code>id</code>.</b> A replayed
+  event keeps its own identity, so using that as the resume token would make resumption
+  ambiguous. Send the last <code>id:</code> you saw back as <code>Last-Event-ID</code>; the
+  browser's <code>EventSource</code> does this for you.</li>
+  <li><b>It is not the run's <code>sequence</code> either.</b> The bus cursor is global to the
+  workspace and counts every event from every run. In the worked run below the two columns line
+  up exactly, 1 through 9 — because that workspace had no other traffic. On a busy server they
+  will not, and a client that assumed otherwise breaks the first time two pipelines overlap.</li>
+  <li><b>A heartbeat is a comment and never moves your cursor.</b> It exists to stop proxies
+  closing an idle connection; it carries no <code>id:</code>.</li>
+  <li><b><code>resync</code> means refetch, not reconnect.</b> The bus keeps a bounded ring
+  buffer per workspace (<code>sse_replay_buffer</code>, default 1000 events). A client that
+  reconnects inside the buffer is replayed; one that has been away longer, or one too slow to
+  drain its queue, is told to refetch over REST. Silently skipping the gap would leave a
+  dashboard confidently displaying stale numbers, which is worse than a reload.</li>
+</ul>
+
+<h2 id="worked-run">A full run, end to end</h2>
+
+<p>Everything below was executed against a local server on port 8931 with
+<code>TEST_HUB_DATA_DIR</code> pointed at a scratch directory. The ids are the real ones.</p>
+
+<ol class="steps">
+  <li>
+    <h3>Open the run</h3>
+    <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ RUN=$(curl -sX POST "$HUB/api/v1/runs" -H 'content-type: application/json' \
+    -d '{"project_key":"storefront-web","test_type":"e2e","team":"payments",
+         "component":"checkout",
+         "context":{"branch":"main","environment":"staging","framework":"playwright"}}' \
+  | jq -r .id)</code></pre>
+    </div>
+    <p>That emits two events, not one: <code>run.queued</code> at sequence 1 and
+    <code>run.started</code> at sequence 2, because the request body's <code>started</code>
+    defaults to true. Pass <code>"started": false</code> if your run is genuinely queued and
+    will begin later.</p>
+  </li>
+  <li>
+    <h3>Stream the results</h3>
+    <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ curl -sX POST "$HUB/api/v1/runs/$RUN/events" \
+    -H 'content-type: application/json' -H 'X-Idempotency-Key: doc-batch-1' \
+    -d @events.json</code></pre>
+    </div>
+    <div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>{"run_id":"c863fdf4-614f-45df-be15-3af522f4d7d7","applied":5,"ignored":0,
+ "created_run":false,
+ "counts":{"total":1,"passed":1,"failed":0,"error":0,"skipped":0,"xfailed":0,
+           "xpassed":0,"cancelled":0,"unknown":0,"running":0,"queued":0,
+           "flaky":1,"retried":1,"completed":1,"executed":1,
+           "pass_rate":100.0,"failure_rate":0.0},
+ "status":"running"}</code></pre>
+    </div>
+    <p><code>events.json</code> held five events with <code>"sequence": 0</code>, so the server
+    allocated 3 through 7: <code>suite.started</code>, <code>test.started</code>,
+    <code>test.finished</code> (attempt 1, failed), <code>test.finished</code> (attempt 2,
+    passed), <code>suite.finished</code>. Read <code>counts.total</code> carefully — it is 1,
+    not 2. Two attempts, one test. And <code>flaky: 1</code> already, before the run is even
+    closed.</p>
+  </li>
+  <li>
+    <h3>Close it</h3>
+    <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ curl -sX POST "$HUB/api/v1/runs/$RUN/finish" \
+    -H 'content-type: application/json' -d '{}'</code></pre>
+    </div>
+    <div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>"status": "passed",
+"started_at": "2026-09-09T03:28:35.117041Z",
+"finished_at": "2026-09-09T03:29:01.343215Z",
+"duration_ms": 26226,
+"counts": {"total": 1, "passed": 1, "flaky": 1, "retried": 1,
+           "completed": 1, "executed": 1, "pass_rate": 100.0, "failure_rate": 0.0}</code></pre>
+    </div>
+    <p><code>run.finished</code> takes sequence 8. The run is
+    <span class="st st--passed">passed</span> because the effective attempt passed, and
+    <code>flaky: 1, retried: 1</code> because the first attempt did not. The 26226 ms is the
+    wall clock of my hand-typed session between the two <code>curl</code> calls — not the
+    8000 ms the two attempts reported between them.
+    <a href="metrics.html#durations">Why wall clock wins.</a></p>
+  </li>
+  <li>
+    <h3>Attach a screenshot</h3>
+    <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ curl -sX POST "$HUB/api/v1/runs/$RUN/artifacts" \
+    -F "file=@shot.png" -F "kind=screenshot" \
+    -F "test_id=72b4ac40-333b-50f2-9519-7b0bad62c78c"</code></pre>
+    </div>
+    <div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>{"artifact":{"id":"6bf9602b-3f2c-4afe-9fba-e876ce41425f",
+             "sha256":"cc20cf458969ddaf4e12d919aa545ac2fcdfae6f19baf2373d5273bf8d44c3aa",
+             "size_bytes":17,
+             "url":"/api/v1/artifacts/6bf9602b-3f2c-4afe-9fba-e876ce41425f"},
+ "deduplicated":false}</code></pre>
+    </div>
+    <p>A run that is already finished still accepts artifacts; the event lands at sequence 9.
+    That is on purpose — screenshots and traces are frequently uploaded by a cleanup step that
+    runs after the results have been reported.</p>
+  </li>
+</ol>
+
+<p>The whole stream as it arrived on <code>GET /api/v1/events/stream</code>, with the bus
+cursor each SSE <code>id:</code> line carried:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>SSE <code>id:</code></th><th><code>sequence</code></th><th><code>type</code></th><th><code>source</code></th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>1</td><td><code>run.queued</code></td><td><code>urn:test-hub:api</code></td></tr>
+    <tr><td>2</td><td>2</td><td><code>run.started</code></td><td><code>urn:test-hub:api</code></td></tr>
+    <tr><td>3</td><td>3</td><td><code>suite.started</code></td><td><code>urn:test-hub:ci</code></td></tr>
+    <tr><td>4</td><td>4</td><td><code>test.started</code></td><td><code>urn:test-hub:ci</code></td></tr>
+    <tr><td>5</td><td>5</td><td><code>test.finished</code> — attempt 1, failed</td><td><code>urn:test-hub:ci</code></td></tr>
+    <tr><td>6</td><td>6</td><td><code>test.finished</code> — attempt 2, passed</td><td><code>urn:test-hub:ci</code></td></tr>
+    <tr><td>7</td><td>7</td><td><code>suite.finished</code></td><td><code>urn:test-hub:ci</code></td></tr>
+    <tr><td>8</td><td>8</td><td><code>run.finished</code></td><td><code>urn:test-hub:api</code></td></tr>
+    <tr><td>9</td><td>9</td><td><code>artifact.published</code></td><td><code>https://test-hub.dev/source/unknown</code></td></tr>
+  </tbody>
+</table></div>
+
+<p>Two columns of identical numbers, three different sources, one run. The columns agree only
+because nothing else was writing to that workspace, and the sources differ because the server
+generated some of these events and my <code>curl</code> supplied the rest.</p>
+
+<h2 id="events-in-a-file">Events in a file</h2>
+
+<p>A publisher that already speaks this contract does not need an HTTP session at all. Put the
+raw stream in a file and import it:</p>
+
+<div class="codeblock" data-lang="json" data-caption="tests/fixtures/canonical/events.json is a complete worked example"><div class="codeblock__head"><span class="codeblock__lang">json</span><span class="codeblock__cap">tests/fixtures/canonical/events.json is a complete worked example</span></div>
+<pre><code>{"kind": "test-hub-events", "schema_version": 1, "events": [ …CloudEvents envelopes… ]}</code></pre>
+</div>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub ingest events.json --project ledger-worker --json</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="The shipped fixture: seven events, two tests, one of them failing"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">The shipped fixture: seven events, two tests, one of them failing</span></div>
+<pre><code>  "adapter": "testhub-json", "created": true,
+  "events_applied": 7, "events_ignored": 0,
+  "tests_imported": 2, "attempts_imported": 2,
+  "counts": {"total": 2, "passed": 1, "failed": 1, "completed": 2, "executed": 2,
+             "pass_rate": 50.0, "failure_rate": 50.0}</code></pre>
+</div>
+
+<p>The <code>testhub-json</code> adapter validates each envelope and passes it through
+unchanged, <b>preserving sequence numbers</b> — they are the file's own statement about
+ordering and the adapter has no better information. Missing <code>run_id</code>,
+<code>workspace_id</code> and <code>source</code> are filled in from the import request.</p>
+
+<p>A <code>workspace_id</code> that disagrees with the importing workspace is overridden rather
+than honoured, because a file must never be able to write into another tenant. It is overridden
+loudly:</p>
+
+<div class="codeblock" data-lang="output" data-caption="Real warning from importing a file whose events named a foreign workspace"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">Real warning from importing a file whose events named a foreign workspace</span></div>
+<pre><code>  "code": "workspace_override",
+  "message": "7 event(s) named a different workspace; they were re-homed into
+              the importing workspace",
+  "severity": "warning"</code></pre>
+</div>
+
+<div class="cards">
+  <div>
+    <h3>What the payloads mean</h3>
+    <p><a href="canonical-schema.html">Canonical schema</a> — the ten statuses, the identity
+    recipe, and every model field these events fold into.</p>
+  </div>
+  <div>
+    <h3>What the numbers mean</h3>
+    <p><a href="metrics.html">Metrics</a> — how two <code>test.finished</code> events for one
+    test become one pass and one flake.</p>
+  </div>
+  <div>
+    <h3>The endpoints</h3>
+    <p><a href="rest-api.html">REST API</a> — request and response shapes, status codes, and
+    what each call emits.</p>
+  </div>
+  <div>
+    <h3>Turning a report into events</h3>
+    <p><a href="adapters.html">Adapters</a> — how JUnit XML and the canonical JSON forms are
+    converted into exactly these eight types.</p>
+  </div>
+</div>
+<nav class="pagenav" aria-label="Pagination">
+<a class="pagenav__prev" href="../docs/canonical-schema.html"><span>&larr;&nbsp;Previous</span><b>Canonical schema</b></a>
+<a class="pagenav__next" href="../docs/metrics.html"><span>Next&nbsp;&rarr;</span><b>Metrics</b></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#envelope">The envelope</a></li>
+<li class="lvl-3"><a href="#extension-names">Why workspaceid and not workspace_id</a></li>
+<li class="lvl-3"><a href="#strict-validation">Unknown fields are refused, and so is an unknown version</a></li>
+<li class="lvl-2"><a href="#sequence">Sequence numbers</a></li>
+<li class="lvl-2"><a href="#idempotency">Idempotency</a></li>
+<li class="lvl-3"><a href="#per-event">Per event: UNIQUE(source, event_id)</a></li>
+<li class="lvl-3"><a href="#per-batch">Per batch: X-Idempotency-Key</a></li>
+<li class="lvl-2"><a href="#types">The eight event types</a></li>
+<li class="lvl-3"><a href="#run-queued">run.queued</a></li>
+<li class="lvl-3"><a href="#run-started">run.started</a></li>
+<li class="lvl-3"><a href="#suite-started">suite.started</a></li>
+<li class="lvl-3"><a href="#test-started">test.started</a></li>
+<li class="lvl-3"><a href="#test-finished">test.finished</a></li>
+<li class="lvl-3"><a href="#suite-finished">suite.finished</a></li>
+<li class="lvl-3"><a href="#artifact-published">artifact.published</a></li>
+<li class="lvl-3"><a href="#run-finished">run.finished</a></li>
+<li class="lvl-2"><a href="#batches">Batches</a></li>
+<li class="lvl-2"><a href="#sse">Reading the stream back over SSE</a></li>
+<li class="lvl-2"><a href="#worked-run">A full run, end to end</a></li>
+<li class="lvl-2"><a href="#events-in-a-file">Events in a file</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

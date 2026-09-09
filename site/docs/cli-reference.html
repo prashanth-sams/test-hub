@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLI reference · Test Hub</title>
+<meta name="description" content="Every test-hub command, every option, what it exits with, and why there is no --token flag.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="CLI reference · Test Hub">
+<meta property="og:description" content="Every test-hub command, every option, what it exits with, and why there is no --token flag.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/cli-reference.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html">Docs</a><a href="../docs/dashboard-tour.html">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html" aria-current="page">CLI</a><a href="../docs/deployment.html">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link" href="../docs/getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link" href="../docs/dashboard-tour.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link is-active" href="../docs/cli-reference.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link" href="../docs/configuration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link" href="../docs/python-sdk.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link" href="../docs/events.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link" href="../docs/metrics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link" href="../docs/deployment.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link" href="../docs/ci-integrations.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link" href="../docs/contributing.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>CLI reference</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Reference</span>
+  <h1>CLI reference</h1>
+  <p class="lede">Seven commands, one of which has two sub-commands. None of them holds any logic of its own — each is a thin wrapper over the same service layer the HTTP API calls, which is why anything you can do here you can also do over HTTP. Everything below was run against test-hub 0.1.0; the outputs are copied out of a terminal, not paraphrased.</p>
+</header>
+<h2 id="shape">The shape of the command line</h2>
+
+<p>Every command takes <code>-h</code> or <code>--help</code>, and the root command takes
+<code>-V</code>/<code>--version</code>. The version line reports two numbers, because they move
+independently: the package version, and the canonical schema version that every payload carries.</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub --version
+test-hub 0.1.0 (canonical schema v1)</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub --help, commands only"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">test-hub --help, commands only</span></div>
+<pre><code>  serve    Start the API and serve the dashboard.
+  ingest   Import a report file into the local store.
+  publish  Send a report to a remote Test Hub server.
+  export   Write a self-contained offline HTML report.
+  demo     Populate the store with realistic sample data.
+  formats  List the installed report adapters.
+  token    Create and hash API tokens.</code></pre>
+</div>
+
+<p>Sub-commands are registered lazily, inside a function, so <code>test-hub --help</code> does not
+import FastAPI, SQLAlchemy and every adapter to print seven lines. That is the difference between
+a help screen that feels instant and one that does not, and it is the reason each command imports
+its own service module in its first line of body rather than at module scope.</p>
+
+<p><code>ingest</code> and <code>publish</code> take <code>--json</code>, and print the very
+object the human summary was rendered from —
+<code>ImportResult.model_dump(mode="json")</code> — rather than a second formatter that could
+drift away from it. So a CI step parses exactly what the terminal described.
+<code>formats --json</code> does the same for the adapter registry.</p>
+
+<h2 id="tokens">There is no <code>--token</code> flag, on purpose</h2>
+
+<p>Neither <code>publish</code> nor <code>token hash</code> will take a token as an argument. This
+is not an oversight to be worked around; it is the one rule that shows up in every command that
+touches a credential.</p>
+
+<ul>
+  <li><b><code>ps</code> is world-readable.</b> On a shared build agent, every other user on the
+  box can read the full argument vector of every running process. A token on a command line is a
+  token handed to anyone with a shell on that machine.</li>
+  <li><b>Shell history keeps it.</b> <code>~/.bash_history</code> and <code>~/.zsh_history</code>
+  are written on exit, are rarely encrypted, and are frequently backed up.</li>
+  <li><b>CI logs echo commands.</b> Most runners print the command before running it, and those
+  logs are often readable by more people than the secret store is.</li>
+</ul>
+
+<p>The two supported ways in:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>Behaviour</th></tr></thead>
+  <tbody>
+    <tr><td><code>--token-env NAME</code></td><td><code>TEST_HUB_TOKEN</code></td>
+    <td>Reads <code>$NAME</code> and strips whitespace. If you name a variable explicitly and it
+    is unset or empty, that is an error. If you leave the default and
+    <code>TEST_HUB_TOKEN</code> happens to be unset, the publish goes ahead unauthenticated —
+    which is the normal case against a local, unauthenticated server.</td></tr>
+    <tr><td><code>--token-file PATH</code></td><td>—</td>
+    <td>Reads the file and strips whitespace. A missing or empty file is always an error. This is
+    the form for Docker/Kubernetes secrets and for GitLab's file-type variables.</td></tr>
+  </tbody>
+</table></div>
+
+<p><code>--token-file</code> wins if you pass both; it is checked first and returns before the
+environment is consulted.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Both failure modes, with their real messages"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">Both failure modes, with their real messages</span></div>
+<pre><code>$ test-hub publish results.xml --project p --url http://127.0.0.1:8811 --token-env MY_MISSING_VAR
+error: environment variable MY_MISSING_VAR is not set or is empty; export it before running, or use --token-file
+# exit 78
+
+$ test-hub publish results.xml --project p --url http://127.0.0.1:8811 --token-file /tmp/empty.token
+error: token file /tmp/empty.token is empty
+# exit 78</code></pre>
+</div>
+
+<div class="note note--tip"><span class="note__title">Tip</span>If you must inline a token in a
+one-off command, do it through the environment of that single command —
+<code>TEST_HUB_TOKEN="$SECRET" test-hub publish …</code> — rather than through a flag. The value
+still reaches the process, but it never appears in the argument vector that <code>ps</code>
+shows.</div>
+
+<h2 id="serve">serve</h2>
+
+<p>Starts the REST API and serves the dashboard from the same process. One Uvicorn worker,
+deliberately: the live-update bus is in-process, so a second worker would hold a second bus and
+half the connected dashboards would miss half the events.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--host</code></td><td><code>127.0.0.1</code></td><td>Interface to bind. Anything
+    that is not loopback goes through the bind-safety gate below.</td></tr>
+    <tr><td><code>--port</code></td><td><code>8000</code></td><td>Port to listen on.</td></tr>
+    <tr><td><code>--data-dir</code></td><td>platform default</td><td>Where the SQLite file and the
+    artifact directory live. This is the one option on <code>serve</code> that also reads its
+    environment variable, <code>TEST_HUB_DATA_DIR</code>.</td></tr>
+    <tr><td><code>--reload</code></td><td>off</td><td>Restart on code changes. Rebuilds the app,
+    and therefore the application context, on every change.</td></tr>
+    <tr><td><code>--insecure-no-auth</code></td><td>off</td><td>Permit a non-loopback bind with no
+    tokens configured. Logs a warning on every start and banners the dashboard.</td></tr>
+    <tr><td><code>--open</code> / <code>--no-open</code></td><td><code>--no-open</code></td>
+    <td>Open the dashboard in a browser once the server is up.</td></tr>
+    <tr><td><code>--log-level</code></td><td><code>info</code></td><td><code>debug</code>,
+    <code>info</code>, <code>warning</code> or <code>error</code>.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub serve --port 8811</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="Loopback, no tokens configured"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">Loopback, no tokens configured</span></div>
+<pre><code>  Test Hub  http://127.0.0.1:8811
+  dashboard http://127.0.0.1:8811/
+  API docs  http://127.0.0.1:8811/api/docs
+  data      /private/tmp/th-site-serve</code></pre>
+</div>
+
+<p>Configure token hashes and a fifth line appears, so you can tell from the terminal alone which
+mode you are in:</p>
+
+<div class="codeblock" data-lang="output" data-caption="With TEST_HUB_API_TOKEN_HASHES set"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">With TEST_HUB_API_TOKEN_HASHES set</span></div>
+<pre><code>  Test Hub  http://127.0.0.1:8811
+  dashboard http://127.0.0.1:8811/
+  API docs  http://127.0.0.1:8811/api/docs
+  data      /private/tmp/th-site-serve
+  auth      bearer token required for writes</code></pre>
+</div>
+
+<p>Bind somewhere the network can reach and the gate runs <em>before</em> the socket is opened, so
+what arrives is an error rather than a listening port:</p>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub serve --host 0.0.0.0 --port 8123"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">test-hub serve --host 0.0.0.0 --port 8123</span></div>
+<pre><code>error: refusing to bind 0.0.0.0:8123 with no authentication. Create a token with `test-hub token create`, set TEST_HUB_API_TOKEN_HASHES, or pass --insecure-no-auth if this really is a throwaway development host.
+  host: 0.0.0.0
+  port: 8123
+# exit 78</code></pre>
+</div>
+
+<p>Opt out explicitly and it starts, loudly — the warning is logged, the header says
+<code>DISABLED</code>, and the URL printed is the loopback name because
+<code>http://0.0.0.0:8123</code> is neither clickable nor reachable:</p>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub serve --host 0.0.0.0 --port 8877 --insecure-no-auth"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">test-hub serve --host 0.0.0.0 --port 8877 --insecure-no-auth</span></div>
+<pre><code>07:34:25 WARNING test_hub.cli.commands.serve  AUTHENTICATION IS DISABLED and Test Hub is bound to 0.0.0.0:8877. Anyone who can reach this port can read and write every test result.
+  Test Hub  http://localhost:8877
+  dashboard http://localhost:8877/
+  API docs  http://localhost:8877/api/docs
+  data      /private/tmp/th-site-serve
+  auth      DISABLED on a public interface
+
+07:34:25 WARNING test_hub.api.app             AUTHENTICATION IS DISABLED and Test Hub is bound to 0.0.0.0:8877. Anyone who can reach this port can read and write every test result.</code></pre>
+</div>
+
+<p>The warning appears twice because it is raised in two places: by the CLI before it binds, and
+by the application at startup. The second one is the one that matters if you skip the CLI — run
+<code>create_app</code> under your own ASGI server, or use <code>--reload</code>, where the app is
+built in a subprocess on every restart, and the CLI's copy is printed once or not at all.</p>
+
+<div class="note note--warn"><span class="note__title">The environment does not reach these
+flags</span><code>--host</code>, <code>--port</code> and <code>--log-level</code> always send a
+value to the settings overlay, including their defaults, and a supplied value beats the
+environment. So <code>TEST_HUB_HOST=0.0.0.0 TEST_HUB_PORT=9999 test-hub serve</code> binds
+<code>127.0.0.1:8000</code> — verified, not theoretical. Pass the flags. Only
+<code>--data-dir</code> declares an environment variable, and
+<code>TEST_HUB_INSECURE_NO_AUTH</code> works because the flag maps its <code>False</code> to
+"unset". More on that on the <a href="configuration.html#precedence">configuration</a>
+page.</div>
+
+<div class="note note--info"><span class="note__title">About <code>--reload</code></span>It
+watches the directory the package was imported from — the checkout's <code>src/</code> if you
+installed with <code>pip install -e</code>, and <code>site-packages</code> if you installed a
+wheel. In the second case it will restart on any change to any installed package, which is not
+what you wanted. It is a development flag.</div>
+
+<h2 id="ingest">ingest</h2>
+
+<p>Parses a report file and writes it into the local store. No network, no server. Along with
+<code>publish</code> it forms a pair that deliberately takes the same options, so moving a script
+from a laptop into CI is a one-word change.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>PATH</code> (argument)</td><td>required</td><td>The report file. Must exist and
+    be a readable file; a directory is rejected by the argument parser.</td></tr>
+    <tr><td><code>--project</code>, <code>-p</code></td><td><b>required</b></td><td>Project key,
+    e.g. <code>payments-api</code>. Report files do not carry one, so nothing can infer it.</td></tr>
+    <tr><td><code>--team</code></td><td>—</td><td>Owning team. A filter facet, and part of what
+    makes a run comparable to the previous one.</td></tr>
+    <tr><td><code>--component</code></td><td>—</td><td>Component or service under test.</td></tr>
+    <tr><td><code>--type</code></td><td><code>other</code></td><td>One of <code>unit</code>,
+    <code>component</code>, <code>integration</code>, <code>contract</code>,
+    <code>functional</code>, <code>e2e</code>, <code>api</code>, <code>ui</code>,
+    <code>performance</code>, <code>security</code>, <code>accessibility</code>,
+    <code>smoke</code>, <code>regression</code>, <code>acceptance</code>, <code>other</code>.
+    Case-insensitive.</td></tr>
+    <tr><td><code>--trigger</code></td><td><code>local</code></td><td>One of <code>manual</code>,
+    <code>push</code>, <code>pull_request</code>, <code>schedule</code>, <code>api</code>,
+    <code>retry</code>, <code>local</code>, <code>unknown</code>.</td></tr>
+    <tr><td><code>--environment</code>, <code>--env</code></td><td>—</td><td>What the tests ran
+    against — <code>staging</code>, <code>prod</code>. Part of comparability.</td></tr>
+    <tr><td><code>--branch</code>, <code>--commit</code></td><td>—</td><td>Source branch and commit
+    SHA. Branch is part of comparability; commit is not.</td></tr>
+    <tr><td><code>--framework</code>, <code>--language</code></td><td>—</td><td>Free-text run
+    context, stored on the run.</td></tr>
+    <tr><td><code>--pipeline-id</code>, <code>--pipeline-url</code></td><td>—</td><td>Link back to
+    the build that produced the report.</td></tr>
+    <tr><td><code>--name</code></td><td>—</td><td>Human-readable run name.</td></tr>
+    <tr><td><code>--tags</code></td><td>—</td><td>Comma-separated; empty entries are
+    dropped.</td></tr>
+    <tr><td><code>--run-id</code></td><td>new UUID</td><td>Import into an existing run instead of
+    creating one. See the idempotency example below.</td></tr>
+    <tr><td><code>--format</code>, <code>-f</code></td><td>auto-detect</td><td>Force an adapter by
+    name. Names come from <code>test-hub formats</code>.</td></tr>
+    <tr><td><code>--data-dir</code></td><td>platform default</td><td>Also
+    <code>TEST_HUB_DATA_DIR</code>.</td></tr>
+    <tr><td><code>--json</code></td><td>off</td><td>Print the <code>ImportResult</code> as JSON
+    instead of the summary.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell" data-caption="A six-case Surefire file with one flakyFailure in it"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">A six-case Surefire file with one flakyFailure in it</span></div>
+<pre><code>$ test-hub ingest results.xml \
+    --project payments-api \
+    --team payments \
+    --component checkout \
+    --environment staging \
+    --type integration \
+    --branch main \
+    --commit 9f2c1ab</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>  imported run b8009e5c-a94e-48dd-925f-7f9325612dfc
+  adapter   junit-xml (detected, 90% confident)
+  project   payments-api
+  stored in /private/tmp/th-site-cli
+  6 tests  3 passed  1 failed  1 error  1 skipped  1 flaky  60.0% pass
+
+  2 parser warning(s):
+    naive_timestamp [testsuite[CheckoutIT]]: timestamps in this report carry no UTC offset; they are read as UTC
+    counts_mismatch [CheckoutIT]: suite 'CheckoutIT' declares errors=1, failures=1, skipped=1, tests=5 but errors=1, failures=1, skipped=1, tests=6 were parsed; the parsed numbers are the ones Test Hub keeps</code></pre>
+</div>
+
+<p>That <code>counts_mismatch</code> is the file being caught in a small lie: its
+<code>&lt;testsuite&gt;</code> element declares <code>tests="5"</code> while the element actually
+contains six <code>&lt;testcase&gt;</code> children. Test Hub keeps what it parsed and says so,
+rather than trusting an attribute that the writer computed separately from the cases. Warnings are
+printed ten at a time, then summarised as <code>… and N more</code>, so a pathological file cannot
+flood the terminal.</p>
+
+<h3 id="ingest-idempotent">Re-importing the same file</h3>
+
+<p>Pass <code>--run-id</code> and the second import applies nothing. Event ids for the canonical
+JSON adapter are a UUIDv5 over <code>(source, run_id, sequence, type)</code>, and
+<code>(source, event id)</code> is unique in the store, so the events are recognised as already
+applied:</p>
+
+<div class="codeblock" data-lang="output" data-caption="Second ingest of the same file into the same run"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">Second ingest of the same file into the same run</span></div>
+<pre><code>  updated run a7be9e5c-4e76-4341-890f-ba7538fc2b40
+  adapter   junit-xml (detected, 90% confident)
+  project   payments-api
+  stored in /private/tmp/th-site-cli
+  6 tests  3 passed  1 failed  1 error  1 skipped  1 flaky  60.0% pass
+  12 event(s) had already been applied and were ignored</code></pre>
+</div>
+
+<p>Note <code>updated</code> rather than <code>imported</code>, and that the counts did not move.
+Without <code>--run-id</code> you get a new run every time, which is the right default —
+re-running a suite is a new run, not a correction to the old one.</p>
+
+<h3 id="ingest-errors">When it will not import</h3>
+
+<div class="codeblock" data-lang="output" data-caption="A .txt file that no adapter recognises — exit 2"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">A .txt file that no adapter recognises — exit 2</span></div>
+<pre><code>error: no installed adapter recognised this input (filename='notes.txt').
+Installed adapters:
+  junit-xml        .xml, .junit, .junit.xml JUnit/xUnit XML from pytest, Surefire, Gradle, Jest, Playwright and friends.
+  testhub-json     .json                  Test Hub's own report and raw event JSON (kind: test-hub-report/-events).
+Pass --format &lt;name&gt; to skip detection and force one of these.</code></pre>
+</div>
+
+<p>Forcing an adapter that cannot cope produces the adapter's own complaint, also exit 2 —
+<code>error: this file is not well-formed XML: syntax error: line 1, column 0</code>. Naming an
+adapter that is not installed produces <code>error: unknown format 'nope'</code> followed by the
+same installed-adapter list. In all three cases the list of what <em>is</em> supported travels
+with the error, and it is the same list the HTTP API returns in its 415.</p>
+
+<h2 id="publish">publish</h2>
+
+<p>The same import against somebody else's server. Same adapters, same parsing, same
+<code>ImportResult</code> — the work happens on the server, and this command is an HTTP client
+around <code>POST /api/v1/imports</code>. Everything it does is something <code>curl</code> could
+do; that is a design constraint on the API, not a coincidence.</p>
+
+<p>It takes every option <code>ingest</code> takes, minus <code>--data-dir</code>, plus:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--url</code></td><td><code>http://127.0.0.1:8000</code></td><td>Base URL of the
+    server. Also reads <code>TEST_HUB_URL</code>.</td></tr>
+    <tr><td><code>--token-env</code></td><td><code>TEST_HUB_TOKEN</code></td><td>Name of the
+    variable holding the token. See <a href="#tokens">above</a>.</td></tr>
+    <tr><td><code>--token-file</code></td><td>—</td><td>File holding the token.</td></tr>
+    <tr><td><code>--timeout</code></td><td><code>60.0</code></td><td>Seconds, per request.</td></tr>
+    <tr><td><code>--insecure</code></td><td>off</td><td>Skip TLS certificate verification. Only
+    for a server with a private CA you have not installed yet.</td></tr>
+    <tr><td><code>--idempotency-key</code></td><td>—</td><td>Sent as
+    <code>X-Idempotency-Key</code>. A retried publish under the same key is a no-op instead of a
+    duplicate run.</td></tr>
+    <tr><td><code>--trigger</code></td><td><code>unknown</code></td><td>Differs from
+    <code>ingest</code>, whose default is <code>local</code>. A publish usually comes from a
+    pipeline, and claiming it was local would be a lie.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ export TEST_HUB_TOKEN='ths_…'        # from `test-hub token create`
+$ test-hub publish results.xml \
+    --url http://127.0.0.1:8811 \
+    --project payments-api \
+    --team payments \
+    --type integration \
+    --branch "$GIT_BRANCH" \
+    --commit "$GIT_COMMIT" \
+    --token-env TEST_HUB_TOKEN</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>  imported run 2dbda2c1-f23b-4d9f-9824-2f2788fa1490
+  adapter   junit-xml (detected, 90% confident)
+  project   payments-api
+  stored in http://127.0.0.1:8811
+  6 tests  3 passed  1 failed  1 error  1 skipped  1 flaky  60.0% pass</code></pre>
+</div>
+
+<p>The only difference from the <code>ingest</code> output is the <code>stored in</code> line,
+which names the server instead of a directory. The client retries a connection error and the
+statuses that are worth retrying — 408, 425, 429, 500, 502, 503 and 504 — up to three times, with
+a backoff between attempts. Every other 4xx is returned immediately, because a malformed request
+will be exactly as malformed on the second attempt. Retries reuse the same
+<code>X-Idempotency-Key</code>, so a timeout that had actually succeeded server-side does not
+produce a second run.</p>
+
+<div class="note note--warn"><span class="note__title">Server-side failures surface as exit
+1</span>A rejected token, an unreachable host or a 5xx comes back as
+<code>TestHubClientError</code>, which is a <code>RuntimeError</code> rather than one of Test Hub's
+own error classes — so it escapes the CLI's error handler and prints a Python traceback with exit
+code <b>1</b>, not the exit 5 the taxonomy would suggest. The message on the last line is accurate
+(<code>a valid bearer token is required; send it as `Authorization: Bearer &lt;token&gt;` or
+`X-API-Key: &lt;token&gt;`</code>); the presentation is not. Branch on 0-vs-non-zero for publish,
+not on the specific code.</div>
+
+<p>You do not need Test Hub installed on the build agent at all. The equivalent
+<code>curl</code>, with the same authentication, is on the
+<a href="getting-started.html#publish-from-ci">getting started</a> page.</p>
+
+<h2 id="export">export</h2>
+
+<p>Writes the dashboard, its CSS, its JavaScript and a frozen data snapshot into one HTML file
+with no external references. It is the same rendering code the live dashboard uses, reading a
+<code>SnapshotDataProvider</code> instead of REST — there is no second renderer that could
+drift.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--output</code>, <code>-o</code></td><td><code>test-hub-report.html</code></td>
+    <td>Where to write the file.</td></tr>
+    <tr><td><code>--input</code>, <code>-i</code></td><td>—</td><td>A directory or a single file of
+    reports to export <em>instead of</em> the local store. Must exist.</td></tr>
+    <tr><td><code>--project</code>, <code>-p</code></td><td>—</td><td>Required when
+    <code>--input</code> is used; ignored otherwise.</td></tr>
+    <tr><td><code>--team</code>, <code>--component</code>, <code>--type</code></td><td>—,
+    —, <code>other</code></td><td>Metadata applied to every file parsed under
+    <code>--input</code>.</td></tr>
+    <tr><td><code>--title</code></td><td><code>Test Hub report</code></td><td>Title shown inside
+    the report.</td></tr>
+    <tr><td><code>--days</code></td><td><code>30</code></td><td>How much history to include.</td></tr>
+    <tr><td><code>--max-runs</code></td><td><code>200</code></td><td>Ceiling on runs in the
+    snapshot. The export fully materializes, so this is the knob that keeps a large store from
+    producing an unopenable file.</td></tr>
+    <tr><td><code>--format</code>, <code>-f</code></td><td>auto-detect</td><td>Force an adapter for
+    <code>--input</code> files.</td></tr>
+    <tr><td><code>--data-dir</code></td><td>platform default</td><td>Which store to export.</td></tr>
+    <tr><td><code>--open</code></td><td>off</td><td>Open the written file in a browser.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell" data-caption="From the local store"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">From the local store</span></div>
+<pre><code>$ test-hub export --output report.html --title "Payments nightly"</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>  wrote /private/tmp/th-site-work/report.html
+  295 KB, self-contained — no network needed to open it</code></pre>
+</div>
+
+<h3 id="export-input">Exporting straight from a directory of reports</h3>
+
+<p>On a build agent you usually have shard results on disk and no store at all.
+<code>--input</code> parses them into a throwaway temporary database and exports that, so your
+real data directory is never touched:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub export --input ./results --output agent.html --project payments-api --type integration</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>  parsed results.xml
+
+  wrote /private/tmp/th-site-work/agent.html
+  274 KB, self-contained — no network needed to open it</code></pre>
+</div>
+
+<p>It walks the directory recursively and considers only <code>.xml</code> and <code>.json</code>
+files, because a results folder routinely contains screenshots, videos and logs, and warning about
+each one would bury the warnings that matter. Files are sorted before parsing so the same directory
+produces the same output twice.</p>
+
+<p>One unparseable file does not abandon the rest — it is reported as
+<code>skipped &lt;name&gt;: &lt;reason&gt;</code> and the walk continues. Only if <em>every</em>
+candidate fails does the command give up, and only if there were no candidates at all does it
+refuse before starting. Both refusals are configuration errors, exit 78:</p>
+
+<div class="codeblock" data-lang="output" data-caption="--input without --project"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">--input without --project</span></div>
+<pre><code>error: --project is required with --input: report files do not carry a project key, so Test Hub cannot guess which project they belong to
+# exit 78</code></pre>
+</div>
+
+<h2 id="demo">demo</h2>
+
+<p>Fills the store with a plausible organization so you can judge the dashboard against data
+instead of against an empty state. Five projects across three teams, two weeks of history, real
+failures, genuine flaky retries, and — unless you turn it off — one run that is still open so the
+live indicator has something to show.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--days</code></td><td><code>14</code></td><td>How far back to spread the
+    runs.</td></tr>
+    <tr><td><code>--runs</code></td><td><code>6</code></td><td>Runs per project.</td></tr>
+    <tr><td><code>--live</code> / <code>--no-live</code></td><td><code>--live</code></td><td>Include
+    one run that is still going.</td></tr>
+    <tr><td><code>--data-dir</code></td><td>platform default</td><td>Which store to seed.</td></tr>
+    <tr><td><code>--reset</code></td><td>off</td><td>Delete <code>test-hub.db</code> and its
+    <code>-wal</code>/<code>-shm</code> siblings first.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub demo, log lines trimmed"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">test-hub demo, log lines trimmed</span></div>
+<pre><code>  seeding sample data…
+
+  sample data created
+  5 projects, 31 runs, 258 test results, 270 attempts
+  23 failures and 12 flaky retries, so the red and amber states have something to show
+  one run is still open: 975fa3df-3260-4444-ac7c-c65957c82513
+  stored in /private/tmp/th-site-demo
+
+  next:  test-hub serve</code></pre>
+</div>
+
+<p>The counts follow the flags. <code>--days 7 --runs 3 --no-live</code> produces a smaller,
+fully-closed dataset, and <code>--reset</code> says what it removed before it starts:</p>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub demo --reset --days 7 --runs 3 --no-live"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">test-hub demo --reset --days 7 --runs 3 --no-live</span></div>
+<pre><code>  removed the existing database (1 file(s))
+
+  seeding sample data…
+
+  sample data created
+  5 projects, 15 runs, 129 test results, 138 attempts
+  13 failures and 9 flaky retries, so the red and amber states have something to show
+  stored in /private/tmp/th-site-demo
+
+  next:  test-hub serve</code></pre>
+</div>
+
+<div class="note note--warn"><span class="note__title">--reset deletes the database it is pointed
+at</span>It removes <code>test-hub.db</code> from whatever <code>--data-dir</code> /
+<code>TEST_HUB_DATA_DIR</code> resolves to, which by default is your real store — not a demo one.
+Point <code>TEST_HUB_DATA_DIR</code> at a scratch directory before you experiment. Everything on
+this page was produced under <code>/private/tmp</code> for exactly that reason.</div>
+
+<h2 id="formats">formats</h2>
+
+<p>What this installation can parse. The same list appears inside the error when auto-detection
+fails, and in the API's 415 body, so the terminal and the server never disagree about what is
+installed.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--json</code></td><td>off</td><td>Print the registry description as JSON,
+    including <code>content_types</code> and <code>priority</code>, which the human view
+    omits.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub formats"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">test-hub formats</span></div>
+<pre><code>  2 adapter(s) installed
+
+  junit-xml  JUnit XML
+      JUnit/xUnit XML from pytest, Surefire, Gradle, Jest, Playwright and friends.
+      extensions: .xml, .junit, .junit.xml
+
+  testhub-json  Test Hub JSON
+      Test Hub's own report and raw event JSON (kind: test-hub-report/-events).
+      extensions: .json
+
+  Force one with --format &lt;name&gt;. Add more by installing an adapter package.</code></pre>
+</div>
+
+<div class="codeblock" data-lang="json" data-caption="test-hub formats --json, first entry"><div class="codeblock__head"><span class="codeblock__lang">json</span><span class="codeblock__cap">test-hub formats --json, first entry</span></div>
+<pre><code>{
+  "name": "junit-xml",
+  "display_name": "JUnit XML",
+  "description": "JUnit/xUnit XML from pytest, Surefire, Gradle, Jest, Playwright and friends.",
+  "extensions": [".xml", ".junit", ".junit.xml"],
+  "content_types": ["application/xml", "text/xml", "application/x-junit+xml"],
+  "priority": 50
+}</code></pre>
+</div>
+
+<p><code>priority</code> is the tie-break when two adapters both claim an input;
+<code>testhub-json</code> sits at 100 and <code>junit-xml</code> at 50. The <code>name</code> field
+is what <code>--format</code> expects. Adapters are discovered through the
+<code>test_hub.adapters</code> entry-point group — the two in the box use exactly the mechanism a
+third-party package would, so installing another one makes it appear here with no further
+configuration. <a href="adapters.html">Writing one.</a></p>
+
+<h2 id="token">token</h2>
+
+<p>Two sub-commands, both of which exist because Test Hub stores only PBKDF2 digests. Nothing on
+the server can recover a token; the plaintext exists in exactly one place, for as long as your
+terminal scrollback keeps it.</p>
+
+<h3 id="token-create">token create</h3>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--label</code></td><td><code>ci</code></td><td>A note for your own records. It
+    appears in a comment in the printed snippet and is <em>not</em> stored anywhere — the server
+    never sees it.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub token create --label ci-github"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">test-hub token create --label ci-github</span></div>
+<pre><code>  Token (shown once — copy it now)
+  ths_Itl-rN2xWt77MMFWbio3kn8OqyNelvebooRMFnD6p2E
+
+  Configure the server with the hash, not the token:
+  export TEST_HUB_API_TOKEN_HASHES="pbkdf2_sha256$120000$2c78b65c9fb65300c908c68af1250978$7a9b282ed5a62cdfe0a53dfba669a5967131fb58c160e5f92bbc961ba1a22b85"
+
+  Publishers use the token itself:
+  export TEST_HUB_TOKEN="ths_Itl-rN2xWt77MMFWbio3kn8OqyNelvebooRMFnD6p2E"   # label: ci-github
+  test-hub publish results.xml --url https://… --project p --token-env TEST_HUB_TOKEN
+
+  Test Hub keeps only the hash. Nothing can recover this token from the server.</code></pre>
+</div>
+
+<p>The token is 256 bits of <code>secrets.token_urlsafe</code> behind a <code>ths_</code> prefix.
+The prefix costs four characters and buys two things: secret scanners can be taught to recognise
+it, and a human reading a log can tell what they are looking at.</p>
+
+<div class="note note--warn"><span class="note__title">Do not paste that hash line into a shell as
+printed</span>It is printed inside double quotes, and a PBKDF2 hash contains four
+<code>$</code> characters. In <code>bash</code> or <code>zsh</code>, <code>"…$120000$…"</code>
+expands <code>$1</code>, <code>$5</code> and <code>$0</code> before the variable is ever set. The
+line above, pasted verbatim into zsh, produced
+<code>pbkdf2_sha256f46ca…/bin/zshdd92bd…</code> — the server then rejects every token and tells you
+the token is wrong, which sends you looking in the wrong place. Retype the quotes as single quotes,
+or write the value into a file. There is more on this, including the
+<code>docker-compose</code> variant, on the
+<a href="configuration.html#list-values">configuration</a> page.</div>
+
+<h3 id="token-hash">token hash</h3>
+
+<p>Hashes a token you already have — for rotating a server's configuration without reissuing a
+token to every publisher, or for hashing a token that came out of a password manager.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--token-env</code></td><td><code>TEST_HUB_TOKEN</code></td><td>Name of the
+    environment variable holding the token to hash. There is no argument form, for the same reason
+    <code>publish</code> has none.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ TEST_HUB_TOKEN='ths_…' test-hub token hash
+pbkdf2_sha256$120000$84cf00d22b1abb3857b796badcfb460d$266c36495c2a60ff1ebc6d6c67821e9bcfd60e231d8390bde1914c659541cee3</code></pre>
+</div>
+
+<p>Four <code>$</code>-separated fields: algorithm, iteration count, salt hex, digest hex. The salt
+is random per call, so hashing the same token twice gives two different lines and both verify.
+Unlike every other failure on this page, an unset variable here exits <b>2</b> through Typer rather
+than through the error taxonomy:</p>
+
+<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>  environment variable TEST_HUB_TOKEN is not set or is empty
+# exit 2</code></pre>
+</div>
+
+<h2 id="exit-codes">Exit codes</h2>
+
+<p>Every deliberate failure in Test Hub is one of a small set of error classes, and each class
+carries both an HTTP status and an exit code. They are mapped to HTTP in one place and to an exit
+code in one place, so <code>test-hub ingest</code> and <code>POST /api/v1/imports</code> disagree
+about nothing except the transport. A CI step can therefore branch on <em>why</em> it failed rather
+than only on the fact that it did.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Exit</th><th>Error class</th><th><code>error</code> code</th><th>HTTP</th><th>Means</th></tr></thead>
+  <tbody>
+    <tr><td><code>0</code></td><td>—</td><td>—</td><td>—</td><td>Success.</td></tr>
+    <tr><td><code>1</code></td><td><code>TestHubError</code></td><td><code>test_hub_error</code></td><td>500</td>
+    <td>The base class, and also where anything unanticipated lands — including a failed
+    <code>publish</code> and an invalid setting value.</td></tr>
+    <tr><td><code>2</code></td><td><code>ValidationError</code></td><td><code>validation_error</code></td><td>422</td>
+    <td>Well-formed input that said something impossible. Typer's own usage errors (a missing
+    <code>--project</code>, a file that does not exist) also exit 2.</td></tr>
+    <tr><td><code>2</code></td><td><code>AdapterError</code></td><td><code>adapter_error</code></td><td>422</td>
+    <td>An adapter claimed the input and then could not parse it.</td></tr>
+    <tr><td><code>2</code></td><td><code>UnknownFormatError</code></td><td><code>unknown_format</code></td><td>415</td>
+    <td>No installed adapter recognised the input. Carries the installed-adapter list.</td></tr>
+    <tr><td><code>3</code></td><td><code>NotFoundError</code></td><td><code>not_found</code></td><td>404</td>
+    <td>A run, test or artifact that does not exist. Reached over HTTP; the local CLI commands
+    create what they need rather than failing.</td></tr>
+    <tr><td><code>4</code></td><td><code>ConflictError</code></td><td><code>conflict</code></td><td>409</td>
+    <td>A write contradicted a write that already landed.</td></tr>
+    <tr><td><code>5</code></td><td><code>AuthenticationError</code></td><td><code>unauthorized</code></td><td>401</td>
+    <td>No token, or a token that does not verify.</td></tr>
+    <tr><td><code>5</code></td><td><code>AuthorizationError</code></td><td><code>forbidden</code></td><td>403</td>
+    <td>A valid token that is not allowed to do this.</td></tr>
+    <tr><td><code>6</code></td><td><code>PayloadTooLargeError</code></td><td><code>payload_too_large</code></td><td>413</td>
+    <td>A report, an artifact or a decompressed upload past its configured ceiling.</td></tr>
+    <tr><td><code>78</code></td><td><code>ConfigurationError</code></td><td><code>configuration_error</code></td><td>500</td>
+    <td><code>EX_CONFIG</code>. Test Hub was asked to start, or to run, in a state that is not safe
+    or not coherent.</td></tr>
+    <tr><td><code>130</code></td><td>—</td><td>—</td><td>—</td><td>Ctrl-C. Prints
+    <code>interrupted</code> and stops.</td></tr>
+  </tbody>
+</table></div>
+
+<p>78 is <code>EX_CONFIG</code> from <code>sysexits.h</code>, chosen so a supervisor — systemd,
+Kubernetes, a Compose healthcheck — can tell "you configured this wrong" apart from "it crashed"
+and stop restarting something that will never come up.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Branching on the reason, verified against a 1 KB limit"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">Branching on the reason, verified against a 1 KB limit</span></div>
+<pre><code>$ TEST_HUB_MAX_REPORT_BYTES=1024 test-hub ingest results.xml --project payments-api
+error: report exceeds the 1024 byte limit (TEST_HUB_MAX_REPORT_BYTES); split the upload or raise the limit
+  limit_bytes: 1024
+
+$ echo $?
+6</code></pre>
+</div>
+
+<p>Structured detail is printed under the message, one <code>key: value</code> per line, on stderr
+along with the message itself. Standard output stays clean, so <code>--json</code> piped into
+<code>jq</code> is not polluted by an error.</p>
+
+<div class="note note--info"><span class="note__title">Two honest gaps</span>Codes 3, 4 and 5 are
+defined and are what the HTTP API returns, but the CLI does not currently reach them: the SDK
+client raises its own <code>TestHubClientError</code>, which is not part of the taxonomy, so an
+authentication failure during <code>publish</code> exits 1 with a traceback. Likewise an invalid
+value for a <code>TEST_HUB_*</code> variable surfaces as a Pydantic
+<code>ValidationError</code> traceback and exit 1 rather than exit 78. Both were verified against
+0.1.0.</div>
+<nav class="pagenav" aria-label="Pagination">
+<a class="pagenav__prev" href="../docs/dashboard-tour.html"><span>&larr;&nbsp;Previous</span><b>Dashboard tour</b></a>
+<a class="pagenav__next" href="../docs/configuration.html"><span>Next&nbsp;&rarr;</span><b>Configuration</b></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#shape">The shape of the command line</a></li>
+<li class="lvl-2"><a href="#tokens">There is no --token flag, on purpose</a></li>
+<li class="lvl-2"><a href="#serve">serve</a></li>
+<li class="lvl-2"><a href="#ingest">ingest</a></li>
+<li class="lvl-3"><a href="#ingest-idempotent">Re-importing the same file</a></li>
+<li class="lvl-3"><a href="#ingest-errors">When it will not import</a></li>
+<li class="lvl-2"><a href="#publish">publish</a></li>
+<li class="lvl-2"><a href="#export">export</a></li>
+<li class="lvl-3"><a href="#export-input">Exporting straight from a directory of reports</a></li>
+<li class="lvl-2"><a href="#demo">demo</a></li>
+<li class="lvl-2"><a href="#formats">formats</a></li>
+<li class="lvl-2"><a href="#token">token</a></li>
+<li class="lvl-3"><a href="#token-create">token create</a></li>
+<li class="lvl-3"><a href="#token-hash">token hash</a></li>
+<li class="lvl-2"><a href="#exit-codes">Exit codes</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

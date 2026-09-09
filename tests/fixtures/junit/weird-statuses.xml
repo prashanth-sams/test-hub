@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Invented fixture: status words from four dialects plus one nobody has ever defined,
+  a case with BOTH <failure> and <error>, a missing time and a negative one.
+-->
+<testsuites name="notification-gateway mixed" tests="7" failures="2" errors="2" skipped="2">
+  <testsuite name="gateway.dialects" tests="7" failures="9" errors="9" skipped="9" time="4.5">
+    <testcase name="ant style run marker" classname="gateway.dialects.Ant" time="0.10"
+              status="run"/>
+    <testcase name="dotnet inconclusive" classname="gateway.dialects.Trx" time="0.20"
+              status="Inconclusive"/>
+    <testcase name="playwright expected" classname="gateway.dialects.Playwright" time="0.30"
+              status="expected"/>
+    <testcase name="pytest unexpected success" classname="gateway.dialects.Pytest" time="0.40"
+              status="unexpectedSuccess"/>
+    <testcase name="a word nobody defined" classname="gateway.dialects.Unknown" time="0.50"
+              status="bananas"/>
+    <testcase name="both failure and error" classname="gateway.dialects.Conflict" time="-1.25">
+      <failure message="assertion did not hold" type="AssertionError">at gateway.dialects.Conflict.both(Conflict.java:31)</failure>
+      <error message="teardown blew up afterwards" type="IllegalStateException">at gateway.dialects.Conflict.tearDown(Conflict.java:44)</error>
+    </testcase>
+    <testcase name="no time attribute at all" classname="gateway.dialects.Untimed"/>
+  </testsuite>
+</testsuites>

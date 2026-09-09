@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "entry": "index.html",
+  "_readme": [
+    "The load order of the dashboard, and the only place it is written down.",
+    "The server serves these files individually from src/test_hub/web/; the snapshot",
+    "exporter concatenates them in exactly this order into one HTML file. Paths are",
+    "relative to src/test_hub/web/ and match the href/src attributes in index.html.",
+    "Concatenate 'js' in order into a single classic <script> (no type=module: ES",
+    "modules do not load over file://), and 'css' into a single <style>. Replace the",
+    "marker comments in index.html rather than rebuilding the document, and write the",
+    "snapshot object into 'snapshot_global' at the 'snapshot' marker, before the",
+    "scripts block. Escaping </script> inside that JSON is the exporter's job."
+  ],
+  "css": [
+    "assets/css/app.css"
+  ],
+  "js": [
+    "assets/js/00-util.js",
+    "assets/js/10-provider.js",
+    "assets/js/11-snapshot-provider.js",
+    "assets/js/12-live-provider.js",
+    "assets/js/20-charts.js",
+    "assets/js/30-store.js",
+    "assets/js/40-components.js",
+    "assets/js/50-view-overview.js",
+    "assets/js/55-view-runs.js",
+    "assets/js/60-view-run.js",
+    "assets/js/65-view-test.js",
+    "assets/js/90-app.js"
+  ],
+  "files": [
+    "assets/css/app.css",
+    "assets/js/00-util.js",
+    "assets/js/10-provider.js",
+    "assets/js/11-snapshot-provider.js",
+    "assets/js/12-live-provider.js",
+    "assets/js/20-charts.js",
+    "assets/js/30-store.js",
+    "assets/js/40-components.js",
+    "assets/js/50-view-overview.js",
+    "assets/js/55-view-runs.js",
+    "assets/js/60-view-run.js",
+    "assets/js/65-view-test.js",
+    "assets/js/90-app.js"
+  ],
+  "markers": {
+    "styles_start": "<!-- test-hub:styles:start -->",
+    "styles_end": "<!-- test-hub:styles:end -->",
+    "scripts_start": "<!-- test-hub:scripts:start -->",
+    "scripts_end": "<!-- test-hub:scripts:end -->",
+    "snapshot": "<!-- test-hub:snapshot -->"
+  },
+  "snapshot_global": "TEST_HUB_SNAPSHOT",
+  "api_base_global": "TEST_HUB_API_BASE",
+  "api_base_meta": "test-hub-api-base",
+  "theme_storage_key": "testHubTheme",
+  "namespace": "TestHub"
+}

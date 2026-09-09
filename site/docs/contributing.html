@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contributing · Test Hub</title>
+<meta name="description" content="Setting up, the rules the codebase is held to, and how to get a change merged.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="Contributing · Test Hub">
+<meta property="og:description" content="Setting up, the rules the codebase is held to, and how to get a change merged.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/contributing.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html">Docs</a><a href="../docs/dashboard-tour.html">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html">CLI</a><a href="../docs/deployment.html">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link" href="../docs/getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link" href="../docs/dashboard-tour.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link" href="../docs/cli-reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link" href="../docs/configuration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link" href="../docs/python-sdk.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link" href="../docs/events.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link" href="../docs/metrics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link" href="../docs/deployment.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link" href="../docs/ci-integrations.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link is-active" href="../docs/contributing.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>Contributing</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Project</span>
+  <h1>Contributing</h1>
+  <p class="lede">Test Hub is Apache-2.0 and contributions are welcome. This page is the shape of the codebase and the gates a change has to pass — read the layering rule before you write anything, because it is the one that gets pull requests sent back.</p>
+</header>
+<h2 id="setup">Getting set up</h2>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ git clone https://github.com/prashanth-sams/test-hub
+$ cd test-hub
+$ python3 -m venv .venv && source .venv/bin/activate
+$ pip install -e ".[dev]"</code></pre>
+</div>
+
+<p>Or with <a href="https://github.com/prashanth-sams/test-hub">uv</a>, which is
+noticeably faster and equally supported for development:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ uv venv && source .venv/bin/activate
+$ uv pip install -e ".[dev]"</code></pre>
+</div>
+
+<p>Python 3.11 or newer. Nothing else — no database server, no Node, no container
+runtime. Check it works:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub demo && test-hub serve</code></pre>
+</div>
+
+<h2 id="layout">The shape of the codebase</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Package</th><th>Holds</th></tr></thead>
+  <tbody>
+    <tr><td><code>domain/</code></td><td>The contract: canonical models, the event envelope, status normalization, test identity, every metric formula. <strong>No I/O.</strong></td></tr>
+    <tr><td><code>adapters/</code></td><td>Report formats. Bytes in, domain events out. No database.</td></tr>
+    <tr><td><code>storage/</code></td><td>Repository protocols and the SQLite implementation, plus Alembic migrations.</td></tr>
+    <tr><td><code>service/</code></td><td>Orchestration: imports, live runs, the event bus, the application context.</td></tr>
+    <tr><td><code>api/</code></td><td>FastAPI app, routes, security, public request and response models.</td></tr>
+    <tr><td><code>cli/</code></td><td>Typer commands. Thin wrappers with no business logic.</td></tr>
+    <tr><td><code>export/</code></td><td>The standalone HTML snapshot writer.</td></tr>
+    <tr><td><code>sdk/</code></td><td>The Python publishing client.</td></tr>
+    <tr><td><code>web/</code></td><td>The dashboard, shipped inside the wheel.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="layering">The layering rule</h3>
+
+<div class="codeblock" data-lang="text"><div class="codeblock__head"><span class="codeblock__lang">text</span></div>
+<pre><code>cli ──▶ api ──▶ service ──▶ storage ──▶ (sqlite / filesystem)
+ │       │         │
+ │       │         └──▶ domain ◀── adapters
+ ├──▶ export ──────────▶ domain
+ └──▶ sdk ─(http)─▶ api</code></pre>
+</div>
+
+<p><code>domain</code> imports nothing else from the package. That is what lets an
+adapter, a publisher or a test depend on the contract without pulling in FastAPI,
+SQLAlchemy or a database — and it means a cycle shows up immediately as an
+<code>ImportError</code> rather than as a slow build. <code>storage</code> never imports
+<code>api</code>. <code>adapters</code> import only <code>domain</code>.</p>
+
+<p>If a piece of logic wants to reach across those lines, it belongs in
+<code>service</code>. This is the most common reason a change gets sent back.</p>
+
+<h2 id="gates">The gates</h2>
+
+<p>All four run in CI on Linux, macOS and Windows across Python 3.11, 3.12 and 3.13. Run
+them before you push:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ ruff check .            # lint
+$ ruff format --check .   # formatting, including Python inside Markdown
+$ mypy                    # strict, on src/
+$ pytest                  # the suite</code></pre>
+</div>
+
+<p><code>mypy</code> runs in strict mode over the whole package and currently reports
+nothing. A new <code>type: ignore</code> needs a comment explaining what it is working
+around.</p>
+
+<p>There is a fifth gate that catches the failures which embarrass a release: CI builds
+the wheel, installs it into a clean virtualenv in a directory with no checkout, and runs
+<code>test-hub demo</code> and <code>test-hub export</code> from there. A data file left
+out of the wheel, an entry point that does not resolve, or an exporter emitting a file
+that references assets only present in the source tree — all of those pass every other
+check and fail that one.</p>
+
+<h2 id="tests">Writing tests</h2>
+
+<p>Fixtures live in <code>tests/fixtures/</code> and are <strong>invented</strong> —
+plausible-looking reports for imaginary projects. Nothing is copied from a real-world
+report, and new fixtures should keep it that way.</p>
+
+<p>A few conventions worth knowing:</p>
+
+<ul>
+  <li>The <code>context</code> fixture gives a fully wired application on a temporary
+    database; <code>client</code> gives a <code>TestClient</code> bound to it.</li>
+  <li><code>live_server</code> boots a real Uvicorn on a free port. Use it for anything
+    involving Server-Sent Events — <code>TestClient</code> runs the app on the calling
+    thread's portal and cannot interleave a streaming response with concurrent requests,
+    so every interesting SSE property is untestable through it.</li>
+  <li>Import <code>test_identity</code> under an alias. pytest collects any module-level
+    name beginning with <code>test_</code>, including imports, and will try to run the
+    function under test as a test case.</li>
+  <li>Mark anything that starts a server or builds a large input
+    <code>@pytest.mark.slow</code>.</li>
+</ul>
+
+<h2 id="browser-checks">The browser checks</h2>
+
+<p>Rendering, contrast in both themes, keyboard order, the 375&nbsp;px layout, and that a
+test named <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> displays as text are checked
+with a real browser. Those checks are deliberately <em>not</em> in the pytest suite: they
+would put a 180&nbsp;MB browser download in front of every contributor for a part of the
+codebase most changes do not touch.</p>
+
+<p>The static half — no <code>innerHTML</code> with data, no CDN, no inline scripts, both
+theme token blocks present, both providers on one interface — <em>is</em> in the suite,
+in <code>tests/test_frontend_assets.py</code>, and runs everywhere.</p>
+
+<p>To run the browser checks yourself:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ npm install playwright && npx playwright install chromium
+$ test-hub demo && test-hub serve --port 8971 &amp;
+# then drive http://127.0.0.1:8971 with Playwright</code></pre>
+</div>
+
+<div class="note note--tip"><span class="note__title">If you change the dashboard</span>
+Re-run those checks and say in the pull request that you did. The static tests will catch
+a broken invariant; only a browser will catch a broken layout.</div>
+
+<h2 id="adapters">Adding a report format</h2>
+
+<p>The most valuable contribution available, and it does not require touching Test Hub at
+all — adapters are entry-point plugins, and the two built-in ones register through exactly
+the mechanism a third-party package uses. <a href="adapters.html">The adapter guide</a>
+has a complete worked example, including the rules: never claim arbitrary JSON or XML,
+parse untrusted XML with <code>defusedxml</code> only, stream rather than build a DOM,
+raise a warning rather than approximate, and record a retry as a new attempt.</p>
+
+<p>Formats we would particularly like: TRX, NUnit, Cucumber JSON and messages, Jest JSON,
+Playwright JSON, Maven Surefire's native form, Gradle, Go test, Rust test, and the
+performance-testing formats.</p>
+
+<h2 id="docs">Changing the documentation</h2>
+
+<p>Long-form reference lives in <code>docs/*.md</code>. The website is built from
+<code>site/content/*.html</code> by <code>site/tools/build.py</code>, which uses only the
+standard library:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ cd site
+$ python3 tools/build.py          # rebuild
+$ python3 tools/build.py --check  # what CI runs — fails if the output is stale</code></pre>
+</div>
+
+<p>The built pages are committed, so a content change without a rebuild is a red check.
+<code>site/README.md</code> has the page format and the component vocabulary.</p>
+
+<h2 id="commits">Commits and pull requests</h2>
+
+<p>Conventional-commit prefixes — <code>feat:</code>, <code>fix:</code>,
+<code>docs:</code>, <code>refactor:</code>, <code>test:</code>, <code>chore:</code> — with
+a <code>!</code> or a <code>BREAKING CHANGE:</code> footer for anything that changes the
+wire contract.</p>
+
+<p>In the pull request, say what changed and why, and what you ran. If the change touches
+the canonical model or the event envelope, say whether <code>SCHEMA_VERSION</code> needs
+to move — it changes only on a breaking change, and a release that moves it says so in
+its own section of the changelog.</p>
+
+<h2 id="release">Releasing</h2>
+
+<ol class="steps">
+  <li><h3>Update the version</h3><p><code>src/test_hub/version.py</code> is the single source; Hatchling reads it at build time.</p></li>
+  <li><h3>Write the changelog entry</h3><p>For the person reading <code>pip list --outdated</code> and deciding whether to upgrade, not for the person who wrote the patch.</p></li>
+  <li><h3>Tag it</h3><p><code>git tag v0.1.0 &amp;&amp; git push --tags</code>.</p></li>
+  <li><h3>The workflow publishes it</h3><p><code>release.yml</code> builds and publishes to PyPI with Trusted Publishing over OIDC. There is no API token anywhere in the repository or in the settings — configure the publisher on PyPI first.</p></li>
+</ol>
+
+<h2 id="security-reports">Security reports</h2>
+
+<p>Please do not open a public issue. Use GitHub Security Advisories; the threat model and
+the disclosure commitment are in <a href="security.html">Security</a>.</p>
+<nav class="pagenav" aria-label="Pagination">
+<a class="pagenav__prev" href="../docs/faq.html"><span>&larr;&nbsp;Previous</span><b>FAQ</b></a>
+<span></span>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#setup">Getting set up</a></li>
+<li class="lvl-2"><a href="#layout">The shape of the codebase</a></li>
+<li class="lvl-3"><a href="#layering">The layering rule</a></li>
+<li class="lvl-2"><a href="#gates">The gates</a></li>
+<li class="lvl-2"><a href="#tests">Writing tests</a></li>
+<li class="lvl-2"><a href="#browser-checks">The browser checks</a></li>
+<li class="lvl-2"><a href="#adapters">Adding a report format</a></li>
+<li class="lvl-2"><a href="#docs">Changing the documentation</a></li>
+<li class="lvl-2"><a href="#commits">Commits and pull requests</a></li>
+<li class="lvl-2"><a href="#release">Releasing</a></li>
+<li class="lvl-2"><a href="#security-reports">Security reports</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

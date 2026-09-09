@@ -1,0 +1,186 @@
+<!--META {"title": "Contributing", "eyebrow": "Project", "description": "Setting up, the rules the codebase is held to, and how to get a change merged.", "lede": "Test Hub is Apache-2.0 and contributions are welcome. This page is the shape of the codebase and the gates a change has to pass — read the layering rule before you write anything, because it is the one that gets pull requests sent back."} -->
+
+<h2 id="setup">Getting set up</h2>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ git clone https://github.com/prashanth-sams/test-hub
+$ cd test-hub
+$ python3 -m venv .venv && source .venv/bin/activate
+$ pip install -e ".[dev]"</code></pre>
+</div>
+
+<p>Or with <a href="https://github.com/prashanth-sams/test-hub">uv</a>, which is
+noticeably faster and equally supported for development:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ uv venv && source .venv/bin/activate
+$ uv pip install -e ".[dev]"</code></pre>
+</div>
+
+<p>Python 3.11 or newer. Nothing else — no database server, no Node, no container
+runtime. Check it works:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub demo && test-hub serve</code></pre>
+</div>
+
+<h2 id="layout">The shape of the codebase</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Package</th><th>Holds</th></tr></thead>
+  <tbody>
+    <tr><td><code>domain/</code></td><td>The contract: canonical models, the event envelope, status normalization, test identity, every metric formula. <strong>No I/O.</strong></td></tr>
+    <tr><td><code>adapters/</code></td><td>Report formats. Bytes in, domain events out. No database.</td></tr>
+    <tr><td><code>storage/</code></td><td>Repository protocols and the SQLite implementation, plus Alembic migrations.</td></tr>
+    <tr><td><code>service/</code></td><td>Orchestration: imports, live runs, the event bus, the application context.</td></tr>
+    <tr><td><code>api/</code></td><td>FastAPI app, routes, security, public request and response models.</td></tr>
+    <tr><td><code>cli/</code></td><td>Typer commands. Thin wrappers with no business logic.</td></tr>
+    <tr><td><code>export/</code></td><td>The standalone HTML snapshot writer.</td></tr>
+    <tr><td><code>sdk/</code></td><td>The Python publishing client.</td></tr>
+    <tr><td><code>web/</code></td><td>The dashboard, shipped inside the wheel.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3 id="layering">The layering rule</h3>
+
+<div class="codeblock" data-lang="text">
+<pre><code>cli ──▶ api ──▶ service ──▶ storage ──▶ (sqlite / filesystem)
+ │       │         │
+ │       │         └──▶ domain ◀── adapters
+ ├──▶ export ──────────▶ domain
+ └──▶ sdk ─(http)─▶ api</code></pre>
+</div>
+
+<p><code>domain</code> imports nothing else from the package. That is what lets an
+adapter, a publisher or a test depend on the contract without pulling in FastAPI,
+SQLAlchemy or a database — and it means a cycle shows up immediately as an
+<code>ImportError</code> rather than as a slow build. <code>storage</code> never imports
+<code>api</code>. <code>adapters</code> import only <code>domain</code>.</p>
+
+<p>If a piece of logic wants to reach across those lines, it belongs in
+<code>service</code>. This is the most common reason a change gets sent back.</p>
+
+<h2 id="gates">The gates</h2>
+
+<p>All four run in CI on Linux, macOS and Windows across Python 3.11, 3.12 and 3.13. Run
+them before you push:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ ruff check .            # lint
+$ ruff format --check .   # formatting, including Python inside Markdown
+$ mypy                    # strict, on src/
+$ pytest                  # the suite</code></pre>
+</div>
+
+<p><code>mypy</code> runs in strict mode over the whole package and currently reports
+nothing. A new <code>type: ignore</code> needs a comment explaining what it is working
+around.</p>
+
+<p>There is a fifth gate that catches the failures which embarrass a release: CI builds
+the wheel, installs it into a clean virtualenv in a directory with no checkout, and runs
+<code>test-hub demo</code> and <code>test-hub export</code> from there. A data file left
+out of the wheel, an entry point that does not resolve, or an exporter emitting a file
+that references assets only present in the source tree — all of those pass every other
+check and fail that one.</p>
+
+<h2 id="tests">Writing tests</h2>
+
+<p>Fixtures live in <code>tests/fixtures/</code> and are <strong>invented</strong> —
+plausible-looking reports for imaginary projects. Nothing is copied from a real-world
+report, and new fixtures should keep it that way.</p>
+
+<p>A few conventions worth knowing:</p>
+
+<ul>
+  <li>The <code>context</code> fixture gives a fully wired application on a temporary
+    database; <code>client</code> gives a <code>TestClient</code> bound to it.</li>
+  <li><code>live_server</code> boots a real Uvicorn on a free port. Use it for anything
+    involving Server-Sent Events — <code>TestClient</code> runs the app on the calling
+    thread's portal and cannot interleave a streaming response with concurrent requests,
+    so every interesting SSE property is untestable through it.</li>
+  <li>Import <code>test_identity</code> under an alias. pytest collects any module-level
+    name beginning with <code>test_</code>, including imports, and will try to run the
+    function under test as a test case.</li>
+  <li>Mark anything that starts a server or builds a large input
+    <code>@pytest.mark.slow</code>.</li>
+</ul>
+
+<h2 id="browser-checks">The browser checks</h2>
+
+<p>Rendering, contrast in both themes, keyboard order, the 375&nbsp;px layout, and that a
+test named <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> displays as text are checked
+with a real browser. Those checks are deliberately <em>not</em> in the pytest suite: they
+would put a 180&nbsp;MB browser download in front of every contributor for a part of the
+codebase most changes do not touch.</p>
+
+<p>The static half — no <code>innerHTML</code> with data, no CDN, no inline scripts, both
+theme token blocks present, both providers on one interface — <em>is</em> in the suite,
+in <code>tests/test_frontend_assets.py</code>, and runs everywhere.</p>
+
+<p>To run the browser checks yourself:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ npm install playwright && npx playwright install chromium
+$ test-hub demo && test-hub serve --port 8971 &amp;
+# then drive http://127.0.0.1:8971 with Playwright</code></pre>
+</div>
+
+<div class="note note--tip"><span class="note__title">If you change the dashboard</span>
+Re-run those checks and say in the pull request that you did. The static tests will catch
+a broken invariant; only a browser will catch a broken layout.</div>
+
+<h2 id="adapters">Adding a report format</h2>
+
+<p>The most valuable contribution available, and it does not require touching Test Hub at
+all — adapters are entry-point plugins, and the two built-in ones register through exactly
+the mechanism a third-party package uses. <a href="adapters.html">The adapter guide</a>
+has a complete worked example, including the rules: never claim arbitrary JSON or XML,
+parse untrusted XML with <code>defusedxml</code> only, stream rather than build a DOM,
+raise a warning rather than approximate, and record a retry as a new attempt.</p>
+
+<p>Formats we would particularly like: TRX, NUnit, Cucumber JSON and messages, Jest JSON,
+Playwright JSON, Maven Surefire's native form, Gradle, Go test, Rust test, and the
+performance-testing formats.</p>
+
+<h2 id="docs">Changing the documentation</h2>
+
+<p>Long-form reference lives in <code>docs/*.md</code>. The website is built from
+<code>site/content/*.html</code> by <code>site/tools/build.py</code>, which uses only the
+standard library:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ cd site
+$ python3 tools/build.py          # rebuild
+$ python3 tools/build.py --check  # what CI runs — fails if the output is stale</code></pre>
+</div>
+
+<p>The built pages are committed, so a content change without a rebuild is a red check.
+<code>site/README.md</code> has the page format and the component vocabulary.</p>
+
+<h2 id="commits">Commits and pull requests</h2>
+
+<p>Conventional-commit prefixes — <code>feat:</code>, <code>fix:</code>,
+<code>docs:</code>, <code>refactor:</code>, <code>test:</code>, <code>chore:</code> — with
+a <code>!</code> or a <code>BREAKING CHANGE:</code> footer for anything that changes the
+wire contract.</p>
+
+<p>In the pull request, say what changed and why, and what you ran. If the change touches
+the canonical model or the event envelope, say whether <code>SCHEMA_VERSION</code> needs
+to move — it changes only on a breaking change, and a release that moves it says so in
+its own section of the changelog.</p>
+
+<h2 id="release">Releasing</h2>
+
+<ol class="steps">
+  <li><h3>Update the version</h3><p><code>src/test_hub/version.py</code> is the single source; Hatchling reads it at build time.</p></li>
+  <li><h3>Write the changelog entry</h3><p>For the person reading <code>pip list --outdated</code> and deciding whether to upgrade, not for the person who wrote the patch.</p></li>
+  <li><h3>Tag it</h3><p><code>git tag v0.1.0 &amp;&amp; git push --tags</code>.</p></li>
+  <li><h3>The workflow publishes it</h3><p><code>release.yml</code> builds and publishes to PyPI with Trusted Publishing over OIDC. There is no API token anywhere in the repository or in the settings — configure the publisher on PyPI first.</p></li>
+</ol>
+
+<h2 id="security-reports">Security reports</h2>
+
+<p>Please do not open a public issue. Use GitHub Security Advisories; the threat model and
+the disclosure commitment are in <a href="security.html">Security</a>.</p>

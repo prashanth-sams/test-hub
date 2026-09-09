@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invented fixture: notification-gateway, pytest junitxml shape (file, line, xfail, parametrize). -->
+<testsuites>
+  <testsuite name="pytest" errors="0" failures="1" skipped="2" tests="6" time="7.331"
+             timestamp="2026-03-12T11:20:41.512094" hostname="mac-dev-04">
+    <properties>
+      <property name="branch" value="feature/webhook-retries"/>
+      <property name="commit" value="c0ffee1234567890abcdef1234567890abcdef12"/>
+      <property name="environment" value="local"/>
+      <property name="framework" value="pytest"/>
+      <property name="framework_version" value="8.1.1"/>
+      <property name="language" value="python"/>
+    </properties>
+    <testcase classname="tests.gateway.test_webhooks" name="test_delivers_payload"
+              file="tests/gateway/test_webhooks.py" line="18" time="0.412"/>
+    <testcase classname="tests.gateway.test_webhooks" name="test_retries_on_502[attempts=3]"
+              file="tests/gateway/test_webhooks.py" line="34" time="2.884"/>
+    <testcase classname="tests.gateway.test_webhooks" name="test_retries_on_502[attempts=5]"
+              file="tests/gateway/test_webhooks.py" line="34" time="3.115">
+      <failure message="AssertionError: expected 5 delivery attempts, saw 4">
+self = &lt;tests.gateway.test_webhooks.TestRetries object at 0x10f2c31d0&gt;
+
+    def test_retries_on_502(self, attempts):
+        sink = FakeSink(status=502)
+&gt;       assert sink.calls == attempts
+E       AssertionError: expected 5 delivery attempts, saw 4
+E       assert 4 == 5
+
+tests/gateway/test_webhooks.py:41: AssertionError
+      </failure>
+      <system-out>DEBUG notification_gateway.webhook: backoff schedule [0.5, 1.0, 2.0, 4.0]</system-out>
+    </testcase>
+    <testcase classname="tests.gateway.test_signing" name="test_hmac_matches_reference"
+              file="tests/gateway/test_signing.py" line="9" time="0.077">
+      <skipped type="pytest.skip" message="reference vectors are not vendored in CI">
+/Users/dev/notification-gateway/tests/gateway/test_signing.py:9: reference vectors are not vendored in CI
+      </skipped>
+    </testcase>
+    <testcase classname="tests.gateway.test_signing" name="test_rejects_sha1_signatures"
+              file="tests/gateway/test_signing.py" line="21" time="0.058">
+      <skipped type="pytest.xfail" message="sha1 rejection lands in gateway 3.2">
+      </skipped>
+    </testcase>
+    <testcase classname="tests.gateway.test_queue" name="test_drains_dead_letter_queue"
+              file="tests/gateway/test_queue.py" line="52" time="0.785">
+      <properties>
+        <property name="owner" value="platform-notifications"/>
+        <property name="ticket" value="NG-1184"/>
+      </properties>
+      <system-err>WARNING notification_gateway.queue: dead letter queue had 3 stale messages</system-err>
+    </testcase>
+  </testsuite>
+</testsuites>

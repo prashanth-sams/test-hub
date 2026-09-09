@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Metrics · Test Hub</title>
+<meta name="description" content="Every formula behind every number on the dashboard: pass rate, failure rate, durations, flakiness within a run and across runs, and percentiles.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="Metrics · Test Hub">
+<meta property="og:description" content="Every formula behind every number on the dashboard: pass rate, failure rate, durations, flakiness within a run and across runs, and percentiles.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/metrics.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html">Docs</a><a href="../docs/dashboard-tour.html">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html">CLI</a><a href="../docs/deployment.html">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link" href="../docs/getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link" href="../docs/dashboard-tour.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link" href="../docs/cli-reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link" href="../docs/configuration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link" href="../docs/python-sdk.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link" href="../docs/events.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link is-active" href="../docs/metrics.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link" href="../docs/deployment.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link" href="../docs/ci-integrations.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link" href="../docs/contributing.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>Metrics</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Contracts</span>
+  <h1>Metrics</h1>
+  <p class="lede">A dashboard that will not tell you how it computed a number is a dashboard you cannot argue with. Here is every formula, the denominator each one uses, and the reason it excludes what it excludes.</p>
+</header>
+<p>Every number Test Hub shows is defined here and implemented once — in
+<code>src/test_hub/domain/metrics.py</code> and the computed fields of <code>RunCounts</code>
+in <code>src/test_hub/domain/models.py</code>. Nothing else in the Python codebase computes a
+pass rate, a flake rate or a percentile. A view that needs one calls in there, so the number in
+an exported snapshot and the number in the live API cannot disagree.</p>
+
+<div class="note note--tip"><span class="note__title">The executable version of this
+page</span><code>tests/test_metrics.py</code> is this document as assertions. Almost every
+worked example below is lifted from it, and both change together when a definition changes. If
+you are about to argue with a number, that file is the fastest way to check whether you are
+right.</div>
+
+<h2 id="one-implementation">One implementation, and the one deliberate exception</h2>
+
+<p>There is exactly one second implementation of any of this, and it is on purpose:
+<code>src/test_hub/web/assets/js/10-provider.js</code> transcribes
+<code>RunCounts</code>'s computed fields as <code>finalizeCounts()</code>, and
+<code>percentile()</code> line for line, into JavaScript. It has to, because the offline
+snapshot has no server to ask when the reader applies a filter — the same
+<code>test-hub export</code> file has to recompute a pass rate for "the payments team, staging
+only" with the network off.</p>
+
+<p>The JavaScript carries the Python function names in its comments so the two stay greppable
+from each other. That is a real duplication and worth knowing about before you change a
+formula.</p>
+
+<div class="note note--warn"><span class="note__title">One place they genuinely differ</span>
+Python's <code>round()</code> breaks ties to even; the JavaScript
+<code>Math.round(value * 100) / 100</code> breaks them upward. One test passing out of 32
+executed is <code>3.12</code> from the server and <code>3.13</code> from the snapshot's
+filtered recomputation. Both are verified; the divergence is at most 0.01 and only at an exact
+half-cent tie, but it is there.</div>
+
+<h2 id="counting-rule">The counting rule</h2>
+
+<p><b>One test contributes exactly one outcome to a run's counts, through its effective
+attempt.</b> The effective attempt is the <em>last</em> one — not the best, not the worst:</p>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">test_hub.domain.metrics</span></div>
+<pre><code>def effective_status(attempt_statuses):
+    if not attempt_statuses:
+        return TestStatus.UNKNOWN
+    return attempt_statuses[-1]</code></pre>
+</div>
+
+<p>A test that failed and then passed on retry is green <em>and</em> flaky, and it counts as
+one pass. A test that passed and then failed on a rerun is red. The retry history is never
+discarded, so both facts stay on the page — that is the whole reason attempts are rows rather
+than overwrites.</p>
+
+<p>Counts are always folded from the stored attempt rows, never taken from a publisher's own
+totals. A publisher's totals drift the moment anything is retried or a shard fails to upload,
+and a front page that disagrees with the run page it links to is worse than a slow one. The
+same rule is why a JUnit file's <code>tests="5" failures="1"</code> attributes are advisory: a
+mismatch produces a <code>counts_mismatch</code> warning, not a wrong number.</p>
+
+<h2 id="count-fields">The count fields</h2>
+
+<p><code>RunCounts</code> has thirteen stored fields and four computed ones. It is the same
+object for a run, a suite or any filtered slice.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>total</code></td><td>Tests folded into this block. Equals the sum of the ten status fields.</td></tr>
+    <tr><td><code>passed</code> <code>failed</code> <code>error</code> <code>skipped</code> <code>xfailed</code> <code>xpassed</code> <code>cancelled</code> <code>unknown</code> <code>running</code> <code>queued</code></td>
+        <td>One per <code>TestStatus</code>, counting <em>effective</em> attempts.</td></tr>
+    <tr><td><code>flaky</code></td><td>Tests that were flaky <em>within this run</em>. Not a status: a test is counted here <em>as well as</em> under its effective status.</td></tr>
+    <tr><td><code>retried</code></td><td>Tests with more than one attempt. Likewise not a status.</td></tr>
+  </tbody>
+</table></div>
+
+<p><code>flaky</code> and <code>retried</code> overlap with the status counts on purpose. They
+answer a different question — "how much of this run's green was earned on the second try" — and
+adding them into <code>total</code> would double-count the same tests.</p>
+
+<h3 id="completed-executed">completed and executed</h3>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>completed = passed + failed + error + skipped + xfailed + xpassed + cancelled + unknown
+executed  = completed - skipped - cancelled</code></pre>
+</div>
+
+<p><code>completed</code> is <code>total</code> minus the tests still in flight, so it is the
+honest denominator while a run is still streaming: <code>running</code> and <code>queued</code>
+are excluded. <code>executed</code> goes one step further and removes the tests that never ran
+a body. A skipped test cannot pass and cannot fail; putting it in the denominator turns "we
+skipped the slow suite today" into a pass-rate drop that reads exactly like a regression.</p>
+
+<div class="codeblock" data-lang="python" data-caption="Verified — a five-test run, two still in flight"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">Verified — a five-test run, two still in flight</span></div>
+<pre><code>&gt;&gt;&gt; counts = RunCounts(total=5, passed=3, running=1, queued=1)
+&gt;&gt;&gt; counts.completed
+3
+&gt;&gt;&gt; counts.executed
+3
+&gt;&gt;&gt; counts.pass_rate
+100.0</code></pre>
+</div>
+
+<p>That 100% is correct and it is also the thing to understand about a live run: it means
+"everything that has finished so far has passed", not "this run will pass". The dashboard shows
+the in-flight counts beside it for exactly that reason.</p>
+
+<h2 id="rates">Pass rate and failure rate</h2>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>pass_rate    = 100 * (passed + xfailed)          / executed
+failure_rate = 100 * (failed + error + xpassed)  / executed</code></pre>
+</div>
+
+<p>Both are rounded to two decimal places, and both are <code>None</code> when
+<code>executed &lt;= 0</code>.</p>
+
+<h3 id="xfail-xpass">Why <code>xfailed</code> is a success and <code>xpassed</code> is not</h3>
+
+<p>A test marked expected-to-fail that failed did exactly what it was declared to do. Colouring
+it red trains people to ignore red, which is the most expensive failure mode a test dashboard
+has. So <code>xfailed</code> counts toward the pass rate.</p>
+
+<p><code>xpassed</code> counts as a failure instead, because an expectation that no longer holds
+is a signal: either the bug is fixed and the marker should go, or something else changed and
+nobody noticed. It is the one status where "the test passed" and "this is fine" come apart, and
+the code says so out loud in <code>test_hub.domain.status.is_successful</code> and
+<code>is_failureish</code>.</p>
+
+<div class="codeblock" data-lang="python" data-caption="One of each: the two rates land on 50/50"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">One of each: the two rates land on 50/50</span></div>
+<pre><code>&gt;&gt;&gt; counts = RunCounts(total=4, passed=1, xfailed=1, xpassed=1, failed=1)
+&gt;&gt;&gt; counts.pass_rate, counts.failure_rate
+(50.0, 50.0)</code></pre>
+</div>
+
+<h3 id="null-not-zero">Why <code>pass_rate</code> is null, not zero, when nothing executed</h3>
+
+<p>A run that only skipped has no pass rate. Rendering it as a red 0% is a lie the dashboard
+would then have to explain every time somebody asked; rendering it as "—" is the truth.</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>&gt;&gt;&gt; counts = RunCounts(total=3, skipped=3)
+&gt;&gt;&gt; counts.executed
+0
+&gt;&gt;&gt; counts.pass_rate is None, counts.failure_rate is None
+(True, True)</code></pre>
+</div>
+
+<p>Consumers have to handle the null. The JavaScript provider carries a comment saying so, for
+the same reason: a missing <code>pass_rate</code> must not become 0% on the way through the
+UI.</p>
+
+<h3 id="rates-dont-sum">The two rates need not add up to 100</h3>
+
+<p><code>unknown</code> sits in <code>executed</code> but in neither numerator. That is
+deliberate. An unmapped status word is not evidence of a pass and not evidence of a failure,
+and quietly assigning it to either would change the number the dashboard shows on the basis of
+a word Test Hub failed to recognize. Every <code>unknown</code> also raises an
+<code>unknown_status</code> parser warning attached to the run, so the gap is visible rather
+than mysterious.</p>
+
+<p>This is real, not theoretical. <code>tests/fixtures/canonical/report.json</code> contains a
+test whose status is the word <code>bananas</code>:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub ingest tests/fixtures/canonical/report.json --project checkout-service --json</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>  "counts": {"total": 6, "passed": 3, "failed": 1, "skipped": 1, "unknown": 1,
+             "flaky": 2, "retried": 2, "completed": 6, "executed": 5,
+             "pass_rate": 60.0, "failure_rate": 20.0}
+  "warnings": [
+    {"code": "unknown_status",
+     "message": "status 'bananas' is not a word Test Hub knows; recorded as unknown",
+     "severity": "warning", "location": "tests[6]"}
+  ]</code></pre>
+</div>
+
+<p>Six tests, one skipped, so <code>executed</code> is 5. Three passes over five is 60%; one
+failure over five is 20%; the missing 20% is the test nobody could classify.</p>
+
+<h3 id="worked-mixture">A worked mixture</h3>
+
+<p><code>RunCounts(total=12, passed=7, failed=2, error=1, skipped=1, xfailed=1)</code>:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Quantity</th><th>Arithmetic</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td><code>completed</code></td><td>7 + 2 + 1 + 1 + 1</td><td>12</td></tr>
+    <tr><td><code>executed</code></td><td>12 − 1 skipped − 0 cancelled</td><td>11</td></tr>
+    <tr><td><code>pass_rate</code></td><td>100 × (7 + 1) / 11</td><td>72.73</td></tr>
+    <tr><td><code>failure_rate</code></td><td>100 × (2 + 1 + 0) / 11</td><td>27.27</td></tr>
+  </tbody>
+</table></div>
+
+<p>And the two-line version from the test suite, which is the case people get wrong by hand.
+Eight passed, one failed, one skipped is 88.89%, not 80%:</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>&gt;&gt;&gt; counts = RunCounts(total=10, passed=8, failed=1, skipped=1)
+&gt;&gt;&gt; counts.executed, counts.pass_rate
+(9, 88.89)</code></pre>
+</div>
+
+<h3 id="rates-many-runs">Rates over many runs are test-weighted</h3>
+
+<p>The overview and the trend chart merge count blocks with <code>RunCounts.merge</code> and
+<em>then</em> compute the rate. That makes the result test-weighted rather than a mean of
+per-run rates: a 2000-test nightly and a 3-test smoke run do not carry equal weight in the
+portfolio number.</p>
+
+<p>Both statistics are defensible and they answer different questions. Test-weighted asks "what
+fraction of our tests are green"; the unweighted mean of run pass rates asks "what fraction of
+our pipelines are healthy", and gives a tiny smoke suite the same vote as the nightly. Test Hub
+computes the first and does not compute the second — if you want it, the per-run rates are all
+in the API response.</p>
+
+<h2 id="durations">Durations</h2>
+
+<h3 id="run-duration">A run</h3>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics.run_duration_ms"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">test_hub.domain.metrics.run_duration_ms</span></div>
+<pre><code>def run_duration_ms(started_at, finished_at, attempt_durations_ms=None):
+    if started_at is not None and finished_at is not None:
+        return max(0, round((finished_at - started_at).total_seconds() * 1000))
+    if attempt_durations_ms is not None:
+        total = sum(attempt_durations_ms)
+        return int(total) if total else None
+    return None</code></pre>
+</div>
+
+<p>Wall clock wins whenever both ends are known, because with parallel workers the sum of test
+durations is not a duration anyone means. Eight xdist workers make it roughly eight times the
+number on the wall, and a chart of it tells you about your fleet's total CPU time, not about
+how long anybody waited.</p>
+
+<div class="codeblock" data-lang="python" data-caption="63 seconds of test time inside a 30-second run"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">63 seconds of test time inside a 30-second run</span></div>
+<pre><code>&gt;&gt;&gt; start = utcnow(); end = start + timedelta(seconds=30)
+&gt;&gt;&gt; run_duration_ms(start, end, [20_000, 25_000, 18_000])
+30000</code></pre>
+</div>
+
+<p>It runs the other way too, and that is the more common case in practice: a run whose two
+attempts reported 4100 ms and 3900 ms, published over HTTP by a script, stored
+<code>duration_ms: 37</code>. Thirty-seven milliseconds of wall clock, because the "run" was
+three <code>curl</code> calls and no test actually executed — the attempt durations came from
+the report, the wall clock came from the reporting. Neither number is wrong; they measure
+different things, and Test Hub stores the one that answers "how long was this run open".</p>
+
+<p>The fallback, and its floor:</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>&gt;&gt;&gt; run_duration_ms(None, None, [100, 200])
+300
+&gt;&gt;&gt; run_duration_ms(None, None, []) is None
+True
+&gt;&gt;&gt; run_duration_ms(None, None, None) is None
+True</code></pre>
+</div>
+
+<p>An empty list yields <code>None</code> rather than <code>0</code>: zero milliseconds is a
+claim about how long something took, and "we do not know" is not that claim. The
+<code>max(0, …)</code> in the wall-clock branch is a floor for clock skew — a
+<code>finished_at</code> before <code>started_at</code> gives 0, not a negative duration.</p>
+
+<h3 id="test-duration">A test, across its attempts</h3>
+
+<p><code>TestCase.duration_ms</code> is the <b>sum over every attempt</b>:</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>return sum(attempt.duration_ms or 0 for attempt in self.attempts)</code></pre>
+</div>
+
+<p>Retries are time the run actually spent. A test that took 30 seconds to time out and then 6
+seconds to pass cost the run 36 seconds, and reporting only the successful 6 hides the most
+expensive tests in the suite behind their own flakiness. If you want the effective attempt's
+duration on its own it is <code>attempts[-1].duration_ms</code>, and it is in the payload.</p>
+
+<p>Note that this is the opposite choice from the run, and for a consistent reason: a single
+test's attempts are strictly sequential, so summing them <em>is</em> wall clock. A run's tests
+are not.</p>
+
+<p><code>TestAttempt</code> fills in whichever of <code>started_at</code>,
+<code>finished_at</code> and <code>duration_ms</code> is missing when the other two are present,
+and the fold does the same on the way in, so an adapter that can only supply two of the three
+does not lose the third.</p>
+
+<h2 id="flaky">Flakiness</h2>
+
+<p>Test Hub has two flakiness definitions, at two altitudes. They answer different questions and
+neither is a substitute for the other.</p>
+
+<h3 id="flaky-within-run">Within a run</h3>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics.is_flaky_within_run"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">test_hub.domain.metrics.is_flaky_within_run</span></div>
+<pre><code>def is_flaky_within_run(attempt_statuses):
+    if len(attempt_statuses) &lt; 2:
+        return False
+    saw_success = any(is_successful(s) for s in attempt_statuses)
+    saw_failure = any(is_failureish(s) for s in attempt_statuses)
+    return saw_success and saw_failure</code></pre>
+</div>
+
+<p>The test both succeeded and failed inside one execution of the suite. This is the strict
+definition: it needs two attempts, because a single attempt cannot disagree with itself, and it
+needs genuine disagreement rather than merely a retry.</p>
+
+<div class="codeblock" data-lang="python" data-caption="All verified against the shipped code"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">All verified against the shipped code</span></div>
+<pre><code>&gt;&gt;&gt; is_flaky_within_run([S.FAILED, S.PASSED])
+True
+&gt;&gt;&gt; is_flaky_within_run([S.PASSED, S.FAILED, S.PASSED])
+True
+&gt;&gt;&gt; is_flaky_within_run([S.FAILED, S.FAILED])
+False
+&gt;&gt;&gt; is_flaky_within_run([S.PASSED])
+False
+&gt;&gt;&gt; is_flaky_within_run([S.SKIPPED, S.PASSED])       # a skip is neither side
+False
+&gt;&gt;&gt; is_flaky_within_run([S.PASSED, S.XPASSED])       # xpassed is failure-ish
+True</code></pre>
+</div>
+
+<p>That last pair is the definition earning its keep: <code>xpassed</code> counts as a failure
+for the rates, so it counts as the failure side here too, and a test that passed then
+unexpectedly-passed is flagged. Consistency across the two definitions matters more than any
+individual reading of that case.</p>
+
+<p>This is what <code>TestCase.flaky</code> and <code>RunCounts.flaky</code> mean, and it is
+what the JUnit adapter's handling of Surefire's <code>&lt;flakyFailure&gt;</code> and
+<code>&lt;rerunFailure&gt;</code> elements exists to make visible.</p>
+
+<h3 id="flake-rate">Across runs — <code>flake_rate</code></h3>
+
+<p><code>TestDetail.flake_rate</code> is the percentage of runs in a trailing window in which a
+test misbehaved. The window is <code>Settings.flaky_window_runs</code> (default 20) for the
+overview's flakiest-tests list, 30 by default on
+<code>GET /api/v1/tests/{id}?history=…</code> (1–200), and 20 in an exported snapshot.</p>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics.flake_rate"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">test_hub.domain.metrics.flake_rate</span></div>
+<pre><code>def flake_rate(per_run):
+    considered = [
+        (status, within) for status, within in per_run
+        if status not in (SKIPPED, CANCELLED, UNKNOWN)
+    ]
+    if len(considered) &lt; 2:
+        return None
+
+    successes = sum(1 for s, _ in considered if is_successful(s))
+    failures  = sum(1 for s, _ in considered if is_failureish(s))
+    majority_is_success = successes &gt;= failures
+
+    disagreements = 0
+    for status, within_run in considered:
+        agreed = is_successful(status) if majority_is_success else is_failureish(status)
+        if within_run or not agreed:
+            disagreements += 1
+    return round(100.0 * disagreements / len(considered), 2)</code></pre>
+</div>
+
+<p>Four rules, each worth stating on its own.</p>
+
+<ol class="steps">
+  <li>
+    <h3>Runs where the test did not execute are dropped</h3>
+    <p>Not counted as agreement — dropped. <code>skipped</code>, <code>cancelled</code> and
+    <code>unknown</code> enter neither the numerator nor the denominator, so a test that was
+    skipped for a month does not accumulate a month of apparent stability.</p>
+  </li>
+  <li>
+    <h3>Two executed runs are the minimum</h3>
+    <p>One data point cannot describe consistency. Returning <code>0.0</code> for it would put
+    every brand-new test at the bottom of the flakiest list — the right place, for entirely the
+    wrong reason, and it would stay there until it broke. <code>None</code> is the honest
+    answer and the dashboard renders it as "—".</p>
+  </li>
+  <li>
+    <h3>The majority is the baseline, ties going to success</h3>
+    <p>A run disagrees when its effective outcome is not the window's majority outcome. The tie
+    rule (<code>successes &gt;= failures</code>) means a test that is up half the time and down
+    half the time scores 50%, from either direction.</p>
+  </li>
+  <li>
+    <h3>A run that was flaky within itself always counts as a disagreement</h3>
+    <p>Even when its final outcome agreed with the majority. A test that reached green only
+    because it was retried is not the same as a test that was green, and a majority-only rule
+    would score it 0% and hide it.</p>
+  </li>
+</ol>
+
+<p><code>per_run</code> is ordered oldest first. The repository reverses its newest-first
+history before calling in, and says so in a comment, because every list it returns is
+newest-first and exactly one of them has to flip.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>History (oldest first)</th><th>Considered</th><th>Majority</th><th>Disagreements</th><th><code>flake_rate</code></th></tr></thead>
+  <tbody>
+    <tr><td>pass, pass, pass, fail</td><td>4</td><td>success</td><td>1</td><td>25.0</td></tr>
+    <tr><td>pass, pass, fail, fail</td><td>4</td><td>success (tie)</td><td>2</td><td>50.0</td></tr>
+    <tr><td>pass, fail, fail, fail</td><td>4</td><td>failure</td><td>1</td><td>25.0</td></tr>
+    <tr><td>pass, pass <em>(second one retried)</em></td><td>2</td><td>success</td><td>1</td><td>50.0</td></tr>
+    <tr><td>error, pass</td><td>2</td><td>success (tie)</td><td>1</td><td>50.0</td></tr>
+    <tr><td>skip, pass, fail</td><td>2</td><td>success (tie)</td><td>1</td><td>50.0</td></tr>
+    <tr><td>pass × 10</td><td>10</td><td>success</td><td>0</td><td>0.0</td></tr>
+    <tr><td>pass</td><td>1</td><td>—</td><td>—</td><td><code>None</code></td></tr>
+    <tr><td>skip, pass</td><td>1</td><td>—</td><td>—</td><td><code>None</code></td></tr>
+  </tbody>
+</table></div>
+
+<p>Every row was run against the shipped function. The fourth is the one that motivates rule 4:
+both runs ended green, so a majority-only rule would report 0% and the test would stay invisible
+despite needing a retry half the time. The last row is rule 1 and rule 2 together — the skip is
+dropped, which leaves one considered run, which is not enough.</p>
+
+<p><code>metrics.py</code> also exports a boolean <code>is_flaky_across_runs(statuses)</code>,
+true when a sequence of effective outcomes contains both a success and a failure. Nothing in the
+server uses it; <code>flake_rate</code> is what the repository calls, because a rate is more
+useful than a boolean when you are ranking twenty thousand tests. It is exported and tested for
+consumers that want the cheap answer over a window they chose themselves.
+<code>aggregate_counts(statuses)</code> is in the same position: exported, tested, and not on
+the write path, which uses <code>RunCounts.add</code> directly.</p>
+
+<h3 id="test-failure-rate"><code>TestDetail.failure_rate</code> is a different quantity</h3>
+
+<p>Not the same denominator as <code>RunCounts.failure_rate</code>, and not in
+<code>metrics.py</code> — it is computed in <code>SqlRunRepository.get_test_detail</code>:</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>executed = [s for s, _ in oldest_first if s not in (SKIPPED, CANCELLED, UNKNOWN)]
+failure_pct = round(100.0 * sum(1 for s in executed if is_failureish(s)) / len(executed), 2)</code></pre>
+</div>
+
+<p>It is "in what fraction of the runs where this test actually ran did it fail", over the same
+window <code>flake_rate</code> uses. <code>RunCounts.failure_rate</code> is "what fraction of
+the tests in this run failed". Both are labelled <em>failure rate</em> in the UI because in
+their own contexts both readings are the obvious one — but they are different quantities and
+comparing one against the other means nothing.</p>
+
+<p><code>TestDetail.average_duration_ms</code> is the arithmetic mean of the per-run
+<code>TestCase.duration_ms</code> values that were recorded, which — per
+<a href="#test-duration">the rule above</a> — are already sums across attempts. A test that is
+retried often will look slower here than its typical successful attempt, and that is the
+intended reading.</p>
+
+<h2 id="percentiles">Percentiles</h2>
+
+<p>The trend chart's <code>duration_ms_p50</code> and <code>duration_ms_p95</code> come from a
+percentile written out by hand:</p>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics.percentile"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">test_hub.domain.metrics.percentile</span></div>
+<pre><code>def percentile(values, fraction):
+    if not values:
+        return None
+    ordered = sorted(float(v) for v in values)
+    if len(ordered) == 1:
+        return ordered[0]
+    position = max(0.0, min(1.0, fraction)) * (len(ordered) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight</code></pre>
+</div>
+
+<p>Linear interpolation between the two nearest ranks, with <code>fraction</code> clamped into
+<code>[0, 1]</code>. It is written out rather than taken from <code>statistics.quantiles</code>
+so the trend numbers are identical on every supported Python, reproducible by hand from the raw
+durations the API returns, and transcribable into the JavaScript provider without a second
+opinion about which of the nine standard percentile definitions to use.</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>&gt;&gt;&gt; percentile([10], 0.95)
+10.0
+&gt;&gt;&gt; percentile([], 0.5) is None
+True
+&gt;&gt;&gt; percentile([1, 2, 3, 4, 5], 0.5)
+3.0
+&gt;&gt;&gt; percentile([1, 2, 3, 4], 0.0)
+1.0
+&gt;&gt;&gt; percentile([1, 2, 3, 4], 1.0)
+4.0
+&gt;&gt;&gt; percentile([1, 2, 3, 4], 0.5)      # the interpolation, visible
+2.5</code></pre>
+</div>
+
+<p>It can produce the usual binary-floating-point artefacts —
+<code>percentile([100, 200, 300, 400, 500], 0.95)</code> is
+<code>479.99999999999994</code> — but <code>TrendPoint</code> stores
+<code>round(p95)</code> as an integer, so what reaches the wire is <code>480</code>.</p>
+
+<div class="note"><span class="note__title">A bucket with one run</span>A single run in a trend
+bucket makes p50 and p95 the same number, because <code>percentile</code> short-circuits on a
+one-element list. That is correct, and it is also why the trend chart is not worth reading at a
+one-day bucket on a quiet project. Buckets widen automatically past 60 points, and a bucket with
+no runs at all is still emitted so the chart shows a genuine gap instead of a straight line
+implying continuity.</div>
+
+<h2 id="run-status">Where a run's status comes from</h2>
+
+<p>The run's own status is folded too, in <code>SqlEventRepository._fold_status</code>, and it
+does not use <code>worst_status</code>. The conditions are checked in this order:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Condition</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>the run was explicitly cancelled</td><td><span class="st st--cancelled">cancelled</span></td></tr>
+    <tr><td><code>finished_at</code> is set and <code>error &gt; 0</code></td><td><span class="st st--error">error</span></td></tr>
+    <tr><td><code>finished_at</code> is set and (<code>failed &gt; 0</code> or <code>xpassed &gt; 0</code>)</td><td><span class="st st--failed">failed</span></td></tr>
+    <tr><td><code>finished_at</code> is set and <code>total == 0</code></td><td><span class="st st--unknown">unknown</span></td></tr>
+    <tr><td><code>finished_at</code> is set</td><td><span class="st st--passed">passed</span></td></tr>
+    <tr><td>any attempt exists, or <code>started_at</code> is set</td><td><span class="st st--running">running</span></td></tr>
+    <tr><td>otherwise</td><td><span class="st st--queued">queued</span></td></tr>
+  </tbody>
+</table></div>
+
+<p><code>cancelled</code> is the one outcome a publisher can dictate, because a cancelled run is
+indistinguishable from a run that stopped reporting; everything else is derived from the
+attempts. A finished run with no tests at all is <code>unknown</code>, not <code>passed</code> —
+an empty suite has no outcome. All seven rows are verifiable against a live server, and the
+<a href="events.html#run-finished">event contract</a> shows what happens when a publisher claims
+otherwise.</p>
+
+<p><code>worst_status</code> in <code>domain/status.py</code> is a different function for a
+different job: it folds a set of attempt statuses into the most severe one, and is used by the
+JUnit adapter to give a single verdict to a <code>&lt;testcase&gt;</code> carrying several
+outcome elements. It orders <code>unknown &lt; skipped &lt; xfailed &lt; passed &lt; xpassed
+&lt; queued &lt; running &lt; cancelled &lt; failed &lt; error</code>, and an empty iterable is
+<code>unknown</code>.</p>
+
+<div class="cards">
+  <div>
+    <h3>Where the numbers come from</h3>
+    <p><a href="events.html">Event contract</a> — the two <code>test.finished</code> events that
+    become one pass and one flake.</p>
+  </div>
+  <div>
+    <h3>What a status means</h3>
+    <p><a href="canonical-schema.html#statuses">Canonical schema</a> — the ten statuses, the
+    alias table, and what happens to a word Test Hub does not know.</p>
+  </div>
+  <div>
+    <h3>Where the numbers are shown</h3>
+    <p><a href="dashboard-tour.html">Dashboard tour</a> — which panel uses which denominator,
+    and what the comparison panel is comparing against.</p>
+  </div>
+  <div>
+    <h3>Tuning the window</h3>
+    <p><a href="configuration.html">Configuration</a> — <code>flaky_window_runs</code> and the
+    other settings these formulas read.</p>
+  </div>
+</div>
+<nav class="pagenav" aria-label="Pagination">
+<a class="pagenav__prev" href="../docs/events.html"><span>&larr;&nbsp;Previous</span><b>Event contract</b></a>
+<a class="pagenav__next" href="../docs/security.html"><span>Next&nbsp;&rarr;</span><b>Security</b></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#one-implementation">One implementation, and the one deliberate exception</a></li>
+<li class="lvl-2"><a href="#counting-rule">The counting rule</a></li>
+<li class="lvl-2"><a href="#count-fields">The count fields</a></li>
+<li class="lvl-3"><a href="#completed-executed">completed and executed</a></li>
+<li class="lvl-2"><a href="#rates">Pass rate and failure rate</a></li>
+<li class="lvl-3"><a href="#xfail-xpass">Why xfailed is a success and xpassed is not</a></li>
+<li class="lvl-3"><a href="#null-not-zero">Why pass_rate is null, not zero, when nothing executed</a></li>
+<li class="lvl-3"><a href="#rates-dont-sum">The two rates need not add up to 100</a></li>
+<li class="lvl-3"><a href="#worked-mixture">A worked mixture</a></li>
+<li class="lvl-3"><a href="#rates-many-runs">Rates over many runs are test-weighted</a></li>
+<li class="lvl-2"><a href="#durations">Durations</a></li>
+<li class="lvl-3"><a href="#run-duration">A run</a></li>
+<li class="lvl-3"><a href="#test-duration">A test, across its attempts</a></li>
+<li class="lvl-2"><a href="#flaky">Flakiness</a></li>
+<li class="lvl-3"><a href="#flaky-within-run">Within a run</a></li>
+<li class="lvl-3"><a href="#flake-rate">Across runs — flake_rate</a></li>
+<li class="lvl-3"><a href="#test-failure-rate">TestDetail.failure_rate is a different quantity</a></li>
+<li class="lvl-2"><a href="#percentiles">Percentiles</a></li>
+<li class="lvl-2"><a href="#run-status">Where a run's status comes from</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

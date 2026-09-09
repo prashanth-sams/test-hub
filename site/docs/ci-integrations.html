@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CI integrations · Test Hub</title>
+<meta name="description" content="Publishing results from GitHub Actions, Jenkins or anything else that can make an HTTP request.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="CI integrations · Test Hub">
+<meta property="og:description" content="Publishing results from GitHub Actions, Jenkins or anything else that can make an HTTP request.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/ci-integrations.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html">Docs</a><a href="../docs/dashboard-tour.html">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html">CLI</a><a href="../docs/deployment.html">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link" href="../docs/getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link" href="../docs/dashboard-tour.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link" href="../docs/cli-reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link" href="../docs/configuration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link" href="../docs/python-sdk.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link" href="../docs/events.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link" href="../docs/metrics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link" href="../docs/deployment.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link is-active" href="../docs/ci-integrations.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link" href="../docs/contributing.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>CI integrations</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Operating it</span>
+  <h1>CI integrations</h1>
+  <p class="lede">There is no Test Hub plugin to install. Every CI system here uses curl or the test-hub CLI against the same REST API, so the pattern transfers to whichever one you actually use.</p>
+</header>
+<h2 id="the-shape">The shape of it</h2>
+
+<p>Three patterns, in the order you will want them:</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Pattern</th><th>Use it when</th></tr></thead>
+  <tbody>
+    <tr><td><a href="#on-finish">Publish on finish</a></td><td>Almost always. Three lines, works with any framework that writes JUnit XML.</td></tr>
+    <tr><td><a href="#shards">One run from many shards</a></td><td>A matrix or parallel build, so four shards become one run rather than four.</td></tr>
+    <tr><td><a href="#streaming">Stream while running</a></td><td>The suite takes long enough that people watch it.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="token">First, a token</h2>
+
+<p>On any machine with Test Hub installed:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub token create --label ci</code></pre>
+</div>
+
+<p>It prints two things. The <strong>token</strong> goes into your CI system's secret
+store. The <strong>hash</strong> goes into the server's
+<code>TEST_HUB_API_TOKEN_HASHES</code>. The server never sees the token, and nothing can
+recover it from the server if you lose it — create another and remove the old hash.</p>
+
+<h2 id="on-finish">Publish when the suite finishes</h2>
+
+<h3 id="gh-finish">GitHub Actions</h3>
+
+<div class="codeblock" data-lang="yaml"><div class="codeblock__head"><span class="codeblock__lang">yaml</span></div>
+<pre><code>      - name: Run tests
+        run: pytest --junitxml=results.xml
+
+      - name: Publish results
+        if: always()
+        env:
+          TEST_HUB_TOKEN: ${{ secrets.TEST_HUB_TOKEN }}
+          TEST_HUB_URL: https://test-hub.internal
+        run: |
+          curl --fail-with-body -sS -X POST "$TEST_HUB_URL/api/v1/imports" \
+            -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+            -F "file=@results.xml" \
+            -F "project=payments-api" -F "team=payments" -F "type=component" \
+            -F "environment=ci" \
+            -F "branch=${GITHUB_REF_NAME}" -F "commit=${GITHUB_SHA}" \
+            -F "ci_provider=github-actions" \
+            -F "pipeline_id=${GITHUB_RUN_ID}" \
+            -F "pipeline_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"</code></pre>
+</div>
+
+<div class="note note--warn"><span class="note__title">Two lines that are not optional</span>
+<code>if: always()</code> — without it the publish step is skipped exactly when the tests
+failed, which is the run you most wanted to see. And
+<code>--fail-with-body</code> — without it <code>curl</code> exits 0 on a
+<code>4xx</code>, so the step goes green while nothing was published.</div>
+
+<h3 id="jenkins-finish">Jenkins</h3>
+
+<div class="codeblock" data-lang="groovy"><div class="codeblock__head"><span class="codeblock__lang">groovy</span></div>
+<pre><code>pipeline {
+  agent any
+  environment {
+    TEST_HUB_URL   = 'https://test-hub.internal'
+    TEST_HUB_TOKEN = credentials('test-hub-token')
+  }
+  stages {
+    stage('Test') {
+      // Do not let a failing suite abort before the results are published.
+      steps { sh 'pytest --junitxml=results.xml || true' }
+    }
+  }
+  post {
+    always {
+      sh '''
+        set -eu
+        curl --fail-with-body -sS -X POST "$TEST_HUB_URL/api/v1/imports" \
+          -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+          -F "file=@results.xml" \
+          -F "project=payments-api" -F "team=payments" -F "type=component" \
+          -F "branch=${BRANCH_NAME:-$GIT_BRANCH}" -F "commit=${GIT_COMMIT}" \
+          -F "ci_provider=jenkins" \
+          -F "pipeline_id=${BUILD_NUMBER}" -F "pipeline_url=${BUILD_URL}"
+      '''
+    }
+  }
+}</code></pre>
+</div>
+
+<p><code>set -eu</code> matters as much as <code>--fail-with-body</code>: a
+<code>sh</code> step reports the status of the <em>last</em> command, so without
+<code>-e</code> a failing <code>curl</code> in the middle of a script is invisible.</p>
+
+<h3 id="cli-form">Or the CLI, if Python is already there</h3>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ pip install test-hub
+$ test-hub publish results.xml \
+    --url https://test-hub.internal \
+    --project payments-api --team payments --type component \
+    --branch "$GIT_BRANCH" --commit "$GIT_COMMIT" \
+    --token-env TEST_HUB_TOKEN</code></pre>
+</div>
+
+<p><code>--token-env</code> names the variable. The value never appears on the command
+line, where it would be readable in <code>ps</code> by anything else on the agent and
+captured by any step that traces its commands. There is deliberately no
+<code>--token</code> flag.</p>
+
+<h2 id="shards">One run from many shards</h2>
+
+<p>A matrix job produces one report per shard. Published naively that is four runs with a
+quarter of the tests each, and the dashboard shows four unrelated half-red runs instead of
+one complete one.</p>
+
+<p>Generate one run id before the shards start, and give it to every one:</p>
+
+<div class="codeblock" data-lang="yaml" data-caption="GitHub Actions"><div class="codeblock__head"><span class="codeblock__lang">yaml</span><span class="codeblock__cap">GitHub Actions</span></div>
+<pre><code>jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.gen.outputs.run_id }}
+    steps:
+      - id: gen
+        run: echo "run_id=$(uuidgen | tr 'A-Z' 'a-z')" &gt;&gt; "$GITHUB_OUTPUT"
+
+  test:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: { shard: [1, 2, 3, 4] }
+    runs-on: ubuntu-latest
+    steps:
+      - run: pytest --junitxml=results.xml --shard=${{ matrix.shard }}/4
+      - if: always()
+        env:
+          TEST_HUB_TOKEN: ${{ secrets.TEST_HUB_TOKEN }}
+        run: |
+          test-hub publish results.xml \
+            --url https://test-hub.internal \
+            --project payments-api --type component \
+            --run-id "${{ needs.prepare.outputs.run_id }}" \
+            --token-env TEST_HUB_TOKEN</code></pre>
+</div>
+
+<div class="codeblock" data-lang="groovy" data-caption="Jenkins — generate once, use in every parallel branch"><div class="codeblock__head"><span class="codeblock__lang">groovy</span><span class="codeblock__cap">Jenkins — generate once, use in every parallel branch</span></div>
+<pre><code>stage('Prepare') {
+  steps {
+    script {
+      env.TEST_HUB_RUN_ID = sh(returnStdout: true,
+        script: 'python3 -c "import uuid; print(uuid.uuid4())"').trim()
+    }
+  }
+}</code></pre>
+</div>
+
+<p>Order does not matter, and re-running a single shard is safe: its events were already
+applied, so they are ignored and no count moves. That is the same idempotency guarantee
+that makes a retried publish free.</p>
+
+<h2 id="streaming">Stream while the suite runs</h2>
+
+<p>Open a run, post results as they finish, close it at the end. Each call is safe to
+retry.</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>RUN=$(curl --fail-with-body -sS -X POST "$HUB/api/v1/runs" \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"project_key":"storefront-web","test_type":"e2e"}' | jq -r .id)
+
+# … the suite POSTs to $HUB/api/v1/runs/$RUN/events as tests finish …
+
+curl --fail-with-body -sS -X POST "$HUB/api/v1/runs/$RUN/finish" \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -H 'content-type: application/json' -d '{}'</code></pre>
+</div>
+
+<p>Results appear in every connected dashboard within a couple of seconds, with a LIVE
+badge on the run. A cancelled job that never reaches the close step leaves the run open,
+which is the honest representation: nobody told Test Hub it finished.</p>
+
+<p>The <a href="python-sdk.html">Python SDK</a> wraps this if you are writing a framework
+plugin; the <a href="rest-api.html">REST API</a> is the whole contract if you are not.</p>
+
+<h2 id="artifacts">Screenshots and traces</h2>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>curl --fail-with-body -sS -X POST "$HUB/api/v1/runs/$RUN/artifacts" \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -F "file=@test-results/failure.png" \
+  -F "kind=screenshot" -F "test_id=$TEST_ID"</code></pre>
+</div>
+
+<p>Content-addressed, so fifty shards uploading the same screenshot store one copy.</p>
+
+<h2 id="troubleshooting">Things that go wrong</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Symptom</th><th>Cause</th></tr></thead>
+  <tbody>
+    <tr><td>Step is green, nothing in the dashboard</td><td><code>curl</code> without <code>--fail-with-body</code>, or a <code>sh</code> script without <code>set -e</code>.</td></tr>
+    <tr><td>Results only appear when tests pass</td><td>Missing <code>if: always()</code> / publishing in <code>post { success }</code>, or a failing test command aborting the stage.</td></tr>
+    <tr><td>Four runs instead of one</td><td>The shards did not share a <code>--run-id</code>.</td></tr>
+    <tr><td><code>415 unknown_format</code></td><td>Not JUnit XML or Test Hub JSON. <code>GET /api/v1/adapters</code> lists what this server accepts.</td></tr>
+    <tr><td><code>401 unauthorized</code></td><td>The secret is unset — in most CI systems a missing secret expands to an empty string rather than failing.</td></tr>
+    <tr><td>Branch shows as <code>HEAD</code> or <code>&lt;n&gt;/merge</code></td><td>On a GitHub pull request <code>GITHUB_REF_NAME</code> is the merge ref; use <code>github.head_ref</code>. On Jenkins prefer <code>BRANCH_NAME</code> over <code>GIT_BRANCH</code>, which includes the remote.</td></tr>
+    <tr><td>Publish times out on a large report</td><td>Raise <code>--timeout</code>, and check <code>TEST_HUB_MAX_REPORT_BYTES</code> on the server. Gzipped reports are accepted and decompressed with their own limit.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The full worked pipelines, including scripted-pipeline and systemd variants, are in
+<code>docs/ci/github-actions.md</code> and <code>docs/ci/jenkins.md</code> in the
+repository.</p>
+<nav class="pagenav" aria-label="Pagination">
+<a class="pagenav__prev" href="../docs/deployment.html"><span>&larr;&nbsp;Previous</span><b>Deployment</b></a>
+<a class="pagenav__next" href="../docs/faq.html"><span>Next&nbsp;&rarr;</span><b>FAQ</b></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#the-shape">The shape of it</a></li>
+<li class="lvl-2"><a href="#token">First, a token</a></li>
+<li class="lvl-2"><a href="#on-finish">Publish when the suite finishes</a></li>
+<li class="lvl-3"><a href="#gh-finish">GitHub Actions</a></li>
+<li class="lvl-3"><a href="#jenkins-finish">Jenkins</a></li>
+<li class="lvl-3"><a href="#cli-form">Or the CLI, if Python is already there</a></li>
+<li class="lvl-2"><a href="#shards">One run from many shards</a></li>
+<li class="lvl-2"><a href="#streaming">Stream while the suite runs</a></li>
+<li class="lvl-2"><a href="#artifacts">Screenshots and traces</a></li>
+<li class="lvl-2"><a href="#troubleshooting">Things that go wrong</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

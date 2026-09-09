@@ -1,0 +1,17 @@
+{
+  "kind": "test-hub-report",
+  "schema_version": 99,
+  "run": {
+    "name": "a report from a Test Hub that has not been written yet",
+    "component": "payments-api"
+  },
+  "tests": [
+    {
+      "name": "refundsFullAmount",
+      "class_name": "payments.api.RefundIT",
+      "suite_path": "payments/api",
+      "status": "passed",
+      "duration_ms": 1200
+    }
+  ]
+}

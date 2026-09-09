@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Invented fixture: every one of these strings is a legitimate test name or assertion message
+  for a test suite that checks output escaping. They must survive parsing intact and must be
+  escaped by whatever renders them - the adapter's job is to carry them faithfully, not to
+  sanitise them.
+-->
+<testsuites name="checkout-service xss regression" tests="3" failures="3" errors="0" skipped="0"
+            time="0.9">
+  <testsuite name="checkout.render.EscapingTest" tests="3" failures="3" errors="0" skipped="0"
+             time="0.9">
+    <testcase name="escapes &lt;script&gt;alert(1)&lt;/script&gt; in the product title"
+              classname="checkout.render.EscapingTest" time="0.30">
+      <failure message="expected escaped output, got &lt;script&gt;alert(1)&lt;/script&gt;"
+               type="AssertionError">
+AssertionError: rendered title was &lt;script&gt;alert(1)&lt;/script&gt;
+	at checkout.render.EscapingTest.escapesScriptTags(EscapingTest.java:22)
+      </failure>
+      <system-out>rendered: &lt;div class="title"&gt;&lt;script&gt;alert(1)&lt;/script&gt;&lt;/div&gt;</system-out>
+    </testcase>
+    <testcase name="escapes &lt;/script&gt;&lt;img src=x onerror=alert(1)&gt; in the coupon code"
+              classname="checkout.render.EscapingTest" time="0.31">
+      <failure message="coupon code leaked markup" type="AssertionError">
+AssertionError: coupon rendered as &lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;
+	at checkout.render.EscapingTest.escapesImgOnerror(EscapingTest.java:38)
+      </failure>
+      <system-err>WARN CouponRenderer - unescaped value: &lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;</system-err>
+    </testcase>
+    <testcase name='escapes "&gt;&lt;b&gt; in the search box' classname="checkout.render.EscapingTest"
+              time="0.29">
+      <failure message='search box emitted "&gt;&lt;b&gt;' type="AssertionError">
+AssertionError: search box emitted "&gt;&lt;b&gt; instead of &amp;quot;&amp;gt;&amp;lt;b&amp;gt;
+	at checkout.render.EscapingTest.escapesAttributeBreakout(EscapingTest.java:55)
+      </failure>
+    </testcase>
+  </testsuite>
+</testsuites>

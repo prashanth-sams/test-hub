@@ -1,0 +1,150 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+# The distribution name is deliberately kept in one place. If PyPI rejects it as
+# confusable with an existing project, run `python tools/set_dist_name.py <name>`
+# — it rewrites this field and nothing else. The import package (`test_hub`) and
+# the console script (`test-hub`) are unaffected by that change.
+name = "test-hub"
+dynamic = ["version"]
+description = "Universal test observability — every team, framework and test run in one place."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Test Hub contributors" }]
+keywords = [
+    "testing", "test-results", "test-report", "junit", "xunit", "dashboard",
+    "observability", "ci", "qa", "test-analytics", "sse",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "sqlalchemy>=2.0.25",
+    "alembic>=1.13",
+    "typer>=0.12",
+    "jinja2>=3.1",
+    "defusedxml>=0.7.1",
+    "httpx>=0.27",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "types-defusedxml",
+    "build>=1.2",
+    "twine>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/prashanth-sams/test-hub"
+Documentation = "https://prashanth-sams.github.io/test-hub/"
+Source = "https://github.com/prashanth-sams/test-hub"
+Issues = "https://github.com/prashanth-sams/test-hub/issues"
+Changelog = "https://github.com/prashanth-sams/test-hub/blob/main/CHANGELOG.md"
+
+[project.scripts]
+test-hub = "test_hub.cli:main"
+
+# Built-in adapters register through exactly the same entry-point group a
+# third-party adapter package uses. There is no privileged built-in path.
+[project.entry-points."test_hub.adapters"]
+testhub-json = "test_hub.adapters.canonical_json:CanonicalJsonAdapter"
+junit-xml = "test_hub.adapters.junit_xml:JUnitXmlAdapter"
+
+[tool.hatch.version]
+path = "src/test_hub/version.py"
+
+[tool.hatch.build.targets.wheel]
+# The dashboard lives inside the package directory, so it ships with it — no
+# force-include needed, and adding one duplicates every file in the archive.
+packages = ["src/test_hub"]
+artifacts = ["src/test_hub/web/**"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/docs", "/README.md", "/LICENSE", "/CHANGELOG.md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "S", "PTH", "T20"]
+ignore = [
+    "S101",   # assert is how tests are written
+    "B008",   # FastAPI Depends() in defaults is the framework's idiom
+    "RUF012", # ClassVar annotations on adapter metadata add noise, not safety
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "T20", "E501"]
+"src/test_hub/demo/**" = ["S311"]  # sample data uses random, not crypto
+"src/test_hub/cli/**" = ["T20"]    # the CLI is allowed to print
+"src/test_hub/storage/migrations/**" = ["I001", "E501"]
+"tools/**" = ["T20", "S"]
+# The documentation site generator embeds HTML and SVG templates as literals and
+# reports progress on stdout. Wrapping those lines would corrupt the markup they
+# emit, and a build script that cannot print is not a build script.
+"site/tools/**" = ["T20", "S", "E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["test_hub"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/test_hub"]
+plugins = ["pydantic.mypy"]
+strict = true
+warn_unreachable = true
+disallow_untyped_decorators = false
+exclude = ["^src/test_hub/storage/migrations/versions/"]
+
+[[tool.mypy.overrides]]
+module = ["defusedxml.*", "alembic.*", "uvicorn.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers --strict-config"
+asyncio_mode = "auto"
+markers = [
+    "slow: tests that build large inputs or start a server",
+]
+# The domain classes are called TestStatus, TestRun, TestCase, TestSuite… because
+# that is what they are. Pytest's default collection rules see the `Test` prefix
+# and try to collect them. Narrow the rules instead of renaming the model layer.
+python_classes = ["*Tests", "Describe*"]
+filterwarnings = ["error::DeprecationWarning:test_hub.*"]
+
+[tool.coverage.run]
+source = ["test_hub"]
+branch = true

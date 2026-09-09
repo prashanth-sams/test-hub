@@ -1,0 +1,123 @@
+name: Bug report
+description: Something Test Hub does is wrong, and you can show it.
+title: "bug: "
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time.
+
+        **Before you paste anything:** Test Hub exists because test output is
+        full of secrets. It redacts what it can on the way in, but an issue
+        here is public and nothing redacts that. Please check the report
+        excerpts, logs and stack traces below for tokens, connection strings
+        and internal hostnames before you submit.
+
+        If the bug *is* a security problem — anything where the answer to "what
+        can an attacker do with this" is interesting — please do not file it
+        here. See [SECURITY.md](../blob/main/SECURITY.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, what you got, and how those differ.
+      placeholder: |
+        I imported a JUnit XML file from Maven Surefire. The run shows 412 tests,
+        but the file contains 415 and the three missing ones are the parametrized
+        ones.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: >
+        The exact commands, from a clean state. `test-hub demo` is a fine
+        starting point if the bug shows up there.
+      value: |
+        1. `test-hub ...`
+        2. ...
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: A minimal report file that shows it
+      description: >
+        The single most useful thing you can attach. Cut it down to the few test
+        cases that matter and rename anything confidential — the shape of the
+        XML/JSON is what we need, not your test names. Drag a file in, or paste
+        it here.
+      render: xml
+
+  - type: input
+    id: version
+    attributes:
+      label: Test Hub version
+      description: Output of `test-hub --version`.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how-installed
+    attributes:
+      label: How is it installed
+      options:
+        - pip / pipx from PyPI
+        - Docker image
+        - docker compose
+        - from a source checkout
+        - other
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS and Python
+      description: Output of `python -VV` and your operating system.
+      placeholder: "macOS 15.3 · Python 3.12.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where does it go wrong
+      description: Pick the closest. It routes the issue; being wrong costs nothing.
+      multiple: true
+      options:
+        - "Ingestion — a report file is parsed wrongly or rejected"
+        - "Dashboard — the live UI"
+        - "Snapshot — the exported single-file HTML"
+        - "REST API"
+        - "Live updates (SSE)"
+        - "CLI"
+        - "Packaging, Docker or install"
+        - "Metrics — pass rate, flakiness, durations"
+        - "Not sure"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >
+        Run the same thing again with `TEST_HUB_LOG_LEVEL=debug`. Redaction is on
+        by default, but read it anyway.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: I checked the pasted output above for secrets.
+          required: true

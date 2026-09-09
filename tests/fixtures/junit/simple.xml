@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invented fixture. checkout-service, unit tier. Nothing here came from a real report. -->
+<testsuites name="checkout-service unit" tests="5" failures="1" errors="1" skipped="1" time="3.412">
+  <testsuite name="com.example.checkout.CartTotalsTest" package="com.example.checkout"
+             tests="5" failures="1" errors="1" skipped="1" time="3.412"
+             timestamp="2026-03-11T08:41:02" hostname="ci-runner-07">
+    <properties>
+      <property name="branch" value="main"/>
+      <property name="commit" value="9f3ab21c7d4e5061f2b8c9d0a1e2f3b4c5d6e7f8"/>
+      <property name="environment" value="ci"/>
+      <property name="ci" value="github-actions"/>
+      <property name="build_url" value="https://ci.example.test/checkout-service/runs/4417"/>
+      <property name="java.version" value="21.0.2"/>
+    </properties>
+    <testcase name="emptyCartTotalsZero" classname="com.example.checkout.CartTotalsTest"
+              time="0.041"/>
+    <testcase name="appliesPercentageDiscount" classname="com.example.checkout.CartTotalsTest"
+              time="0.128" assertions="3"/>
+    <testcase name="roundsHalfUpToTwoDecimals" classname="com.example.checkout.CartTotalsTest"
+              time="1.902">
+      <failure message="expected:&lt;19.99&gt; but was:&lt;19.98&gt;" type="org.opentest4j.AssertionFailedError">
+org.opentest4j.AssertionFailedError: expected:&lt;19.99&gt; but was:&lt;19.98&gt;
+	at com.example.checkout.CartTotalsTest.roundsHalfUpToTwoDecimals(CartTotalsTest.java:88)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+      </failure>
+      <system-out>cart=[sku-1001 x2, sku-2043 x1] subtotal=21.09 discount=0.05</system-out>
+    </testcase>
+    <testcase name="convertsCurrencyViaRateService" classname="com.example.checkout.CartTotalsTest"
+              time="1.301">
+      <error message="Connection refused: rate-service:8080" type="java.net.ConnectException">
+java.net.ConnectException: Connection refused: rate-service:8080
+	at com.example.checkout.rates.RateClient.fetch(RateClient.java:57)
+      </error>
+      <system-err>WARN  RateClient - retry 1/1 failed, giving up</system-err>
+    </testcase>
+    <testcase name="appliesLoyaltyTier" classname="com.example.checkout.CartTotalsTest" time="0.040">
+      <skipped message="loyalty tiers are behind the LOYALTY_V2 flag"/>
+    </testcase>
+    <system-out>Running com.example.checkout.CartTotalsTest with 4 threads</system-out>
+  </testsuite>
+</testsuites>

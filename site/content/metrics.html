@@ -1,0 +1,548 @@
+<!--META {"title": "Metrics", "eyebrow": "Contracts", "description": "Every formula behind every number on the dashboard: pass rate, failure rate, durations, flakiness within a run and across runs, and percentiles.", "lede": "A dashboard that will not tell you how it computed a number is a dashboard you cannot argue with. Here is every formula, the denominator each one uses, and the reason it excludes what it excludes."} -->
+
+<p>Every number Test Hub shows is defined here and implemented once — in
+<code>src/test_hub/domain/metrics.py</code> and the computed fields of <code>RunCounts</code>
+in <code>src/test_hub/domain/models.py</code>. Nothing else in the Python codebase computes a
+pass rate, a flake rate or a percentile. A view that needs one calls in there, so the number in
+an exported snapshot and the number in the live API cannot disagree.</p>
+
+<div class="note note--tip"><span class="note__title">The executable version of this
+page</span><code>tests/test_metrics.py</code> is this document as assertions. Almost every
+worked example below is lifted from it, and both change together when a definition changes. If
+you are about to argue with a number, that file is the fastest way to check whether you are
+right.</div>
+
+<h2 id="one-implementation">One implementation, and the one deliberate exception</h2>
+
+<p>There is exactly one second implementation of any of this, and it is on purpose:
+<code>src/test_hub/web/assets/js/10-provider.js</code> transcribes
+<code>RunCounts</code>'s computed fields as <code>finalizeCounts()</code>, and
+<code>percentile()</code> line for line, into JavaScript. It has to, because the offline
+snapshot has no server to ask when the reader applies a filter — the same
+<code>test-hub export</code> file has to recompute a pass rate for "the payments team, staging
+only" with the network off.</p>
+
+<p>The JavaScript carries the Python function names in its comments so the two stay greppable
+from each other. That is a real duplication and worth knowing about before you change a
+formula.</p>
+
+<div class="note note--warn"><span class="note__title">One place they genuinely differ</span>
+Python's <code>round()</code> breaks ties to even; the JavaScript
+<code>Math.round(value * 100) / 100</code> breaks them upward. One test passing out of 32
+executed is <code>3.12</code> from the server and <code>3.13</code> from the snapshot's
+filtered recomputation. Both are verified; the divergence is at most 0.01 and only at an exact
+half-cent tie, but it is there.</div>
+
+<h2 id="counting-rule">The counting rule</h2>
+
+<p><b>One test contributes exactly one outcome to a run's counts, through its effective
+attempt.</b> The effective attempt is the <em>last</em> one — not the best, not the worst:</p>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics">
+<pre><code>def effective_status(attempt_statuses):
+    if not attempt_statuses:
+        return TestStatus.UNKNOWN
+    return attempt_statuses[-1]</code></pre>
+</div>
+
+<p>A test that failed and then passed on retry is green <em>and</em> flaky, and it counts as
+one pass. A test that passed and then failed on a rerun is red. The retry history is never
+discarded, so both facts stay on the page — that is the whole reason attempts are rows rather
+than overwrites.</p>
+
+<p>Counts are always folded from the stored attempt rows, never taken from a publisher's own
+totals. A publisher's totals drift the moment anything is retried or a shard fails to upload,
+and a front page that disagrees with the run page it links to is worse than a slow one. The
+same rule is why a JUnit file's <code>tests="5" failures="1"</code> attributes are advisory: a
+mismatch produces a <code>counts_mismatch</code> warning, not a wrong number.</p>
+
+<h2 id="count-fields">The count fields</h2>
+
+<p><code>RunCounts</code> has thirteen stored fields and four computed ones. It is the same
+object for a run, a suite or any filtered slice.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>total</code></td><td>Tests folded into this block. Equals the sum of the ten status fields.</td></tr>
+    <tr><td><code>passed</code> <code>failed</code> <code>error</code> <code>skipped</code> <code>xfailed</code> <code>xpassed</code> <code>cancelled</code> <code>unknown</code> <code>running</code> <code>queued</code></td>
+        <td>One per <code>TestStatus</code>, counting <em>effective</em> attempts.</td></tr>
+    <tr><td><code>flaky</code></td><td>Tests that were flaky <em>within this run</em>. Not a status: a test is counted here <em>as well as</em> under its effective status.</td></tr>
+    <tr><td><code>retried</code></td><td>Tests with more than one attempt. Likewise not a status.</td></tr>
+  </tbody>
+</table></div>
+
+<p><code>flaky</code> and <code>retried</code> overlap with the status counts on purpose. They
+answer a different question — "how much of this run's green was earned on the second try" — and
+adding them into <code>total</code> would double-count the same tests.</p>
+
+<h3 id="completed-executed">completed and executed</h3>
+
+<div class="codeblock" data-lang="python">
+<pre><code>completed = passed + failed + error + skipped + xfailed + xpassed + cancelled + unknown
+executed  = completed - skipped - cancelled</code></pre>
+</div>
+
+<p><code>completed</code> is <code>total</code> minus the tests still in flight, so it is the
+honest denominator while a run is still streaming: <code>running</code> and <code>queued</code>
+are excluded. <code>executed</code> goes one step further and removes the tests that never ran
+a body. A skipped test cannot pass and cannot fail; putting it in the denominator turns "we
+skipped the slow suite today" into a pass-rate drop that reads exactly like a regression.</p>
+
+<div class="codeblock" data-lang="python" data-caption="Verified — a five-test run, two still in flight">
+<pre><code>&gt;&gt;&gt; counts = RunCounts(total=5, passed=3, running=1, queued=1)
+&gt;&gt;&gt; counts.completed
+3
+&gt;&gt;&gt; counts.executed
+3
+&gt;&gt;&gt; counts.pass_rate
+100.0</code></pre>
+</div>
+
+<p>That 100% is correct and it is also the thing to understand about a live run: it means
+"everything that has finished so far has passed", not "this run will pass". The dashboard shows
+the in-flight counts beside it for exactly that reason.</p>
+
+<h2 id="rates">Pass rate and failure rate</h2>
+
+<div class="codeblock" data-lang="python">
+<pre><code>pass_rate    = 100 * (passed + xfailed)          / executed
+failure_rate = 100 * (failed + error + xpassed)  / executed</code></pre>
+</div>
+
+<p>Both are rounded to two decimal places, and both are <code>None</code> when
+<code>executed &lt;= 0</code>.</p>
+
+<h3 id="xfail-xpass">Why <code>xfailed</code> is a success and <code>xpassed</code> is not</h3>
+
+<p>A test marked expected-to-fail that failed did exactly what it was declared to do. Colouring
+it red trains people to ignore red, which is the most expensive failure mode a test dashboard
+has. So <code>xfailed</code> counts toward the pass rate.</p>
+
+<p><code>xpassed</code> counts as a failure instead, because an expectation that no longer holds
+is a signal: either the bug is fixed and the marker should go, or something else changed and
+nobody noticed. It is the one status where "the test passed" and "this is fine" come apart, and
+the code says so out loud in <code>test_hub.domain.status.is_successful</code> and
+<code>is_failureish</code>.</p>
+
+<div class="codeblock" data-lang="python" data-caption="One of each: the two rates land on 50/50">
+<pre><code>&gt;&gt;&gt; counts = RunCounts(total=4, passed=1, xfailed=1, xpassed=1, failed=1)
+&gt;&gt;&gt; counts.pass_rate, counts.failure_rate
+(50.0, 50.0)</code></pre>
+</div>
+
+<h3 id="null-not-zero">Why <code>pass_rate</code> is null, not zero, when nothing executed</h3>
+
+<p>A run that only skipped has no pass rate. Rendering it as a red 0% is a lie the dashboard
+would then have to explain every time somebody asked; rendering it as "—" is the truth.</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; counts = RunCounts(total=3, skipped=3)
+&gt;&gt;&gt; counts.executed
+0
+&gt;&gt;&gt; counts.pass_rate is None, counts.failure_rate is None
+(True, True)</code></pre>
+</div>
+
+<p>Consumers have to handle the null. The JavaScript provider carries a comment saying so, for
+the same reason: a missing <code>pass_rate</code> must not become 0% on the way through the
+UI.</p>
+
+<h3 id="rates-dont-sum">The two rates need not add up to 100</h3>
+
+<p><code>unknown</code> sits in <code>executed</code> but in neither numerator. That is
+deliberate. An unmapped status word is not evidence of a pass and not evidence of a failure,
+and quietly assigning it to either would change the number the dashboard shows on the basis of
+a word Test Hub failed to recognize. Every <code>unknown</code> also raises an
+<code>unknown_status</code> parser warning attached to the run, so the gap is visible rather
+than mysterious.</p>
+
+<p>This is real, not theoretical. <code>tests/fixtures/canonical/report.json</code> contains a
+test whose status is the word <code>bananas</code>:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub ingest tests/fixtures/canonical/report.json --project checkout-service --json</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output">
+<pre><code>  "counts": {"total": 6, "passed": 3, "failed": 1, "skipped": 1, "unknown": 1,
+             "flaky": 2, "retried": 2, "completed": 6, "executed": 5,
+             "pass_rate": 60.0, "failure_rate": 20.0}
+  "warnings": [
+    {"code": "unknown_status",
+     "message": "status 'bananas' is not a word Test Hub knows; recorded as unknown",
+     "severity": "warning", "location": "tests[6]"}
+  ]</code></pre>
+</div>
+
+<p>Six tests, one skipped, so <code>executed</code> is 5. Three passes over five is 60%; one
+failure over five is 20%; the missing 20% is the test nobody could classify.</p>
+
+<h3 id="worked-mixture">A worked mixture</h3>
+
+<p><code>RunCounts(total=12, passed=7, failed=2, error=1, skipped=1, xfailed=1)</code>:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Quantity</th><th>Arithmetic</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td><code>completed</code></td><td>7 + 2 + 1 + 1 + 1</td><td>12</td></tr>
+    <tr><td><code>executed</code></td><td>12 − 1 skipped − 0 cancelled</td><td>11</td></tr>
+    <tr><td><code>pass_rate</code></td><td>100 × (7 + 1) / 11</td><td>72.73</td></tr>
+    <tr><td><code>failure_rate</code></td><td>100 × (2 + 1 + 0) / 11</td><td>27.27</td></tr>
+  </tbody>
+</table></div>
+
+<p>And the two-line version from the test suite, which is the case people get wrong by hand.
+Eight passed, one failed, one skipped is 88.89%, not 80%:</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; counts = RunCounts(total=10, passed=8, failed=1, skipped=1)
+&gt;&gt;&gt; counts.executed, counts.pass_rate
+(9, 88.89)</code></pre>
+</div>
+
+<h3 id="rates-many-runs">Rates over many runs are test-weighted</h3>
+
+<p>The overview and the trend chart merge count blocks with <code>RunCounts.merge</code> and
+<em>then</em> compute the rate. That makes the result test-weighted rather than a mean of
+per-run rates: a 2000-test nightly and a 3-test smoke run do not carry equal weight in the
+portfolio number.</p>
+
+<p>Both statistics are defensible and they answer different questions. Test-weighted asks "what
+fraction of our tests are green"; the unweighted mean of run pass rates asks "what fraction of
+our pipelines are healthy", and gives a tiny smoke suite the same vote as the nightly. Test Hub
+computes the first and does not compute the second — if you want it, the per-run rates are all
+in the API response.</p>
+
+<h2 id="durations">Durations</h2>
+
+<h3 id="run-duration">A run</h3>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics.run_duration_ms">
+<pre><code>def run_duration_ms(started_at, finished_at, attempt_durations_ms=None):
+    if started_at is not None and finished_at is not None:
+        return max(0, round((finished_at - started_at).total_seconds() * 1000))
+    if attempt_durations_ms is not None:
+        total = sum(attempt_durations_ms)
+        return int(total) if total else None
+    return None</code></pre>
+</div>
+
+<p>Wall clock wins whenever both ends are known, because with parallel workers the sum of test
+durations is not a duration anyone means. Eight xdist workers make it roughly eight times the
+number on the wall, and a chart of it tells you about your fleet's total CPU time, not about
+how long anybody waited.</p>
+
+<div class="codeblock" data-lang="python" data-caption="63 seconds of test time inside a 30-second run">
+<pre><code>&gt;&gt;&gt; start = utcnow(); end = start + timedelta(seconds=30)
+&gt;&gt;&gt; run_duration_ms(start, end, [20_000, 25_000, 18_000])
+30000</code></pre>
+</div>
+
+<p>It runs the other way too, and that is the more common case in practice: a run whose two
+attempts reported 4100 ms and 3900 ms, published over HTTP by a script, stored
+<code>duration_ms: 37</code>. Thirty-seven milliseconds of wall clock, because the "run" was
+three <code>curl</code> calls and no test actually executed — the attempt durations came from
+the report, the wall clock came from the reporting. Neither number is wrong; they measure
+different things, and Test Hub stores the one that answers "how long was this run open".</p>
+
+<p>The fallback, and its floor:</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; run_duration_ms(None, None, [100, 200])
+300
+&gt;&gt;&gt; run_duration_ms(None, None, []) is None
+True
+&gt;&gt;&gt; run_duration_ms(None, None, None) is None
+True</code></pre>
+</div>
+
+<p>An empty list yields <code>None</code> rather than <code>0</code>: zero milliseconds is a
+claim about how long something took, and "we do not know" is not that claim. The
+<code>max(0, …)</code> in the wall-clock branch is a floor for clock skew — a
+<code>finished_at</code> before <code>started_at</code> gives 0, not a negative duration.</p>
+
+<h3 id="test-duration">A test, across its attempts</h3>
+
+<p><code>TestCase.duration_ms</code> is the <b>sum over every attempt</b>:</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>return sum(attempt.duration_ms or 0 for attempt in self.attempts)</code></pre>
+</div>
+
+<p>Retries are time the run actually spent. A test that took 30 seconds to time out and then 6
+seconds to pass cost the run 36 seconds, and reporting only the successful 6 hides the most
+expensive tests in the suite behind their own flakiness. If you want the effective attempt's
+duration on its own it is <code>attempts[-1].duration_ms</code>, and it is in the payload.</p>
+
+<p>Note that this is the opposite choice from the run, and for a consistent reason: a single
+test's attempts are strictly sequential, so summing them <em>is</em> wall clock. A run's tests
+are not.</p>
+
+<p><code>TestAttempt</code> fills in whichever of <code>started_at</code>,
+<code>finished_at</code> and <code>duration_ms</code> is missing when the other two are present,
+and the fold does the same on the way in, so an adapter that can only supply two of the three
+does not lose the third.</p>
+
+<h2 id="flaky">Flakiness</h2>
+
+<p>Test Hub has two flakiness definitions, at two altitudes. They answer different questions and
+neither is a substitute for the other.</p>
+
+<h3 id="flaky-within-run">Within a run</h3>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics.is_flaky_within_run">
+<pre><code>def is_flaky_within_run(attempt_statuses):
+    if len(attempt_statuses) &lt; 2:
+        return False
+    saw_success = any(is_successful(s) for s in attempt_statuses)
+    saw_failure = any(is_failureish(s) for s in attempt_statuses)
+    return saw_success and saw_failure</code></pre>
+</div>
+
+<p>The test both succeeded and failed inside one execution of the suite. This is the strict
+definition: it needs two attempts, because a single attempt cannot disagree with itself, and it
+needs genuine disagreement rather than merely a retry.</p>
+
+<div class="codeblock" data-lang="python" data-caption="All verified against the shipped code">
+<pre><code>&gt;&gt;&gt; is_flaky_within_run([S.FAILED, S.PASSED])
+True
+&gt;&gt;&gt; is_flaky_within_run([S.PASSED, S.FAILED, S.PASSED])
+True
+&gt;&gt;&gt; is_flaky_within_run([S.FAILED, S.FAILED])
+False
+&gt;&gt;&gt; is_flaky_within_run([S.PASSED])
+False
+&gt;&gt;&gt; is_flaky_within_run([S.SKIPPED, S.PASSED])       # a skip is neither side
+False
+&gt;&gt;&gt; is_flaky_within_run([S.PASSED, S.XPASSED])       # xpassed is failure-ish
+True</code></pre>
+</div>
+
+<p>That last pair is the definition earning its keep: <code>xpassed</code> counts as a failure
+for the rates, so it counts as the failure side here too, and a test that passed then
+unexpectedly-passed is flagged. Consistency across the two definitions matters more than any
+individual reading of that case.</p>
+
+<p>This is what <code>TestCase.flaky</code> and <code>RunCounts.flaky</code> mean, and it is
+what the JUnit adapter's handling of Surefire's <code>&lt;flakyFailure&gt;</code> and
+<code>&lt;rerunFailure&gt;</code> elements exists to make visible.</p>
+
+<h3 id="flake-rate">Across runs — <code>flake_rate</code></h3>
+
+<p><code>TestDetail.flake_rate</code> is the percentage of runs in a trailing window in which a
+test misbehaved. The window is <code>Settings.flaky_window_runs</code> (default 20) for the
+overview's flakiest-tests list, 30 by default on
+<code>GET /api/v1/tests/{id}?history=…</code> (1–200), and 20 in an exported snapshot.</p>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics.flake_rate">
+<pre><code>def flake_rate(per_run):
+    considered = [
+        (status, within) for status, within in per_run
+        if status not in (SKIPPED, CANCELLED, UNKNOWN)
+    ]
+    if len(considered) &lt; 2:
+        return None
+
+    successes = sum(1 for s, _ in considered if is_successful(s))
+    failures  = sum(1 for s, _ in considered if is_failureish(s))
+    majority_is_success = successes &gt;= failures
+
+    disagreements = 0
+    for status, within_run in considered:
+        agreed = is_successful(status) if majority_is_success else is_failureish(status)
+        if within_run or not agreed:
+            disagreements += 1
+    return round(100.0 * disagreements / len(considered), 2)</code></pre>
+</div>
+
+<p>Four rules, each worth stating on its own.</p>
+
+<ol class="steps">
+  <li>
+    <h3>Runs where the test did not execute are dropped</h3>
+    <p>Not counted as agreement — dropped. <code>skipped</code>, <code>cancelled</code> and
+    <code>unknown</code> enter neither the numerator nor the denominator, so a test that was
+    skipped for a month does not accumulate a month of apparent stability.</p>
+  </li>
+  <li>
+    <h3>Two executed runs are the minimum</h3>
+    <p>One data point cannot describe consistency. Returning <code>0.0</code> for it would put
+    every brand-new test at the bottom of the flakiest list — the right place, for entirely the
+    wrong reason, and it would stay there until it broke. <code>None</code> is the honest
+    answer and the dashboard renders it as "—".</p>
+  </li>
+  <li>
+    <h3>The majority is the baseline, ties going to success</h3>
+    <p>A run disagrees when its effective outcome is not the window's majority outcome. The tie
+    rule (<code>successes &gt;= failures</code>) means a test that is up half the time and down
+    half the time scores 50%, from either direction.</p>
+  </li>
+  <li>
+    <h3>A run that was flaky within itself always counts as a disagreement</h3>
+    <p>Even when its final outcome agreed with the majority. A test that reached green only
+    because it was retried is not the same as a test that was green, and a majority-only rule
+    would score it 0% and hide it.</p>
+  </li>
+</ol>
+
+<p><code>per_run</code> is ordered oldest first. The repository reverses its newest-first
+history before calling in, and says so in a comment, because every list it returns is
+newest-first and exactly one of them has to flip.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>History (oldest first)</th><th>Considered</th><th>Majority</th><th>Disagreements</th><th><code>flake_rate</code></th></tr></thead>
+  <tbody>
+    <tr><td>pass, pass, pass, fail</td><td>4</td><td>success</td><td>1</td><td>25.0</td></tr>
+    <tr><td>pass, pass, fail, fail</td><td>4</td><td>success (tie)</td><td>2</td><td>50.0</td></tr>
+    <tr><td>pass, fail, fail, fail</td><td>4</td><td>failure</td><td>1</td><td>25.0</td></tr>
+    <tr><td>pass, pass <em>(second one retried)</em></td><td>2</td><td>success</td><td>1</td><td>50.0</td></tr>
+    <tr><td>error, pass</td><td>2</td><td>success (tie)</td><td>1</td><td>50.0</td></tr>
+    <tr><td>skip, pass, fail</td><td>2</td><td>success (tie)</td><td>1</td><td>50.0</td></tr>
+    <tr><td>pass × 10</td><td>10</td><td>success</td><td>0</td><td>0.0</td></tr>
+    <tr><td>pass</td><td>1</td><td>—</td><td>—</td><td><code>None</code></td></tr>
+    <tr><td>skip, pass</td><td>1</td><td>—</td><td>—</td><td><code>None</code></td></tr>
+  </tbody>
+</table></div>
+
+<p>Every row was run against the shipped function. The fourth is the one that motivates rule 4:
+both runs ended green, so a majority-only rule would report 0% and the test would stay invisible
+despite needing a retry half the time. The last row is rule 1 and rule 2 together — the skip is
+dropped, which leaves one considered run, which is not enough.</p>
+
+<p><code>metrics.py</code> also exports a boolean <code>is_flaky_across_runs(statuses)</code>,
+true when a sequence of effective outcomes contains both a success and a failure. Nothing in the
+server uses it; <code>flake_rate</code> is what the repository calls, because a rate is more
+useful than a boolean when you are ranking twenty thousand tests. It is exported and tested for
+consumers that want the cheap answer over a window they chose themselves.
+<code>aggregate_counts(statuses)</code> is in the same position: exported, tested, and not on
+the write path, which uses <code>RunCounts.add</code> directly.</p>
+
+<h3 id="test-failure-rate"><code>TestDetail.failure_rate</code> is a different quantity</h3>
+
+<p>Not the same denominator as <code>RunCounts.failure_rate</code>, and not in
+<code>metrics.py</code> — it is computed in <code>SqlRunRepository.get_test_detail</code>:</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>executed = [s for s, _ in oldest_first if s not in (SKIPPED, CANCELLED, UNKNOWN)]
+failure_pct = round(100.0 * sum(1 for s in executed if is_failureish(s)) / len(executed), 2)</code></pre>
+</div>
+
+<p>It is "in what fraction of the runs where this test actually ran did it fail", over the same
+window <code>flake_rate</code> uses. <code>RunCounts.failure_rate</code> is "what fraction of
+the tests in this run failed". Both are labelled <em>failure rate</em> in the UI because in
+their own contexts both readings are the obvious one — but they are different quantities and
+comparing one against the other means nothing.</p>
+
+<p><code>TestDetail.average_duration_ms</code> is the arithmetic mean of the per-run
+<code>TestCase.duration_ms</code> values that were recorded, which — per
+<a href="#test-duration">the rule above</a> — are already sums across attempts. A test that is
+retried often will look slower here than its typical successful attempt, and that is the
+intended reading.</p>
+
+<h2 id="percentiles">Percentiles</h2>
+
+<p>The trend chart's <code>duration_ms_p50</code> and <code>duration_ms_p95</code> come from a
+percentile written out by hand:</p>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics.percentile">
+<pre><code>def percentile(values, fraction):
+    if not values:
+        return None
+    ordered = sorted(float(v) for v in values)
+    if len(ordered) == 1:
+        return ordered[0]
+    position = max(0.0, min(1.0, fraction)) * (len(ordered) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight</code></pre>
+</div>
+
+<p>Linear interpolation between the two nearest ranks, with <code>fraction</code> clamped into
+<code>[0, 1]</code>. It is written out rather than taken from <code>statistics.quantiles</code>
+so the trend numbers are identical on every supported Python, reproducible by hand from the raw
+durations the API returns, and transcribable into the JavaScript provider without a second
+opinion about which of the nine standard percentile definitions to use.</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; percentile([10], 0.95)
+10.0
+&gt;&gt;&gt; percentile([], 0.5) is None
+True
+&gt;&gt;&gt; percentile([1, 2, 3, 4, 5], 0.5)
+3.0
+&gt;&gt;&gt; percentile([1, 2, 3, 4], 0.0)
+1.0
+&gt;&gt;&gt; percentile([1, 2, 3, 4], 1.0)
+4.0
+&gt;&gt;&gt; percentile([1, 2, 3, 4], 0.5)      # the interpolation, visible
+2.5</code></pre>
+</div>
+
+<p>It can produce the usual binary-floating-point artefacts —
+<code>percentile([100, 200, 300, 400, 500], 0.95)</code> is
+<code>479.99999999999994</code> — but <code>TrendPoint</code> stores
+<code>round(p95)</code> as an integer, so what reaches the wire is <code>480</code>.</p>
+
+<div class="note"><span class="note__title">A bucket with one run</span>A single run in a trend
+bucket makes p50 and p95 the same number, because <code>percentile</code> short-circuits on a
+one-element list. That is correct, and it is also why the trend chart is not worth reading at a
+one-day bucket on a quiet project. Buckets widen automatically past 60 points, and a bucket with
+no runs at all is still emitted so the chart shows a genuine gap instead of a straight line
+implying continuity.</div>
+
+<h2 id="run-status">Where a run's status comes from</h2>
+
+<p>The run's own status is folded too, in <code>SqlEventRepository._fold_status</code>, and it
+does not use <code>worst_status</code>. The conditions are checked in this order:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Condition</th><th>Result</th></tr></thead>
+  <tbody>
+    <tr><td>the run was explicitly cancelled</td><td><span class="st st--cancelled">cancelled</span></td></tr>
+    <tr><td><code>finished_at</code> is set and <code>error &gt; 0</code></td><td><span class="st st--error">error</span></td></tr>
+    <tr><td><code>finished_at</code> is set and (<code>failed &gt; 0</code> or <code>xpassed &gt; 0</code>)</td><td><span class="st st--failed">failed</span></td></tr>
+    <tr><td><code>finished_at</code> is set and <code>total == 0</code></td><td><span class="st st--unknown">unknown</span></td></tr>
+    <tr><td><code>finished_at</code> is set</td><td><span class="st st--passed">passed</span></td></tr>
+    <tr><td>any attempt exists, or <code>started_at</code> is set</td><td><span class="st st--running">running</span></td></tr>
+    <tr><td>otherwise</td><td><span class="st st--queued">queued</span></td></tr>
+  </tbody>
+</table></div>
+
+<p><code>cancelled</code> is the one outcome a publisher can dictate, because a cancelled run is
+indistinguishable from a run that stopped reporting; everything else is derived from the
+attempts. A finished run with no tests at all is <code>unknown</code>, not <code>passed</code> —
+an empty suite has no outcome. All seven rows are verifiable against a live server, and the
+<a href="events.html#run-finished">event contract</a> shows what happens when a publisher claims
+otherwise.</p>
+
+<p><code>worst_status</code> in <code>domain/status.py</code> is a different function for a
+different job: it folds a set of attempt statuses into the most severe one, and is used by the
+JUnit adapter to give a single verdict to a <code>&lt;testcase&gt;</code> carrying several
+outcome elements. It orders <code>unknown &lt; skipped &lt; xfailed &lt; passed &lt; xpassed
+&lt; queued &lt; running &lt; cancelled &lt; failed &lt; error</code>, and an empty iterable is
+<code>unknown</code>.</p>
+
+<div class="cards">
+  <div>
+    <h3>Where the numbers come from</h3>
+    <p><a href="events.html">Event contract</a> — the two <code>test.finished</code> events that
+    become one pass and one flake.</p>
+  </div>
+  <div>
+    <h3>What a status means</h3>
+    <p><a href="canonical-schema.html#statuses">Canonical schema</a> — the ten statuses, the
+    alias table, and what happens to a word Test Hub does not know.</p>
+  </div>
+  <div>
+    <h3>Where the numbers are shown</h3>
+    <p><a href="dashboard-tour.html">Dashboard tour</a> — which panel uses which denominator,
+    and what the comparison panel is comparing against.</p>
+  </div>
+  <div>
+    <h3>Tuning the window</h3>
+    <p><a href="configuration.html">Configuration</a> — <code>flaky_window_runs</code> and the
+    other settings these formulas read.</p>
+  </div>
+</div>

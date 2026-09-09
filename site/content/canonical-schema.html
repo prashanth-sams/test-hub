@@ -1,0 +1,860 @@
+<!--META {"title": "Canonical schema", "eyebrow": "Contracts", "description": "schema_version and the compatibility promise, the Workspace-to-TestAttempt hierarchy, the ten normalized statuses, stable test identity, and the test-hub-report JSON format.", "lede": "Everything that crosses a boundary \u2014 an HTTP response, the JSON frozen inside an offline export, the output of an adapter \u2014 is one of a small set of Pydantic models. Database rows are never serialized directly. This page is that contract: what is promised, what is derived, and what a publisher in any language has to reproduce to interoperate."} -->
+<p>The models live in <code>test_hub.domain.models</code> and are the public wire
+contract. The SQLAlchemy rows on disk are a separate, private thing, and nothing ever
+serializes an ORM object. That separation is what lets the table layout change &mdash; a
+new index, a split table, PostgreSQL &mdash; without a version bump that every consumer
+has to react to.</p>
+
+<h2 id="schema-version">schema_version and what it promises</h2>
+
+<p>One integer, defined once in <code>test_hub/version.py</code>. It moves independently
+of the package version and only on a breaking change.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Both numbers, from two places that cost nothing to ask">
+<pre><code>$ test-hub --version
+test-hub 0.1.0 (canonical schema v1)
+
+$ curl -s http://127.0.0.1:8000/healthz
+{"status":"ok","version":"0.1.0","schema_version":1,"database":"ok",
+ "workspace_id":"b037a4b3-53f8-5326-a5d5-f5fad3c31052","live_subscribers":0,
+ "time":"2026-09-09T03:30:44.034812Z"}</code></pre>
+</div>
+
+<p><code>/healthz</code> is the cheapest way for a consumer to find out what a server
+speaks before sending it anything.</p>
+
+<h3 id="carries-it">Which payloads carry the version</h3>
+
+<p>Only the ones allowed to cross a version boundary on their own &mdash; a top-level
+document a consumer might have received with no surrounding context.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Carries <code>schema_version</code></th><th>Does not</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>TestRun</code>, <code>RunDetail</code>, <code>TestDetail</code>,
+      <code>OverviewSnapshot</code>, <code>ImportResult</code>, <code>Snapshot</code>,
+      and <code>DomainEvent</code> (as <code>schemaversion</code>, following the
+      CloudEvents attribute-naming rules)</td>
+      <td><code>Workspace</code>, <code>Project</code>, <code>RunSummary</code>,
+      <code>RunCounts</code>, <code>TestSuite</code>, <code>TestCase</code>,
+      <code>TestAttempt</code>, <code>Artifact</code>, <code>RunComparison</code>,
+      <code>TestHistoryPoint</code>, <code>TrendPoint</code>, <code>ProjectHealth</code>,
+      <code>ParserWarning</code>, <code>FailureDetail</code>, <code>RunContext</code></td>
+    </tr>
+  </tbody>
+</table></div>
+
+<p>A <code>TestCase</code> is only ever seen inside a <code>RunDetail</code>, so
+stamping a version onto it would put the same integer on every one of ten thousand
+objects in the same document.</p>
+
+<h3 id="promise">The compatibility promise</h3>
+
+<p>Within a major schema version:</p>
+
+<ul>
+  <li><b>Fields may be added.</b> A new optional field on any model is not a breaking
+  change, so a consumer must tolerate one.</li>
+  <li><b>Fields are not removed, renamed or retyped.</b></li>
+  <li><b>The meaning of a field does not change.</b> In particular the metric
+  definitions are part of this contract rather than an implementation detail: changing
+  what <a href="metrics.html">pass_rate</a> counts is a version bump even though the
+  field's name and type are untouched.</li>
+  <li><b>Enum members may be added.</b> <code>TestStatus</code>, <code>RunStatus</code>,
+  <code>TestType</code>, <code>TriggerType</code> and <code>ArtifactKind</code> are
+  closed sets <em>for this version</em>, but the honest reading is that a future release
+  could add one. Treat an unrecognized member the way you would treat
+  <code>unknown</code> or <code>other</code>, not as a crash.</li>
+</ul>
+
+<p>Anything else &mdash; a removed field, a changed formula, a new
+<a href="events.html">event type</a>, a different envelope shape &mdash; is a
+<code>SCHEMA_VERSION</code> bump.</p>
+
+<h3 id="unknown-version">What happens when the version is not the one this build speaks</h3>
+
+<p>It is refused, not coerced. Every versioned model validates the integer:</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; TestRun.model_validate({..., "schema_version": 2})
+ValidationError: Value error, unsupported schema_version 2; this build speaks 1</code></pre>
+</div>
+
+<p>End to end, importing a <code>test-hub-report</code> that declares version 2:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub ingest report-v2.json --project storefront-web
+
+  error: this build speaks Test Hub schema_version 1, but the document declares 2.
+  Upgrade Test Hub (a newer document) or re-export the report with a publisher
+  that targets version 1.
+    document_schema_version: 2
+    supported: 1</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="The same refusal over REST">
+<pre><code>{"error":"validation_error",
+ "message":"this build speaks Test Hub schema_version 1, but the document declares 2. …",
+ "detail":{"document_schema_version":2,"supported":1}}
+HTTP 422</code></pre>
+</div>
+
+<p>The reasoning is worth repeating because it is the reason for the whole design: an
+older Test Hub reading a newer document cannot know which fields changed meaning, and a
+wrong pass rate is worse than a failed import.</p>
+
+<h3 id="consumer-rules">What a consumer should do</h3>
+
+<p>The same thing, in the same direction, with one asymmetry.</p>
+
+<ul>
+  <li><b>Version higher than you know: refuse, and say so.</b> You cannot know what
+  changed. Failing loudly gives the operator something to act on; guessing gives them a
+  dashboard that is quietly wrong.</li>
+  <li><b>Version lower than you know: you may accept it</b> if you are prepared to
+  supply defaults for fields that did not exist yet. Test Hub itself does not do this,
+  because there is only one version so far, but a consumer with a migration table
+  can.</li>
+  <li><b>Version absent: assume the version you were built for.</b> Every model defaults
+  <code>schema_version</code> rather than requiring it, so a report hand-written without
+  one is read as version 1 rather than rejected. That is a convenience for people writing
+  JSON by hand, and it means a document with no version is <em>not</em> evidence of
+  anything.</li>
+</ul>
+
+<h2 id="strictness">Unknown fields are rejected, not ignored</h2>
+
+<p>Every canonical model is <code>extra="forbid"</code>:</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; RunCounts.model_validate({"total": 1, "passed": 1, "typo_field": 3})
+ValidationError: 1 validation error for RunCounts
+typo_field
+  Extra inputs are not permitted [type=extra_forbidden, input_value=3, input_type=int]</code></pre>
+</div>
+
+<p>This is the opposite of the usual advice about being liberal in what you accept, and
+it is deliberate. A silently ignored <code>durationMs</code> produces a run with no
+durations and no error anywhere; a 422 naming the field produces a five-second fix. The
+one place the rule is relaxed is <code>AdapterInfo</code> in the API layer, which ignores
+extra keys so that a third-party <a href="adapters.html">adapter</a> describing itself
+with unfamiliar fields cannot break <code>GET /api/v1/adapters</code> for everyone
+else.</p>
+
+<div class="note note--warn"><span class="note__title">This applies to the models, not to
+the report document</span>The <code>test-hub-report</code> JSON below is read by an
+adapter that walks plain dictionaries, so a key it does not recognise inside a test entry
+is skipped without a warning. Model-level strictness begins after the adapter has built
+a payload. Spell the field names in the tables below exactly.</div>
+
+<h3 id="round-trip">Round-tripping a response</h3>
+
+<p>Computed fields &mdash; <code>pass_rate</code>, <code>executed</code>, a test case's
+<code>status</code> &mdash; are written out but derived, so <code>extra="forbid"</code>
+would normally reject a client that read a response and validated it straight back into
+the same model. The shared base drops exactly the computed names, and nothing else, on
+the way in. The round trip works and a genuine typo is still an error:</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; counts = RunCounts(total=2, passed=1, failed=1)
+&gt;&gt;&gt; RunCounts.model_validate(counts.model_dump(mode="json")).pass_rate
+50.0</code></pre>
+</div>
+
+<h3 id="field-types">Three field aliases worth learning once</h3>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Alias</th><th>Definition</th><th>Used for</th></tr></thead>
+  <tbody>
+    <tr><td><code>Slug</code></td><td>1&ndash;120 characters, <code>^[a-zA-Z0-9][a-zA-Z0-9._\- ]*$</code></td><td>Project keys, teams, components, environments, tags</td></tr>
+    <tr><td><code>ShortText</code></td><td>&le; 512 characters</td><td>Names, paths, class names, single-line free text</td></tr>
+    <tr><td><code>LongText</code></td><td>&le; 64&nbsp;000 characters</td><td>Stack traces, stdout, stderr, logs</td></tr>
+  </tbody>
+</table></div>
+
+<p><code>Slug</code> is deliberately permissive about case and spaces, because real team
+names have both, and deliberately strict about everything else, because these values end
+up in filenames, URLs and SQL <code>LIKE</code> patterns. It is not a
+lowercase-hyphenated slug in the blog-URL sense.</p>
+
+<p>Event payloads type these same fields as bare <code>str</code>, which means a value
+can pass event validation and still be unstorable. Two layers deal with that, in opposite
+directions and on purpose. Adapters <em>drop</em> a bad slug with an
+<code>invalid_slug</code> warning, because a file should not be able to invent a team
+name. The storage layer <em>repairs</em> one, replacing disallowed characters with
+<code>-</code>, because a run that has already been accepted should not be lost over a
+slash in a team name.</p>
+
+<p><code>LongText</code> has a second ceiling above it,
+<code>TEST_HUB_MAX_TEXT_FIELD_BYTES</code> (256&nbsp;KiB by default). The smaller of the
+two wins, truncation sets <code>FailureDetail.truncated</code> or a
+<code>text_truncated</code> flag in the attempt's metadata, and redaction runs
+<em>before</em> truncation so that a cut can never leave the tail of a secret
+behind.</p>
+
+<p>Every timestamp is an aware datetime in UTC. A naive datetime is a validation error
+everywhere, including on the way out of the database: the ORM stores a fixed-width
+ISO-8601 string precisely so that <code>pysqlite</code> cannot hand back a naive
+value.</p>
+
+<h2 id="hierarchy">The hierarchy</h2>
+
+<div class="codeblock" data-lang="text" data-caption="test_hub.domain.models">
+<pre><code>Workspace
+  └── Project
+        └── TestRun                one execution of a set of tests
+              ├── TestSuite        a file / class / feature grouping
+              │     └── TestCase   a test's identity within that run
+              │           └── TestAttempt   one execution of it (retries!)
+              ├── Artifact         a file the run produced
+              └── (events)         the append-only log it was folded from</code></pre>
+</div>
+
+<h3 id="workspace">Workspace</h3>
+
+<p>The tenancy boundary. The open-source edition creates exactly one, <code>default</code>,
+and gives it no UI &mdash; but every row in the database carries its id from the first
+migration, because adding a tenancy column to a populated events table later is the
+migration nobody wants to write.</p>
+
+<p>Its id is derived rather than random:
+<code>uuid5(TEST_HUB_NAMESPACE, "workspace\x1f" + slug.lower())</code>. So
+<code>default</code> is the same UUID on every installation &mdash;
+<code>b037a4b3-53f8-5326-a5d5-f5fad3c31052</code>, the value in the
+<code>/healthz</code> output above. That is what lets an offline publisher compute
+workspace-scoped identities without asking a server. If an existing database disagrees,
+the database wins and a warning is logged. The other fields are <code>slug</code>,
+<code>name</code> and <code>created_at</code>.</p>
+
+<h3 id="project">Project</h3>
+
+<p>Created implicitly on first import. <code>key</code> is the stable, human-typed
+value a publisher sends (<code>payments-api</code>); <code>id</code> is internal.
+Also: <code>workspace_id</code>, <code>name</code>, <code>description</code>,
+<code>default_team</code>, <code>repository_url</code>, <code>tags</code> (at most 64
+slugs), <code>created_at</code> and <code>updated_at</code>.</p>
+
+<h3 id="test-run">TestRun</h3>
+
+<p>The central object, and the one most consumers touch first.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>schema_version</code></td><td>int</td><td></td></tr>
+    <tr><td><code>id</code></td><td>UUID</td><td>Chosen by the publisher or by the server. Re-importing the same id updates that run rather than creating a second one, which is how sharded runs merge.</td></tr>
+    <tr><td><code>workspace_id</code></td><td>UUID</td><td></td></tr>
+    <tr><td><code>project_key</code></td><td><code>Slug</code></td><td></td></tr>
+    <tr><td><code>name</code></td><td><code>ShortText</code> or null</td><td></td></tr>
+    <tr><td><code>team</code> <code>component</code></td><td><code>Slug</code> or null</td><td>Ownership facets; both are dashboard filters and both take part in run comparison.</td></tr>
+    <tr><td><code>test_type</code></td><td><code>TestType</code></td><td><code>unit</code>, <code>component</code>, <code>integration</code>, <code>contract</code>, <code>functional</code>, <code>e2e</code>, <code>api</code>, <code>ui</code>, <code>performance</code>, <code>security</code>, <code>accessibility</code>, <code>smoke</code>, <code>regression</code>, <code>acceptance</code>, <code>other</code>.</td></tr>
+    <tr><td><code>trigger</code></td><td><code>TriggerType</code></td><td><code>manual</code>, <code>push</code>, <code>pull_request</code>, <code>schedule</code>, <code>api</code>, <code>retry</code>, <code>local</code>, <code>unknown</code>.</td></tr>
+    <tr><td><code>status</code></td><td><code>RunStatus</code></td><td><code>queued</code>, <code>running</code>, <code>passed</code>, <code>failed</code>, <code>error</code>, <code>cancelled</code>, <code>unknown</code>. Derived by folding the attempts, never taken from the file except for <code>cancelled</code>.</td></tr>
+    <tr><td><code>context</code></td><td><code>RunContext</code></td><td>See below.</td></tr>
+    <tr><td><code>started_at</code> <code>finished_at</code></td><td>timestamp or null</td><td></td></tr>
+    <tr><td><code>duration_ms</code></td><td>int &ge; 0 or null</td><td>Wall clock, when both ends are known.</td></tr>
+    <tr><td><code>counts</code></td><td><code>RunCounts</code></td><td></td></tr>
+    <tr><td><code>tags</code></td><td>list of <code>Slug</code>, &le; 64</td><td></td></tr>
+    <tr><td><code>metadata</code></td><td>object</td><td>Free-form.</td></tr>
+    <tr><td><code>warnings</code></td><td>list of <code>ParserWarning</code>, &le; 1000</td><td>Appended, not replaced, so a run assembled from several shards keeps all of them.</td></tr>
+    <tr><td><code>source_adapter</code></td><td><code>ShortText</code> or null</td><td>Which adapter parsed it, when it came from a file.</td></tr>
+    <tr><td><code>created_at</code> <code>updated_at</code></td><td>timestamp</td><td></td></tr>
+    <tr><td><code>is_live</code></td><td>bool, computed</td><td>True while <code>status</code> is <code>queued</code> or <code>running</code>.</td></tr>
+  </tbody>
+</table></div>
+
+<p><code>RunContext</code> is where the run came from, and every field on it is optional
+because publishers know varying amounts: <code>framework</code>,
+<code>framework_version</code>, <code>language</code>, <code>language_version</code>,
+<code>environment</code> (a <code>Slug</code>), <code>branch</code>,
+<code>commit_sha</code> (&le; 64 characters), <code>commit_message</code>,
+<code>pipeline_id</code>, <code>pipeline_url</code>, <code>ci_provider</code>,
+<code>hostname</code>, <code>os</code> and <code>executor</code>. The ones the dashboard
+filters on are stored as indexed columns rather than inside a JSON blob.</p>
+
+<p><code>RunSummary</code> is the compact form used in listings: no suites, no tests, no
+stack traces. It flattens the handful of context facets a list needs onto the top level
+and carries <code>is_live</code> as a plain boolean. It exists so that a page of fifty
+runs is a few kilobytes rather than a few megabytes.</p>
+
+<h3 id="run-counts">RunCounts</h3>
+
+<p>Thirteen stored integers and four computed ones. Counts are <em>always</em> folded
+from attempts and never taken from a publisher's own totals, which drift the moment
+anything is retried or a shard fails to upload. A test contributes exactly once, through
+its effective (last) attempt.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>total</code></td><td>Tests folded into this block; equals the sum of the ten status fields.</td></tr>
+    <tr><td><code>passed</code> <code>failed</code> <code>error</code> <code>skipped</code> <code>xfailed</code> <code>xpassed</code> <code>cancelled</code> <code>unknown</code> <code>running</code> <code>queued</code></td><td>One per <code>TestStatus</code>, counting effective attempts.</td></tr>
+    <tr><td><code>flaky</code></td><td>Tests flaky within this run. Overlaps the status counts on purpose.</td></tr>
+    <tr><td><code>retried</code></td><td>Tests with more than one attempt. Likewise.</td></tr>
+    <tr><td><code>completed</code> <span class="pill">computed</span></td><td>Everything but <code>running</code> and <code>queued</code>.</td></tr>
+    <tr><td><code>executed</code> <span class="pill">computed</span></td><td><code>completed</code> minus <code>skipped</code> and <code>cancelled</code>.</td></tr>
+    <tr><td><code>pass_rate</code> <span class="pill">computed</span></td><td><code>100 × (passed + xfailed) / executed</code>, to 2 decimal places. <code>null</code> rather than <code>0.0</code> when nothing executed.</td></tr>
+    <tr><td><code>failure_rate</code> <span class="pill">computed</span></td><td><code>100 × (failed + error + xpassed) / executed</code>, to 2 decimal places.</td></tr>
+  </tbody>
+</table></div>
+
+<p>Why <code>xfailed</code> counts toward the numerator and <code>xpassed</code> does
+not, and why the denominator excludes skips, is on the
+<a href="metrics.html">metrics</a> page.</p>
+
+<h3 id="test-suite">TestSuite</h3>
+
+<p><code>id</code> is the <b>stable suite identity</b>, not a row id:
+<code>uuid5(ns, "suite\x1f" + project + "\x1f" + path)</code>. Two runs of the same suite
+share it. Also <code>run_id</code>, <code>name</code>, <code>path</code>,
+<code>parent_id</code> (another suite's identity, for a tree), <code>started_at</code>,
+<code>finished_at</code>, <code>duration_ms</code>, <code>metadata</code>, and
+<code>counts</code> &mdash; which is folded from the suite's tests at read time rather
+than stored, so it cannot drift from the tests it summarizes.</p>
+
+<h3 id="test-case">TestCase</h3>
+
+<p>A test's identity within one run, plus every attempt it made.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>UUID</td><td>The <b>stable test identity</b> &mdash; the same value in every run that executed this test. History, comparison and flakiness are all keyed on it.</td></tr>
+    <tr><td><code>run_id</code> <code>suite_id</code></td><td>UUID</td><td></td></tr>
+    <tr><td><code>name</code></td><td><code>ShortText</code></td><td></td></tr>
+    <tr><td><code>class_name</code></td><td><code>ShortText</code> or null</td><td>Class, describe block or feature.</td></tr>
+    <tr><td><code>suite_path</code></td><td><code>ShortText</code></td><td></td></tr>
+    <tr><td><code>params</code></td><td><code>ShortText</code> or null</td><td>The canonical normalized parameter string.</td></tr>
+    <tr><td><code>full_name</code></td><td><code>ShortText</code> or null</td><td>The identifier as the framework prints it.</td></tr>
+    <tr><td><code>file</code> <code>owner</code></td><td><code>ShortText</code> or null</td><td></td></tr>
+    <tr><td><code>tags</code> <code>markers</code></td><td>lists, &le; 64</td><td></td></tr>
+    <tr><td><code>attempts</code></td><td>list of <code>TestAttempt</code></td><td>In order.</td></tr>
+    <tr><td><code>metadata</code></td><td>object</td><td></td></tr>
+    <tr><td><code>status</code> <span class="pill">computed</span></td><td><code>TestStatus</code></td><td>The <em>last</em> attempt's status. <code>unknown</code> when there are no attempts.</td></tr>
+    <tr><td><code>duration_ms</code> <span class="pill">computed</span></td><td>int</td><td><b>Sum across every attempt</b> — retries are work the run paid for.</td></tr>
+    <tr><td><code>flaky</code> <span class="pill">computed</span></td><td>bool</td><td>Both succeeded and failed within this one run.</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="test-attempt">TestAttempt</h3>
+
+<p>One execution of one test. A retry produces a new attempt and nothing in Test Hub ever
+overwrites one; that is the decision the rest of the product is built on.</p>
+
+<p>Fields: <code>id</code> (a row identity, not stable across runs),
+<code>test_id</code>, <code>run_id</code>, <code>attempt_number</code> (&ge; 1),
+<code>status</code>, <code>original_status</code>, <code>started_at</code>,
+<code>finished_at</code>, <code>duration_ms</code> (derived from the two timestamps when
+both exist and this does not), <code>failure</code>, <code>stdout</code>,
+<code>stderr</code>, <code>logs</code>, <code>skip_reason</code>, <code>worker</code>
+(the xdist worker or shard), <code>artifact_ids</code> (&le; 256) and
+<code>metadata</code>.</p>
+
+<p><code>FailureDetail</code> is <code>type</code>, <code>message</code>,
+<code>stack_trace</code>, <code>expected</code> and <code>actual</code> &mdash; all
+<code>LongText</code> except <code>type</code>, which is <code>ShortText</code> &mdash;
+plus <code>truncated</code>, set when the message or the trace was cut to fit the limits,
+so that a shortened stack trace never pretends to be complete.</p>
+
+<h3 id="artifact">Artifact</h3>
+
+<p>A file the run produced: <code>kind</code> is one of <code>screenshot</code>,
+<code>video</code>, <code>log</code>, <code>trace</code>, <code>report</code>,
+<code>coverage</code>, <code>raw_report</code>, <code>other</code>. Storage is
+content-addressed on <code>sha256</code> (64 lowercase hex, pattern-checked), so
+uploading the same screenshot from a hundred shards costs one copy.</p>
+
+<p><code>name</code> is a display label and is <b>never</b> a path &mdash; the store
+builds paths only from the digest, which is why a filename out of an untrusted report
+cannot reach the filesystem. Also: <code>run_id</code>, optional <code>test_id</code>
+and <code>attempt_id</code>, <code>content_type</code>, <code>size_bytes</code>,
+<code>url</code>, <code>created_at</code> and <code>metadata</code>.</p>
+
+<h3 id="parser-warning">ParserWarning</h3>
+
+<p>Something the input said that could not be represented exactly. Raised whenever an
+adapter has to guess, drop or coerce, and never swallowed: the import response carries
+every one and the dashboard shows them on the run.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+  <tbody>
+    <tr><td><code>code</code></td><td><code>^[a-z0-9_.]+$</code>, &le; 64</td><td>Stable and machine-readable: <code>unknown_status</code>, <code>unknown_enum</code>, <code>invalid_slug</code>, <code>text_truncated</code>, <code>counts_mismatch</code>, <code>attempt_renumbered</code>, <code>naive_timestamp</code>, <code>workspace_override</code>, …</td></tr>
+    <tr><td><code>message</code></td><td><code>ShortText</code></td><td>Truncated at 512 characters by the collector.</td></tr>
+    <tr><td><code>severity</code></td><td><code>info</code> or <code>warning</code></td><td></td></tr>
+    <tr><td><code>location</code></td><td><code>ShortText</code> or null</td><td>Where in the input: <code>testsuite[2]/testcase[7]</code>, <code>tests[3].attempts[1]</code>.</td></tr>
+    <tr><td><code>detail</code></td><td>object</td><td>Whatever the adapter passed as keyword arguments.</td></tr>
+  </tbody>
+</table></div>
+
+<p>Warnings are bounded at 500 per parse; past the cap the collector counts what it drops
+and appends a <code>warnings_truncated</code> note, so a pathological file still produces
+a bounded response. <a href="adapters.html#warnings">How an adapter raises one.</a></p>
+
+<h3 id="derived-views">RunComparison, TestDetail, OverviewSnapshot, ImportResult, Snapshot</h3>
+
+<p>Five read models that are computed rather than stored.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Model</th><th>What it is</th></tr></thead>
+  <tbody>
+    <tr><td><code>RunComparison</code></td><td>A run measured against the previous <em>comparable</em> run: same project, team, component, test type, environment and branch. Carries <code>baseline_run_id</code>, <code>baseline_started_at</code>, three deltas (<code>pass_rate_delta</code>, <code>duration_delta_ms</code>, <code>total_delta</code>) and five lists of stable test ids: <code>newly_failing</code>, <code>newly_passing</code>, <code>still_failing</code>, <code>added</code>, <code>removed</code>. The first three are computed over the <em>intersection</em> of the two runs, so a test that appeared for the first time and failed is in <code>added</code>, not <code>newly_failing</code>. Every field is null or empty when there is no comparable predecessor.</td></tr>
+    <tr><td><code>TestDetail</code></td><td>Everything known about one stable test identity across runs: the identity fields, the <code>latest</code> <code>TestCase</code>, a <code>history</code> of <code>TestHistoryPoint</code> newest first, and three derived numbers — <code>flake_rate</code>, <code>failure_rate</code> and <code>average_duration_ms</code>. Note that <code>TestDetail.failure_rate</code> and <code>RunCounts.failure_rate</code> are different quantities over different denominators.</td></tr>
+    <tr><td><code>OverviewSnapshot</code></td><td>The portfolio view, deliberately separate from <code>RunDetail</code>: the overview must stay cheap enough to poll, while the drill-down is allowed to be large. Carries merged <code>counts</code>, run totals inside and outside the window, <code>live_runs</code>, <code>recent_runs</code>, <code>projects</code>, a <code>trend</code>, the ten most failing and ten flakiest tests, and the distinct facet values for the filter dropdowns.</td></tr>
+    <tr><td><code>ImportResult</code></td><td>What every import returns, whether it came from the CLI, the SDK or REST: <code>run_id</code>, <code>project_key</code>, <code>adapter</code>, <code>format</code>, <code>detection_confidence</code>, <code>created</code>, <code>counts</code>, <code>suites_imported</code>, <code>tests_imported</code>, <code>attempts_imported</code>, <code>events_applied</code>, <code>events_ignored</code>, <code>warnings</code> and <code>duration_ms</code>.</td></tr>
+    <tr><td><code>Snapshot</code></td><td>The complete frozen payload embedded in an offline HTML export, and exactly what the snapshot data provider reads in the browser. Its <code>kind</code> is the literal <code>"test-hub-snapshot"</code> — note that this is <em>not</em> one of the two <code>kind</code> values the JSON adapter accepts on import. An export is a report to read, not a report to re-ingest.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="statuses">The ten statuses</h2>
+
+<p>Test Hub stores exactly one normalized status per attempt and <em>always</em> keeps the
+source report's own word beside it in <code>TestAttempt.original_status</code>.
+Normalization is therefore never lossy: you can always find out what the framework
+actually said.</p>
+
+<p><span class="st st--passed">passed</span> <span class="st st--failed">failed</span>
+<span class="st st--error">error</span> <span class="st st--skipped">skipped</span>
+<span class="st st--xfailed">xfailed</span> <span class="st st--xpassed">xpassed</span>
+<span class="st st--running">running</span> <span class="st st--queued">queued</span>
+<span class="st st--cancelled">cancelled</span> <span class="st st--unknown">unknown</span></p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Status</th><th>Meaning</th><th>Counts as</th></tr></thead>
+  <tbody>
+    <tr><td><code>passed</code></td><td>The test ran and succeeded.</td><td>Numerator of the pass rate.</td></tr>
+    <tr><td><code>failed</code></td><td>An assertion did not hold.</td><td>Numerator of the failure rate.</td></tr>
+    <tr><td><code>error</code></td><td>The test did not get as far as a verdict — an exception, a fixture blowing up, a crashed process.</td><td>Numerator of the failure rate.</td></tr>
+    <tr><td><code>skipped</code></td><td>Deliberately not run.</td><td>Excluded from both denominators.</td></tr>
+    <tr><td><code>xfailed</code></td><td>Expected to fail, and did.</td><td>Numerator of the pass rate — the test behaved exactly as declared.</td></tr>
+    <tr><td><code>xpassed</code></td><td>Expected to fail, and passed.</td><td>Numerator of the failure rate — an expectation that no longer holds is a signal.</td></tr>
+    <tr><td><code>cancelled</code></td><td>The run was stopped before this test finished.</td><td>Excluded from both denominators.</td></tr>
+    <tr><td><code>running</code> <code>queued</code></td><td>In flight. Only seen on a live run.</td><td>Excluded from <code>completed</code>, and therefore from everything downstream.</td></tr>
+    <tr><td><code>unknown</code></td><td>The source said something Test Hub does not recognise.</td><td>Counted in <code>completed</code> and <code>executed</code> but in neither rate numerator, so it visibly drags the pass rate down rather than hiding.</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="normalization">The normalization is a lookup table, not a heuristic</h3>
+
+<p><code>normalize_status</code> collapses case, whitespace, hyphens and underscores and
+then looks the word up. The table is deliberately generous &mdash; it already knows
+<code>ok</code>, <code>green</code>, <code>broken</code>, <code>crashed</code>,
+<code>inconclusive</code>, <code>notRunnable</code>, <code>unexpectedSuccess</code>,
+<code>expectedFailure</code>, <code>timedOut</code>, <code>ambiguous</code> and about
+sixty more, grouped in the source by the framework family that spells it that way.</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; normalize_status("Success")
+&lt;TestStatus.PASSED: 'passed'&gt;
+&gt;&gt;&gt; normalize_status("expected failure")
+&lt;TestStatus.XFAILED: 'xfailed'&gt;
+&gt;&gt;&gt; normalize_status("weird")
+&lt;TestStatus.UNKNOWN: 'unknown'&gt;</code></pre>
+</div>
+
+<p>A word it does not know becomes <code>unknown</code> and the adapter raises an
+<code>unknown_status</code> warning. It never becomes <code>passed</code> by accident.
+That is the entire reason the mapping is a table: a heuristic that treats anything
+non-negative as a pass will eventually turn somebody's <code>deferred</code> into a green
+tick, and nobody will find out.</p>
+
+<div class="note"><span class="note__title">Playwright's &ldquo;flaky&rdquo;</span>The
+word maps to <code>xfailed</code> so that a report carrying it verbatim in a status
+column does not become <code>unknown</code>. It is a fallback, not the model: flakiness
+in Test Hub is derived from disagreeing <em>attempts</em>, so an
+<a href="adapters.html#retries">adapter that can see the individual attempts should emit
+them</a> instead.</div>
+
+<h2 id="identity">Stable test identity</h2>
+
+<p>A test's identity has to survive being re-run, re-ordered, re-parameterized in a
+different order, moved to a different line and executed on another machine by a different
+framework version. If it does not, every run invents a new set of tests, and history,
+comparison and flakiness are all worthless.</p>
+
+<p>Three identities are therefore derived rather than assigned, as UUIDv5 in one fixed
+namespace:</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>TEST_HUB_NAMESPACE = uuid.UUID("4c8f4c4d-3ecb-5f78-a1e4-c1a24e07b1e6")</code></pre>
+</div>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Identity</th><th>Hashed input</th></tr></thead>
+  <tbody>
+    <tr><td>workspace</td><td><code>"workspace" \x1f slug.lower()</code></td></tr>
+    <tr><td>suite</td><td><code>"suite" \x1f project \x1f suite_path</code></td></tr>
+    <tr><td>test</td><td><code>project \x1f suite_path \x1f class_name \x1f test_name \x1f params</code></td></tr>
+  </tbody>
+</table></div>
+
+<p>The namespace is hard-coded and must never move: every historical identity would
+change with it. <code>\x1f</code> is the ASCII unit separator, chosen because it cannot
+appear in any of the fields. <code>identity_source()</code> is public and tested
+precisely so that an implementation in another language can reproduce the string byte for
+byte:</p>
+
+<div class="codeblock" data-lang="python" data-caption="The five fields, for the failing test in the worked example below">
+<pre><code>&gt;&gt;&gt; identity_source(project="storefront-web", suite_path="specs/checkout/payment",
+...                 class_name="CheckoutPayment", test_name="declines an expired card",
+...                 params={"currency": "EUR"})
+'storefront-web\x1fspecs/checkout/payment\x1fCheckoutPayment\x1fdeclines an expired card\x1fcurrency=EUR'
+
+&gt;&gt;&gt; test_identity(project="storefront-web", suite_path="specs/checkout/payment",
+...               class_name="CheckoutPayment", test_name="declines an expired card",
+...               params={"currency": "EUR"})
+UUID('f44a4d33-b813-54db-a7c6-b16bf824cd48')</code></pre>
+</div>
+
+<p>That UUID is the <code>id</code> the API returns for that test after the import below,
+computed offline with no server involved. It is what makes a publisher in another
+language possible at all.</p>
+
+<h3 id="identity-excluded">What is in it, and what is deliberately kept out</h3>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>In the identity</th><th>Deliberately excluded</th><th>Because</th></tr></thead>
+  <tbody>
+    <tr><td>project key</td><td>timestamps</td><td>Every run has different ones.</td></tr>
+    <tr><td>suite path</td><td>line numbers and file offsets</td><td>Adding an import above a test would rename it.</td></tr>
+    <tr><td>class name</td><td>durations</td><td>They are the measurement, not the subject.</td></tr>
+    <tr><td>test name</td><td>worker or shard id, hostname</td><td>Re-sharding a suite would mint a whole new set of tests.</td></tr>
+    <tr><td>normalized parameters</td><td>run id, build number, branch</td><td>A test's history is precisely the thing that has to span these.</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="identity-normalization">Normalization before hashing</h3>
+
+<p>Each component is normalized to Unicode NFC, has its whitespace collapsed, and is
+stripped; suite paths are converted to forward slashes with a leading <code>./</code>
+removed. Parameter values are rendered with their volatile fragments scrubbed:
+<code>&lt;Foo object at 0x7f3c…&gt;</code> becomes <code>object at 0x?</code>, a bare
+UUID becomes <code>&lt;uuid&gt;</code>, and a long hex literal becomes
+<code>0x?</code>. They are replaced with a stable token rather than dropped, so that two
+genuinely different parameters do not collide.</p>
+
+<p>Named parameters are sorted by name; positional parameters keep their order, because
+position <em>is</em> the name.</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; normalize_params({"b": 2, "a": 1})
+'a=1|b=2'
+&gt;&gt;&gt; normalize_params(["chrome", 1024])
+'0=chrome|1=1024'
+&gt;&gt;&gt; test_identity(project="p", suite_path="tests/t.py", test_name="x") == \
+...     test_identity(project="p", suite_path="./tests/t.py", test_name=" x ")
+True</code></pre>
+</div>
+
+<h2 id="report-format">The test-hub-report JSON format</h2>
+
+<p>Test Hub's own report format, for when your framework has no JUnit writer or when
+JUnit XML would lose something you care about. It is the reference publisher contract:
+everything the canonical model can hold is expressible here, which is not true of JUnit
+XML.</p>
+
+<h3 id="report-kind">Why kind is mandatory</h3>
+
+<p>Every document must declare <code>"kind": "test-hub-report"</code> or
+<code>"kind": "test-hub-events"</code>. This is not ceremony. A format that claimed
+&ldquo;any JSON object with a <code>tests</code> key&rdquo; would happily swallow a
+coverage report, ESLint output or half of a <code>package.json</code>, and each of those
+would arrive as a silently wrong run with a plausible-looking pass rate. Test Hub does not
+advertise support for arbitrary JSON, so it does not accept it &mdash; the refusal
+mechanics, including the difference between the 415 and the 422 you can get here, are on
+the <a href="adapters.html#never-claim-everything">adapters</a> page.</p>
+
+<h3 id="report-example">A complete example</h3>
+
+<p>The document below was imported with <code>test-hub ingest</code>; the output under it
+is that import's real result.</p>
+
+<div class="codeblock" data-lang="json" data-caption="report.json">
+<pre><code>{
+  "kind": "test-hub-report",
+  "schema_version": 1,
+  "run": {
+    "name": "nightly e2e #418",
+    "team": "growth",
+    "component": "storefront",
+    "test_type": "e2e",
+    "trigger": "schedule",
+    "started_at": "2026-04-02T01:15:00Z",
+    "finished_at": "2026-04-02T01:19:42Z",
+    "tags": ["nightly"],
+    "context": {
+      "framework": "playwright",
+      "framework_version": "1.44.0",
+      "language": "javascript",
+      "environment": "staging",
+      "branch": "main",
+      "commit_sha": "8f21c0d",
+      "ci_provider": "github-actions"
+    }
+  },
+  "suites": [
+    {"path": "specs/checkout", "name": "checkout"},
+    {"path": "specs/checkout/payment", "name": "payment", "parent_path": "specs/checkout"}
+  ],
+  "tests": [
+    {
+      "name": "completes a card payment",
+      "suite_path": "specs/checkout/payment",
+      "status": "passed",
+      "duration_ms": 1840
+    },
+    {
+      "name": "declines an expired card",
+      "class_name": "CheckoutPayment",
+      "suite_path": "specs/checkout/payment",
+      "params": {"currency": "EUR"},
+      "status": "failed",
+      "duration_ms": 812,
+      "file": "specs/checkout/payment.spec.ts",
+      "owner": "payments",
+      "tags": ["smoke"],
+      "failure": {
+        "type": "AssertionError",
+        "message": "expected 402 but got 500",
+        "stack_trace": "at CheckoutPayment.decline (payment.spec.ts:44:11)",
+        "expected": "402",
+        "actual": "500"
+      },
+      "logs": "WARN issuer double returned 500"
+    },
+    {
+      "name": "keeps the basket after a reload",
+      "suite_path": "specs/checkout",
+      "attempts": [
+        {"status": "failed", "duration_ms": 4100,
+         "failure": {"type": "TimeoutError", "message": "locator timed out"}},
+        {"status": "passed", "duration_ms": 4300}
+      ]
+    },
+    {
+      "name": "applies a gift card",
+      "suite_path": "specs/checkout",
+      "status": "skipped",
+      "skip_reason": "gift cards disabled in staging"
+    }
+  ]
+}</code></pre>
+</div>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub ingest report.json --project storefront-web
+
+  imported run eb32b565-bab3-47e6-a460-3b9aa556a98d
+  adapter   testhub-json (detected, 100% confident)
+  project   storefront-web
+  stored in /private/tmp/th-site-canon
+  4 tests  2 passed  1 failed  1 skipped  1 flaky  66.7% pass</code></pre>
+</div>
+
+<p>Four tests from five attempts. The pass rate is 66.67% because the skip is excluded
+from the denominator, and one test is flaky because its two attempts disagreed. Reading
+the run back out of the API shows exactly what was stored:</p>
+
+<div class="codeblock" data-lang="output" data-caption="GET /api/v1/runs/{id}, abridged">
+<pre><code>run.status  failed
+run.counts  {"total": 4, "passed": 2, "failed": 1, "error": 0, "skipped": 1,
+             "xfailed": 0, "xpassed": 0, "cancelled": 0, "unknown": 0,
+             "running": 0, "queued": 0, "flaky": 1, "retried": 1,
+             "completed": 4, "executed": 3, "pass_rate": 66.67, "failure_rate": 33.33}
+
+tests:
+  c4e3ad1e-44a4-5e9e-aac7-2810ac7726a1  applies a gift card
+      skipped   flaky=False  duration_ms=0      attempts=[(1, skipped)]
+  a7e33c60-2e78-5954-817b-7e3ffe66837d  keeps the basket after a reload
+      passed    flaky=True   duration_ms=8400   attempts=[(1, failed), (2, passed)]
+  767e783d-5c31-506c-958b-fcf6586854dc  completes a card payment
+      passed    flaky=False  duration_ms=1840   attempts=[(1, passed)]
+  f44a4d33-b813-54db-a7c6-b16bf824cd48  declines an expired card
+      failed    flaky=False  duration_ms=812    attempts=[(1, failed)]
+
+suites:
+  ef54fbfe-82d2-5a49-b14f-8172db827cea  specs/checkout          parent=None
+  08fc81e5-0b85-5593-8ddd-674e4e1a8fdf  specs/checkout/payment  parent=ef54fbfe-…</code></pre>
+</div>
+
+<p>Three things in there are worth checking against the sections above. The flaky test's
+<code>duration_ms</code> is 8400, which is 4100 + 4300 &mdash; the sum across attempts,
+not the last one. Its status is <code>passed</code>, from the last attempt, while
+<code>flaky</code> stays true. And <code>f44a4d33-b813-54db-a7c6-b16bf824cd48</code> is
+the identity computed offline earlier on this page, byte for byte.</p>
+
+<h3 id="report-run">run — every field optional</h3>
+
+<p>Anything you leave out, the import request supplies. Anything both supply, the import
+request wins: the person typing <code>--team payments</code> knows more than a file
+exported three hours ago.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>Stable UUID. Re-importing the same id <b>updates</b> that run rather than creating a second one — this is how sharded runs merge.</td></tr>
+    <tr><td><code>name</code></td><td>Human-readable, e.g. <code>nightly e2e #418</code>.</td></tr>
+    <tr><td><code>team</code>, <code>component</code></td><td>Ownership. Both are dashboard facets.</td></tr>
+    <tr><td><code>test_type</code></td><td>One of the <code>TestType</code> values. An unrecognised value raises an <code>unknown_enum</code> warning and becomes <code>other</code>.</td></tr>
+    <tr><td><code>trigger</code></td><td><code>push</code>, <code>pull_request</code>, <code>schedule</code>, <code>manual</code>, <code>api</code>, <code>retry</code>, <code>local</code>.</td></tr>
+    <tr><td><code>status</code></td><td><b>Advisory only.</b> The server folds the real status from the attempts. It is honoured for <code>cancelled</code>, which cannot be derived.</td></tr>
+    <tr><td><code>started_at</code>, <code>finished_at</code></td><td>ISO-8601. Include the offset; a naive timestamp is read as UTC and raises a <code>naive_timestamp</code> warning.</td></tr>
+    <tr><td><code>tags</code>, <code>metadata</code></td><td>Yours. <code>metadata</code> is free-form JSON.</td></tr>
+    <tr><td><code>context</code></td><td>Any of the <code>RunContext</code> fields listed above. All optional, all filterable.</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="report-suites">suites — optional</h3>
+
+<p><code>path</code> is required and is the suite's identity within the project;
+<code>name</code> defaults to the last path segment; <code>parent_path</code> names
+another suite's <code>path</code> and is what builds a tree;
+<code>duration_ms</code>, <code>started_at</code>, <code>finished_at</code> and
+<code>metadata</code> are optional.</p>
+
+<p>The whole array can be omitted: any <code>suite_path</code> a test names is created
+implicitly. Declare suites when you want a nested tree or per-suite timings, as the
+example above does to make <code>specs/checkout/payment</code> a child of
+<code>specs/checkout</code>.</p>
+
+<h3 id="report-tests">tests</h3>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>name</code></td><td><b>Required.</b></td></tr>
+    <tr><td><code>suite_path</code></td><td><b>Required.</b> Ties the test to a suite and forms part of its identity.</td></tr>
+    <tr><td><code>class_name</code></td><td>Class, describe block or feature. Part of the identity.</td></tr>
+    <tr><td><code>params</code></td><td>An object, an array, or a pre-rendered string. Object keys are sorted, so <code>{b,a}</code> and <code>{a,b}</code> are one test.</td></tr>
+    <tr><td><code>status</code></td><td>Any word <code>normalize_status</code> knows. Unrecognised words become <code>unknown</code> <b>and raise a warning</b>; they never quietly become a pass.</td></tr>
+    <tr><td><code>duration_ms</code></td><td>Integer milliseconds.</td></tr>
+    <tr><td><code>file</code>, <code>owner</code>, <code>tags</code>, <code>markers</code>, <code>worker</code></td><td>Optional metadata.</td></tr>
+    <tr><td><code>failure</code></td><td><code>{type, message, stack_trace, expected, actual}</code> — all optional.</td></tr>
+    <tr><td><code>stdout</code>, <code>stderr</code>, <code>logs</code></td><td>Captured output. Truncated past <code>TEST_HUB_MAX_TEXT_FIELD_BYTES</code>, and flagged when truncated rather than silently cut.</td></tr>
+    <tr><td><code>skip_reason</code></td><td>Why it was skipped.</td></tr>
+    <tr><td><code>attempts</code> / <code>attempt_number</code></td><td>The two ways to express retries — see below.</td></tr>
+    <tr><td><code>metadata</code></td><td>Free-form.</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="report-retries">Retries</h3>
+
+<p>A retry is a <b>new attempt</b>, never a correction. Two equivalent spellings. Nest
+them:</p>
+
+<div class="codeblock" data-lang="json">
+<pre><code>{
+  "name": "keeps the basket after a reload",
+  "suite_path": "specs/checkout",
+  "attempts": [
+    {"status": "failed", "duration_ms": 4100,
+     "failure": {"type": "TimeoutError", "message": "locator timed out"}},
+    {"status": "passed", "duration_ms": 4300}
+  ]
+}</code></pre>
+</div>
+
+<p>or repeat the test with an increasing <code>attempt_number</code>:</p>
+
+<div class="codeblock" data-lang="json">
+<pre><code>{"name": "keeps the basket after a reload", "suite_path": "specs/checkout",
+ "attempt_number": 1, "status": "failed"}
+{"name": "keeps the basket after a reload", "suite_path": "specs/checkout",
+ "attempt_number": 2, "status": "passed"}</code></pre>
+</div>
+
+<p>Both produce one test with two attempts, because entries are grouped by test identity.
+The <b>last</b> attempt is the effective outcome, and the disagreement between attempts is
+what makes the test flaky. Attempt numbers are re-sequenced densely from 1, with an
+<code>attempt_renumbered</code> warning when the file's own numbering had gaps.</p>
+
+<div class="note note--tip"><span class="note__title">The single most important thing to
+get right in a publisher</span>Reporting a retried test as one row with its final status
+loses the flakiness entirely. Reporting it as two tests inflates the count and makes the
+pass rate wrong. Neither mistake produces an error message — both produce a dashboard
+that is confidently incorrect.</div>
+
+<h3 id="report-events">The event stream a report expands into</h3>
+
+<div class="codeblock" data-lang="text">
+<pre><code>run.queued → run.started → suite.started* → test.finished* → suite.finished* → run.finished</code></pre>
+</div>
+
+<p>Every suite is announced before any result arrives, which is what a dashboard
+subscribing mid-import needs in order to draw the tree before it fills in. If you already
+speak the <a href="events.html">event contract</a>, you can send envelopes directly with
+<code>"kind": "test-hub-events"</code>; sequence numbers are preserved, because they are
+the file's statement about ordering and the adapter has no better information. A
+<code>workspace_id</code> that disagrees with the importing workspace is overridden with a
+warning &mdash; a file must never be able to write into another tenant.</p>
+
+<h3 id="report-idempotency">Idempotency</h3>
+
+<p>Event ids are UUIDv5 over <code>(source, run_id, sequence, type)</code> rather than
+random, so importing the same file twice against the same run applies <b>zero</b> new
+events instead of doubling it:</p>
+
+<div class="codeblock" data-lang="shell" data-caption="The same file, imported twice into one run id">
+<pre><code>$ test-hub ingest report.json --project storefront-web --run-id a47f1a30-… --json
+{"run_id": "a47f1a30-3241-4957-811c-f193b6230654", "created": true,
+ "events_applied": 12, "events_ignored": 0,
+ "suites_imported": 2, "tests_imported": 4, "attempts_imported": 5}
+
+$ test-hub ingest report.json --project storefront-web --run-id a47f1a30-… --json
+{"run_id": "a47f1a30-3241-4957-811c-f193b6230654", "created": false,
+ "events_applied": 0, "events_ignored": 12,
+ "suites_imported": 0, "tests_imported": 0, "attempts_imported": 0}</code></pre>
+</div>
+
+<p>Without a run id you get a new run each time, which is correct: two genuine executions
+of the same suite are two runs. The flip side of derived event ids is worth stating &mdash;
+two <em>different</em> files imported into one run id collide on those ids and lose
+events. One file, one run.</p>
+
+<h2 id="generated-schema">Generating the JSON Schema</h2>
+
+<p>The models are the source of truth and the JSON Schema is generated from them, so
+there is no second artefact to keep in step. Every model's docstring becomes the
+<code>description</code>, which means the generated schema carries the same reasoning this
+page does.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ python -c "import json; from test_hub.domain.models import Snapshot; \
+    print(len(json.dumps(Snapshot.model_json_schema())))"
+32803</code></pre>
+</div>
+
+<p><code>Snapshot</code>'s schema pulls in 25 definitions and is about 33&nbsp;KB of
+JSON.</p>
+
+<div class="note note--warn"><span class="note__title">Ask for the serialization schema
+when you are describing a response</span>Pydantic's default is the <em>validation</em>
+schema, which omits computed fields. That is correct for &ldquo;what may I send&rdquo; and
+wrong for &ldquo;what will I receive&rdquo;.</div>
+
+<div class="codeblock" data-lang="python">
+<pre><code>&gt;&gt;&gt; list(RunCounts.model_json_schema(mode="validation")["properties"])[-3:]
+['queued', 'flaky', 'retried']
+&gt;&gt;&gt; list(RunCounts.model_json_schema(mode="serialization")["properties"])[-4:]
+['completed', 'executed', 'pass_rate', 'failure_rate']</code></pre>
+</div>
+
+<p>The OpenAPI document at <code>/api/openapi.json</code> is generated by FastAPI from the
+same models, and is the machine-readable form of the <a href="rest-api.html">REST
+contract</a>.</p>
+
+<h2 id="what-next">Where to go from here</h2>
+
+<div class="cards">
+  <div><h4>Write a publisher</h4><p><a href="rest-api.html">REST API</a> — open a run,
+  stream results as they finish, close it. Or use the
+  <a href="python-sdk.html">Python SDK</a> if you are already in Python.</p></div>
+  <div><h4>Write an adapter</h4><p><a href="adapters.html">Adapters</a> — the protocol,
+  the detection scores, and a complete third-party package that was built and run.</p></div>
+  <div><h4>Send events instead</h4><p><a href="events.html">Event contract</a> — the
+  envelope, every event type, and the ordering rules the fold depends on.</p></div>
+  <div><h4>Check the arithmetic</h4><p><a href="metrics.html">Metrics</a> — the exact
+  formulas behind <code>pass_rate</code>, <code>failure_rate</code> and both definitions
+  of flaky.</p></div>
+</div>

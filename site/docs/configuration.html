@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuration · Test Hub</title>
+<meta name="description" content="Every TEST_HUB_ setting, its default, what it actually changes, and the two places the syntax will bite you.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="Configuration · Test Hub">
+<meta property="og:description" content="Every TEST_HUB_ setting, its default, what it actually changes, and the two places the syntax will bite you.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/configuration.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html">Docs</a><a href="../docs/dashboard-tour.html">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html">CLI</a><a href="../docs/deployment.html">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link" href="../docs/getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link" href="../docs/dashboard-tour.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link" href="../docs/cli-reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link is-active" href="../docs/configuration.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link" href="../docs/python-sdk.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link" href="../docs/events.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link" href="../docs/metrics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link" href="../docs/deployment.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link" href="../docs/ci-integrations.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link" href="../docs/contributing.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>Configuration</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Reference</span>
+  <h1>Configuration</h1>
+  <p class="lede">Test Hub has one settings object. Everything in it is readable from the environment with a TEST_HUB_ prefix, from a .env file, or from a CLI flag, and the defaults are the ones you want on a laptop: loopback only, no auth because nothing else can reach it, modest limits, data under the platform's user-data directory.</p>
+</header>
+<h2 id="precedence">How a setting gets its value</h2>
+
+<p>Four layers, highest first:</p>
+
+<ol class="steps">
+  <li>
+    <h3>A CLI flag</h3>
+    <p>Flags are layered on top of everything else in exactly one function,
+    <code>test_hub.cli.options.settings_from_cli</code>. Nothing else in the codebase is allowed
+    to reorder this.</p>
+  </li>
+  <li>
+    <h3>An environment variable</h3>
+    <p><code>TEST_HUB_</code> plus the field name, upper-cased:
+    <code>TEST_HUB_MAX_REPORT_BYTES</code>, <code>TEST_HUB_SSE_MAX_CLIENTS</code>. Matching is
+    case-insensitive, so <code>test_hub_port</code> works too — verified.</p>
+  </li>
+  <li>
+    <h3>A <code>.env</code> file</h3>
+    <p>Read from the <em>current working directory</em>, not from the data directory and not from
+    the package. A real variable beats the file: with <code>TEST_HUB_PORT=7001</code> in
+    <code>.env</code>, running under <code>TEST_HUB_PORT=7002</code> gives 7002.</p>
+  </li>
+  <li>
+    <h3>The default in <code>config.py</code></h3>
+    <p>Listed for every setting in the tables below.</p>
+  </li>
+</ol>
+
+<div class="note note--warn"><span class="note__title">The exception that will catch you:
+<code>serve</code></span><code>settings_from_cli</code> treats "not <code>None</code>" as
+"supplied", and <code>serve</code> passes <code>--host</code>, <code>--port</code> and
+<code>--log-level</code> unconditionally — including their defaults. The consequence is that
+<code>TEST_HUB_HOST</code>, <code>TEST_HUB_PORT</code> and <code>TEST_HUB_LOG_LEVEL</code> do not
+reach <code>test-hub serve</code> at all. Running
+<code>TEST_HUB_HOST=0.0.0.0 TEST_HUB_PORT=9999 test-hub serve</code> binds
+<code>127.0.0.1:8000</code>. Use the flags. This is why the shipped
+<code>Dockerfile</code> repeats <code>--host 0.0.0.0 --port 8000</code> in its
+<code>CMD</code> even though it also sets the environment variables.</div>
+
+<p>Two flags escape that because they are wired differently.
+<code>--data-dir</code> declares <code>envvar="TEST_HUB_DATA_DIR"</code>, so Typer resolves the
+variable itself and the flag and the variable are genuinely the same thing.
+<code>--insecure-no-auth</code> is passed as <code>insecure_no_auth or None</code>, so an unset
+flag reads as "not supplied" and <code>TEST_HUB_INSECURE_NO_AUTH=true</code> gets through — which
+is what makes the Compose file work.</p>
+
+<div class="note"><span class="note__title">Note</span>Unknown <code>TEST_HUB_*</code> variables
+are ignored rather than rejected (<code>extra="ignore"</code>). That is what stops
+<code>TEST_HUB_TOKEN</code> — a publisher's variable, not a server setting — from colliding with
+the settings model. The cost is that <code>TEST_HUB_MAX_REPORT_BYTS</code> is silently no
+configuration at all, so check your spelling when a limit does not seem to apply.</div>
+
+<h2 id="list-values">List values, and the <code>$</code> problem</h2>
+
+<p>Five settings are lists: <code>api_tokens</code>, <code>api_token_hashes</code>,
+<code>cors_allow_origins</code>, <code>trusted_hosts</code> and <code>redaction_patterns</code>.
+Each accepts two forms, because both are natural: a JSON array is what a configuration-management
+tool emits, and a comma-separated string is what a person types into a Compose file.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Both parse to the same two-element list"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">Both parse to the same two-element list</span></div>
+<pre><code>$ export TEST_HUB_CORS_ALLOW_ORIGINS='http://a.local, http://b.local'
+$ export TEST_HUB_CORS_ALLOW_ORIGINS='["http://a.local","http://b.local"]'</code></pre>
+</div>
+
+<p>Surrounding whitespace is stripped from each entry and empty entries are dropped, so a trailing
+comma is harmless. A value that starts with <code>[</code> is committed to being JSON — if it then
+fails to parse you get a specific complaint rather than a list containing one strange string:</p>
+
+<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>value starts with '[' so it was read as a JSON array, but it does not parse:
+Expecting value: line 1 column 2 (char 1)</code></pre>
+</div>
+
+<h3 id="dollar-shell">In a shell</h3>
+
+<p>A PBKDF2 hash has four <code>$</code>-separated fields —
+<code>pbkdf2_sha256$120000$&lt;salt-hex&gt;$&lt;hash-hex&gt;</code> — and
+<code>test-hub token create</code> prints it inside <em>double</em> quotes. Pasted verbatim into
+<code>bash</code> or <code>zsh</code>, the shell expands <code>$1</code>, <code>$5</code> and
+<code>$0</code> before Test Hub ever sees the value. Here is what that actually did:</p>
+
+<div class="codeblock" data-lang="shell" data-caption="The same hash, quoted two ways"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">The same hash, quoted two ways</span></div>
+<pre><code>$ echo "pbkdf2_sha256$120000$59752f46ca94861a1005861f439f4481$0dd92bd0f131074061bcb0f50ace158e61ac41e7847ad1c248b9380709aa9604"
+pbkdf2_sha256f46ca94861a1005861f439f4481/bin/zshdd92bd0f131074061bcb0f50ace158e61ac41e7847ad1c248b9380709aa9604
+
+$ echo 'pbkdf2_sha256$120000$59752f46ca94861a1005861f439f4481$0dd92bd0f131074061bcb0f50ace158e61ac41e7847ad1c248b9380709aa9604'
+pbkdf2_sha256$120000$59752f46ca94861a1005861f439f4481$0dd92bd0f131074061bcb0f50ace158e61ac41e7847ad1c248b9380709aa9604</code></pre>
+</div>
+
+<p>The first line is not a typo in this page; that <code>/bin/zsh</code> in the middle is
+<code>$0</code>. Use single quotes, always. The failure mode if you do not is that the server
+starts happily, rejects every token, and tells you the <em>token</em> is invalid — so you go
+looking at the publisher instead of at the hash.</p>
+
+<h3 id="dollar-compose">In docker-compose</h3>
+
+<p>Compose does its own interpolation before the container sees anything, and it treats a single
+<code>$</code> as the start of a variable reference. Write each literal <code>$</code> as
+<code>$$</code>:</p>
+
+<div class="codeblock" data-lang="yaml" data-caption="docker-compose.yml"><div class="codeblock__head"><span class="codeblock__lang">yaml</span><span class="codeblock__cap">docker-compose.yml</span></div>
+<pre><code>environment:
+  TEST_HUB_API_TOKEN_HASHES: "pbkdf2_sha256$$120000$$SALT$$HASH"</code></pre>
+</div>
+
+<p>Without the doubling, <code>$SALT</code> and <code>$HASH</code> resolve to nothing and the
+value silently truncates. Here is Compose 28.3.2 fed both forms of the same hash, and asked what
+it made of them:</p>
+
+<div class="codeblock" data-lang="output" data-caption="docker compose config"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">docker compose config</span></div>
+<pre><code>warning: The "SALT" variable is not set. Defaulting to a blank string.
+warning: The "HASH" variable is not set. Defaulting to a blank string.
+
+services:
+  a:
+    environment:
+      DOUBLED: pbkdf2_sha256$$120000$$SALT$$HASH
+      SINGLE: pbkdf2_sha256$$120000</code></pre>
+</div>
+
+<p><code>SINGLE</code> lost two of its four fields and kept
+<code>$120000</code> only because a variable name cannot begin with a digit. The container gets a
+hash that can never verify. Note also that <code>config</code> re-escapes on output, which is why
+the correct value comes back with its <code>$$</code> intact — that is what a healthy line looks
+like, not a doubly-escaped one. The two warnings are the only signal Compose gives you, and they
+name <code>SALT</code> and <code>HASH</code>, not the setting.</p>
+
+<p>The same interpolation applies to an <code>env_file:</code> and to the <code>.env</code> beside
+the Compose file, so a hash in either of those needs <code>$$</code> too. Check before you
+deploy:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ docker compose config | grep TEST_HUB_API_TOKEN_HASHES</code></pre>
+</div>
+
+<p>Passing the hash with <code>docker run -e</code> needs single quotes and no doubling, because
+there is no Compose in that path — only your shell.</p>
+
+<h2 id="server">Server</h2>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Setting</th><th>Environment variable</th><th>Default</th><th>What it changes</th></tr></thead>
+  <tbody>
+    <tr><td><code>host</code></td><td><code>TEST_HUB_HOST</code></td><td><code>127.0.0.1</code></td>
+    <td>Interface to bind. Anything not loopback goes through the
+    <a href="#bind-safety">bind-safety gate</a>. On <code>serve</code>, set this with
+    <code>--host</code>: the variable does not reach it.</td></tr>
+    <tr><td><code>port</code></td><td><code>TEST_HUB_PORT</code></td><td><code>8000</code></td>
+    <td>1–65535, validated. Same <code>serve</code> caveat.</td></tr>
+    <tr><td><code>root_path</code></td><td><code>TEST_HUB_ROOT_PATH</code></td><td>empty</td>
+    <td>Mount prefix when a reverse proxy serves Test Hub on a sub-path. Passed to FastAPI so that
+    generated URLs and the OpenAPI document carry the prefix. Set it if the proxy does
+    <em>not</em> strip the prefix before forwarding.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="data">Data</h2>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Setting</th><th>Environment variable</th><th>Default</th><th>What it changes</th></tr></thead>
+  <tbody>
+    <tr><td><code>data_dir</code></td><td><code>TEST_HUB_DATA_DIR</code></td><td>platform, see
+    <a href="#default-data-dir">below</a></td><td>The directory holding
+    <code>test-hub.db</code> and <code>artifacts/</code>. <code>~</code> is expanded and the path
+    is resolved to an absolute one, so <code>~/th</code> and a relative path both work. Created on
+    first use with mode <code>0700</code> where the filesystem supports it.</td></tr>
+    <tr><td><code>database_url</code></td><td><code>TEST_HUB_DATABASE_URL</code></td><td>unset</td>
+    <td>A SQLAlchemy URL. Unset means
+    <code>sqlite+pysqlite:///&lt;data_dir&gt;/test-hub.db</code>. The storage interfaces are
+    backend-agnostic, but only SQLite is shipped and tested — treat anything else as unsupported
+    rather than as a supported option you happen not to have tried.</td></tr>
+    <tr><td><code>artifacts_dir</code></td><td><code>TEST_HUB_ARTIFACTS_DIR</code></td><td>unset</td>
+    <td>Where content-addressed artifact files land. Unset means
+    <code>&lt;data_dir&gt;/artifacts</code>. Point it at a bigger disk when raw report retention
+    outgrows the database's volume.</td></tr>
+    <tr><td><code>sqlite_busy_timeout_ms</code></td><td><code>TEST_HUB_SQLITE_BUSY_TIMEOUT_MS</code></td>
+    <td><code>10000</code></td><td>How long a writer waits behind another writer before giving up.
+    Applied both as the driver's connect timeout and as SQLite's own
+    <code>busy_timeout</code> pragma. Raise it if concurrent publishers start seeing "database is
+    locked"; it trades a slow request for a failed one.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="ingestion">Ingestion limits</h2>
+
+<p>Every one of these is a ceiling on something an untrusted uploader controls. They are enforced
+<em>while</em> reading, not after — checking a <code>Content-Length</code> header is advisory, and
+reading first and measuring afterwards is precisely the denial of service the limit exists to
+prevent.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Setting</th><th>Environment variable</th><th>Default</th><th>What it changes</th></tr></thead>
+  <tbody>
+    <tr><td><code>max_report_bytes</code></td><td><code>TEST_HUB_MAX_REPORT_BYTES</code></td>
+    <td>64 MiB</td><td>Largest report accepted, measured before decompression. Minimum 1024.
+    Exceeding it is a <code>PayloadTooLargeError</code>: HTTP 413, exit 6.</td></tr>
+    <tr><td><code>max_artifact_bytes</code></td><td><code>TEST_HUB_MAX_ARTIFACT_BYTES</code></td>
+    <td>128 MiB</td><td>Largest single artifact — a screenshot, a video, a log — attached to a
+    run. Minimum 1024.</td></tr>
+    <tr><td><code>max_decompressed_bytes</code></td><td><code>TEST_HUB_MAX_DECOMPRESSED_BYTES</code></td>
+    <td>512 MiB</td><td>Ceiling on what a gzipped upload may expand to, enforced during expansion.
+    This is the zip-bomb guard: a few kilobytes on the wire can otherwise become gigabytes in
+    memory.</td></tr>
+    <tr><td><code>max_text_field_bytes</code></td><td><code>TEST_HUB_MAX_TEXT_FIELD_BYTES</code></td>
+    <td>256 KiB</td><td>Longest stack trace or captured log stored per attempt. Minimum 256.
+    Longer text is truncated <em>and the attempt is flagged</em> — never silently cut, because a
+    stack trace that ends mid-frame with no indication is worse than one that says it was
+    cut.</td></tr>
+    <tr><td><code>max_events_per_batch</code></td><td><code>TEST_HUB_MAX_EVENTS_PER_BATCH</code></td>
+    <td><code>5000</code></td><td>Events accepted in one
+    <code>POST /api/v1/runs/{id}/events</code>. Minimum 1. A larger batch is rejected rather than
+    truncated.</td></tr>
+    <tr><td><code>store_raw_reports</code></td><td><code>TEST_HUB_STORE_RAW_REPORTS</code></td>
+    <td><code>true</code></td><td>Keep the original uploaded file as an artifact, so you can
+    re-parse it later when an adapter improves. Turning it off saves disk and loses that. The
+    <code>export --input</code> path sets it to <code>false</code> for its throwaway database,
+    because nothing will ever read those back.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="output" data-caption="A 1237-byte report against a 1024-byte limit"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">A 1237-byte report against a 1024-byte limit</span></div>
+<pre><code>error: report exceeds the 1024 byte limit (TEST_HUB_MAX_REPORT_BYTES); split the upload or raise the limit
+  limit_bytes: 1024
+# exit 6</code></pre>
+</div>
+
+<h2 id="security">Security</h2>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Setting</th><th>Environment variable</th><th>Default</th><th>What it changes</th></tr></thead>
+  <tbody>
+    <tr><td><code>auth_enabled</code></td><td><code>TEST_HUB_AUTH_ENABLED</code></td>
+    <td><code>false</code></td><td>Require a bearer token on writes. <b>Turns itself on</b> when
+    <code>api_tokens</code> or <code>api_token_hashes</code> is non-empty — configuring a token
+    and forgetting the switch is not a failure mode Test Hub is willing to have.</td></tr>
+    <tr><td><code>require_auth_for_reads</code></td><td><code>TEST_HUB_REQUIRE_AUTH_FOR_READS</code></td>
+    <td><code>false</code></td><td>Close the read endpoints too. Reads are open by default even
+    with auth on, because the common deployment is "anyone on the team may look, only CI may
+    write". Set it when the dashboard itself is the thing you are protecting.</td></tr>
+    <tr><td><code>api_token_hashes</code></td><td><code>TEST_HUB_API_TOKEN_HASHES</code></td>
+    <td>empty</td><td>The preferred form. A list of
+    <code>pbkdf2_sha256$&lt;iterations&gt;$&lt;salt-hex&gt;$&lt;hash-hex&gt;</code> lines from
+    <code>test-hub token create</code> or <code>token hash</code>. Several entries let you rotate
+    without downtime. Read <a href="#list-values">the <code>$</code> section</a> first.</td></tr>
+    <tr><td><code>api_tokens</code></td><td><code>TEST_HUB_API_TOKENS</code></td><td>empty</td>
+    <td>Plaintext tokens, hashed at startup and never logged. Convenient, and it puts a live
+    credential in your process environment and in whatever wrote it there. Prefer hashes.</td></tr>
+    <tr><td><code>insecure_no_auth</code></td><td><code>TEST_HUB_INSECURE_NO_AUTH</code></td>
+    <td><code>false</code></td><td>Explicitly allow a non-loopback bind with no tokens. Warns on
+    every start and banners the dashboard. Development only.</td></tr>
+    <tr><td><code>cors_allow_origins</code></td><td><code>TEST_HUB_CORS_ALLOW_ORIGINS</code></td>
+    <td>empty</td><td>Empty means no CORS middleware at all — not "same-origin only": the
+    headers are never added, and the browser's own rules apply. Set it only if a separate frontend
+    origin must call this API from a browser. <code>*</code> is accepted, and warned about when the bind is not
+    loopback.</td></tr>
+    <tr><td><code>trusted_hosts</code></td><td><code>TEST_HUB_TRUSTED_HOSTS</code></td><td>empty</td>
+    <td>When non-empty, adds Starlette's <code>TrustedHostMiddleware</code> and rejects requests
+    whose <code>Host</code> header is not in the list. The defence against Host-header poisoning
+    behind a proxy that forwards anything.</td></tr>
+    <tr><td><code>csp</code></td><td><code>TEST_HUB_CSP</code></td><td>see below</td>
+    <td>The <code>Content-Security-Policy</code> header on the dashboard and the API. Setting it to
+    an empty string removes the header entirely.</td></tr>
+    <tr><td><code>redaction_enabled</code></td><td><code>TEST_HUB_REDACTION_ENABLED</code></td>
+    <td><code>true</code></td><td>Apply the patterns below to log records and to stored failure
+    text.</td></tr>
+    <tr><td><code>redaction_patterns</code></td><td><code>TEST_HUB_REDACTION_PATTERNS</code></td>
+    <td>9 built-in patterns</td><td>Each is compiled at startup — an invalid regex fails
+    configuration rather than silently disabling redaction. The <em>capturing group</em> is what
+    gets replaced, so <code>Authorization: Bearer &lt;token&gt;</code> keeps the word
+    <code>Bearer</code> and loses the token. Setting this <b>replaces</b> the built-in list; it
+    does not extend it.</td></tr>
+    <tr><td><code>redaction_placeholder</code></td><td><code>TEST_HUB_REDACTION_PLACEHOLDER</code></td>
+    <td><code>***REDACTED***</code></td><td>What replaces a match.</td></tr>
+  </tbody>
+</table></div>
+
+<p>The shipped patterns cover bearer and basic credentials, PEM private-key blocks, passwords
+inside <code>postgres://</code>-style URLs, AWS <code>AKIA…</code> keys, GitHub
+<code>ghp_…</code> tokens, Slack <code>xox…</code> tokens, JWTs, and a generic
+<code>key = value</code> rule for names like <code>api_key</code>, <code>secret</code> and
+<code>password</code>. Order matters: the scheme-specific rules run before the generic one, so the
+generic rule cannot capture the word <code>Bearer</code> and stop.</p>
+
+<div class="codeblock" data-lang="text" data-caption="The default CSP, one directive per line"><div class="codeblock__head"><span class="codeblock__lang">text</span><span class="codeblock__cap">The default CSP, one directive per line</span></div>
+<pre><code>default-src 'none';
+script-src 'self';
+style-src 'self';
+img-src 'self' data:;
+font-src 'self';
+connect-src 'self';
+form-action 'none';
+frame-ancestors 'none';
+base-uri 'none'</code></pre>
+</div>
+
+<p><code>default-src 'none'</code> is only keepable because the frontend has no inline scripts, no
+inline styles and no remote origins. If you loosen it, you are loosening it for content that
+originated in somebody's test output.</p>
+
+<h2 id="bind-safety">The non-loopback bind refusal</h2>
+
+<p>One rule, checked in one place — <code>Settings.check_bind_safety()</code>, called by
+<code>serve</code> before the socket is opened. <b>Binding to an interface other than loopback
+requires authentication.</b> There is no silent path to an open, unauthenticated Test Hub on a
+network.</p>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub serve --host 0.0.0.0 --port 8123"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">test-hub serve --host 0.0.0.0 --port 8123</span></div>
+<pre><code>error: refusing to bind 0.0.0.0:8123 with no authentication. Create a token with `test-hub token create`, set TEST_HUB_API_TOKEN_HASHES, or pass --insecure-no-auth if this really is a throwaway development host.
+  host: 0.0.0.0
+  port: 8123
+# exit 78</code></pre>
+</div>
+
+<p>78 is <code>EX_CONFIG</code> from <code>sysexits.h</code>. It is not 1, so a supervisor can tell
+"this is misconfigured and will never start" apart from "this crashed and might come back", and
+stop restarting it.</p>
+
+<p><code>localhost</code>, <code>::1</code> and anything in <code>127.0.0.0/8</code> count as
+loopback. <code>0.0.0.0</code> and <code>::</code> do not — they are wildcards that include every
+interface, which is the case the rule exists for. A hostname that is not one of those literals is
+treated as non-loopback, because resolving it would make the check depend on DNS.</p>
+
+<p>Three things the gate warns about instead of refusing. The first two are only reached on a
+non-loopback bind — the check returns early for loopback, which is why a laptop never sees
+them:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Condition</th><th>Warning</th></tr></thead>
+  <tbody>
+    <tr><td>Non-loopback bind with <code>insecure_no_auth</code></td>
+    <td><code>AUTHENTICATION IS DISABLED and Test Hub is bound to 0.0.0.0:8877. Anyone who can
+    reach this port can read and write every test result.</code></td></tr>
+    <tr><td><code>cors_allow_origins</code> contains <code>*</code>, on a non-loopback bind</td>
+    <td><code>CORS is set to '*'. Any website a user visits can read this API in their
+    browser.</code></td></tr>
+    <tr><td><code>insecure_no_auth</code> on a loopback bind</td>
+    <td><code>--insecure-no-auth is redundant on a loopback bind and can be dropped.</code></td></tr>
+  </tbody>
+</table></div>
+
+<p>The first warning is raised in two places: by <code>serve</code> before it binds, and by the
+application at startup. The second is the one that fires when the CLI is not in the path at all —
+someone running <code>create_app</code> under their own ASGI server still gets told.</p>
+
+<div class="note note--tip"><span class="note__title">The container case</span>A container that
+binds <code>127.0.0.1</code> is a container you cannot reach, so the shipped image binds
+<code>0.0.0.0</code> inside its own network namespace and the Compose file publishes it as
+<code>"127.0.0.1:8000:8000"</code>. That loopback prefix is the entire security model of that
+file: written as <code>"8000:8000"</code>, Docker publishes on every interface and inserts its own
+DNAT rules ahead of the host firewall, handing an unauthenticated Test Hub to the network past
+<code>ufw</code>. See <a href="deployment.html">Deployment</a>.</div>
+
+<h2 id="live">Live updates</h2>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Setting</th><th>Environment variable</th><th>Default</th><th>What it changes</th></tr></thead>
+  <tbody>
+    <tr><td><code>sse_heartbeat_seconds</code></td><td><code>TEST_HUB_SSE_HEARTBEAT_SECONDS</code></td>
+    <td><code>15.0</code></td><td>How often a keep-alive comment is written on an idle stream, and
+    the <code>retry:</code> value (in milliseconds) sent to the browser as its reconnect delay.
+    Must be greater than zero. Lower it below any idle timeout in a proxy sitting in
+    front.</td></tr>
+    <tr><td><code>sse_replay_buffer</code></td><td><code>TEST_HUB_SSE_REPLAY_BUFFER</code></td>
+    <td><code>1000</code></td><td>Events kept per workspace for <code>Last-Event-ID</code> replay.
+    A client that reconnects within the buffer is replayed; one that has been away longer is sent
+    an explicit <code>resync</code> directive telling it to refetch over REST, because a dashboard
+    confidently showing stale numbers is a worse failure than a reload.</td></tr>
+    <tr><td><code>sse_max_clients</code></td><td><code>TEST_HUB_SSE_MAX_CLIENTS</code></td>
+    <td><code>200</code></td><td>Concurrent stream subscribers. Minimum 1. Each holds an open
+    connection for as long as its dashboard tab is open, so this is a bound on
+    file descriptors as much as on memory.</td></tr>
+  </tbody>
+</table></div>
+
+<p>The bus is in-process. That is why <code>serve</code> runs one Uvicorn worker: a second worker
+would hold a second bus, and half the connected dashboards would miss half the events. Raising
+<code>sse_max_clients</code> does not change that.</p>
+
+<div class="note note--warn"><span class="note__title">Do not set
+<code>sse_replay_buffer</code> to 0</span>It is accepted, but it does not mean "always resync". A
+buffer of zero keeps nothing, so the oldest-cursor bookkeeping never advances past the first event
+and a reconnecting client falls through both branches: no replay, and no <code>resync</code>
+directive either. It carries on from where it left off and silently misses whatever happened while
+it was away — the one outcome the resync mechanism exists to prevent. Verified against 0.1.0. Any
+value of 1 or more behaves correctly: a buffer of 1 replays the newest event to a current client
+and sends <code>resync</code> to a stale one. Use 1 if you want the smallest working buffer.</div>
+
+<h2 id="behaviour">Behaviour</h2>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Setting</th><th>Environment variable</th><th>Default</th><th>What it changes</th></tr></thead>
+  <tbody>
+    <tr><td><code>workspace_slug</code></td><td><code>TEST_HUB_WORKSPACE_SLUG</code></td>
+    <td><code>default</code></td><td>The workspace every row is written under. Its UUID is derived
+    from the slug, so an offline publisher can compute the same id without asking the
+    server.</td></tr>
+    <tr><td><code>workspace_name</code></td><td><code>TEST_HUB_WORKSPACE_NAME</code></td>
+    <td><code>Default workspace</code></td><td>Display name, used in the dashboard and in the
+    snapshot export.</td></tr>
+    <tr><td><code>log_level</code></td><td><code>TEST_HUB_LOG_LEVEL</code></td><td><code>info</code></td>
+    <td><code>debug</code>, <code>info</code>, <code>warning</code> or <code>error</code> —
+    validated, anything else fails to start. Set it on <code>serve</code> with
+    <code>--log-level</code>.</td></tr>
+    <tr><td><code>log_format</code></td><td><code>TEST_HUB_LOG_FORMAT</code></td><td><code>text</code></td>
+    <td><code>text</code> for a human-readable line, <code>json</code> for one object per line.
+    Use <code>json</code> anywhere a log shipper is reading.</td></tr>
+    <tr><td><code>history_window_days</code></td><td><code>TEST_HUB_HISTORY_WINDOW_DAYS</code></td>
+    <td><code>30</code></td><td>How far back the overview looks when counting each project's flaky
+    tests. Minimum 1. It is a query window, not a retention policy — nothing is ever
+    deleted.</td></tr>
+    <tr><td><code>flaky_window_runs</code></td><td><code>TEST_HUB_FLAKY_WINDOW_RUNS</code></td>
+    <td><code>20</code></td><td>How many recent runs of a test are loaded as its history when the
+    across-runs flakiness formula asks whether it disagreed with itself. Minimum 2, because one
+    run cannot disagree with itself. See <a href="metrics.html#flaky">Metrics</a> for the formula
+    this feeds.</td></tr>
+    <tr><td><code>open_browser</code></td><td><code>TEST_HUB_OPEN_BROWSER</code></td>
+    <td><code>false</code></td><td>Open the dashboard when <code>serve</code> comes up. Unlike the
+    other <code>serve</code> settings, this one <em>does</em> respond to its environment variable:
+    the flag is OR-ed with it rather than overriding it.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="note note--warn"><span class="note__title">Changing
+<code>workspace_slug</code> hides existing data</span>The workspace id is derived from the slug, so
+pointing an existing store at a new slug creates a <em>second</em> workspace rather than renaming
+the first. Verified: ingesting under <code>TEST_HUB_WORKSPACE_SLUG=acme</code> and then under
+<code>=other</code> left two rows in <code>workspaces</code> and one run under each, with neither
+visible from the other. Nothing is lost, but nothing is visible either. Pick the slug before you
+put data in, and use <code>workspace_name</code> for anything cosmetic.</div>
+
+<h2 id="default-data-dir">Where the data directory defaults to</h2>
+
+<p><code>default_data_dir()</code> follows the platform convention rather than dropping a directory
+into the working tree, so <code>test-hub serve</code> run from two different projects is one Test
+Hub rather than two.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Platform</th><th>Default</th><th>Chosen from</th></tr></thead>
+  <tbody>
+    <tr><td>macOS</td><td><code>~/Library/Application Support/test-hub</code></td>
+    <td><code>sys.platform == "darwin"</code></td></tr>
+    <tr><td>Windows</td><td><code>%LOCALAPPDATA%\test-hub</code></td>
+    <td><code>sys.platform</code> starts with <code>win</code>; falls back to
+    <code>~\AppData\Local\test-hub</code> when <code>LOCALAPPDATA</code> is unset</td></tr>
+    <tr><td>Linux and everything else</td><td><code>$XDG_DATA_HOME/test-hub</code></td>
+    <td>falls back to <code>~/.local/share/test-hub</code></td></tr>
+  </tbody>
+</table></div>
+
+<p><code>TEST_HUB_DATA_DIR</code> short-circuits all of it, and it is read directly from the
+environment inside <code>default_data_dir()</code> rather than only through the settings model —
+so the override applies even to code paths that construct settings themselves.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="What the defaults resolve to on macOS"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">What the defaults resolve to on macOS</span></div>
+<pre><code>$ test-hub serve
+  ...
+  data      /Users/you/Library/Application Support/test-hub</code></pre>
+</div>
+
+<p>Inside it, <code>test-hub.db</code> (SQLite in WAL mode, so it is three files while the server
+is running) and <code>artifacts/</code>. Both directories are created on first use and chmod'ed to
+<code>0700</code>; the chmod is wrapped in a suppressed <code>OSError</code> because Windows and
+some network filesystems have no such concept, and a directory that exists matters more than a
+mode that does not apply.</p>
+
+<h2 id="invalid">What happens when a value is wrong</h2>
+
+<p>Settings are validated at construction, so a bad value stops the process rather than producing
+a subtly wrong runtime. The bounds are real — <code>max_report_bytes</code> has a floor of 1024,
+<code>flaky_window_runs</code> a floor of 2, <code>port</code> a range of 1–65535, and
+<code>log_level</code>/<code>log_format</code> are closed sets.</p>
+
+<div class="codeblock" data-lang="output" data-caption="TEST_HUB_LOG_LEVEL=verbose, last lines of the traceback"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">TEST_HUB_LOG_LEVEL=verbose, last lines of the traceback</span></div>
+<pre><code>ValidationError: 1 validation error for Settings
+log_level
+  Input should be 'debug', 'info', 'warning' or 'error' [type=literal_error,
+input_value='verbose', input_type=str]</code></pre>
+</div>
+
+<div class="note note--info"><span class="note__title">Honest about the presentation</span>The
+message names the setting and the acceptable values, which is what you need. But it arrives as a
+Pydantic traceback and exits <b>1</b>, not as the clean <code>error:</code> line and exit 78 that
+<code>ConfigurationError</code> produces — settings are validated before the CLI's error handler
+is in a position to catch them. Verified against 0.1.0. Read the last three lines and ignore the
+frames above them.</div>
+
+<h2 id="starting-points">Two configurations worth copying</h2>
+
+<div class="cards">
+  <div>
+    <h3>A laptop</h3>
+    <p>Nothing. The defaults are loopback, unauthenticated and stored under your user-data
+    directory, which is correct for a machine only you can reach. Set
+    <code>TEST_HUB_DATA_DIR</code> to a scratch path while you experiment so
+    <code>demo --reset</code> cannot touch anything you care about.</p>
+  </div>
+  <div>
+    <h3>A shared server</h3>
+    <p><code>TEST_HUB_API_TOKEN_HASHES</code> (which turns auth on by itself),
+    <code>--host 0.0.0.0</code> behind a proxy that terminates TLS,
+    <code>TEST_HUB_TRUSTED_HOSTS</code> set to the name that proxy serves,
+    <code>TEST_HUB_LOG_FORMAT=json</code>, and <code>TEST_HUB_ROOT_PATH</code> if it lives on a
+    sub-path. A bearer token over plain HTTP across a network is a token you have given
+    away.</p>
+  </div>
+</div>
+<nav class="pagenav" aria-label="Pagination">
+<a class="pagenav__prev" href="../docs/cli-reference.html"><span>&larr;&nbsp;Previous</span><b>CLI reference</b></a>
+<a class="pagenav__next" href="../docs/rest-api.html"><span>Next&nbsp;&rarr;</span><b>REST API</b></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#precedence">How a setting gets its value</a></li>
+<li class="lvl-2"><a href="#list-values">List values, and the $ problem</a></li>
+<li class="lvl-3"><a href="#dollar-shell">In a shell</a></li>
+<li class="lvl-3"><a href="#dollar-compose">In docker-compose</a></li>
+<li class="lvl-2"><a href="#server">Server</a></li>
+<li class="lvl-2"><a href="#data">Data</a></li>
+<li class="lvl-2"><a href="#ingestion">Ingestion limits</a></li>
+<li class="lvl-2"><a href="#security">Security</a></li>
+<li class="lvl-2"><a href="#bind-safety">The non-loopback bind refusal</a></li>
+<li class="lvl-2"><a href="#live">Live updates</a></li>
+<li class="lvl-2"><a href="#behaviour">Behaviour</a></li>
+<li class="lvl-2"><a href="#default-data-dir">Where the data directory defaults to</a></li>
+<li class="lvl-2"><a href="#invalid">What happens when a value is wrong</a></li>
+<li class="lvl-2"><a href="#starting-points">Two configurations worth copying</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

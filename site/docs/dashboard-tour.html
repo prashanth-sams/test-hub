@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard tour · Test Hub</title>
+<meta name="description" content="Every view in the Test Hub dashboard, what each number counts, and what the comparison panel is actually telling you.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="Dashboard tour · Test Hub">
+<meta property="og:description" content="Every view in the Test Hub dashboard, what each number counts, and what the comparison panel is actually telling you.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/dashboard-tour.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html">Docs</a><a href="../docs/dashboard-tour.html" aria-current="page">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html">CLI</a><a href="../docs/deployment.html">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link" href="../docs/getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link is-active" href="../docs/dashboard-tour.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link" href="../docs/cli-reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link" href="../docs/configuration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link" href="../docs/python-sdk.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link" href="../docs/events.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link" href="../docs/metrics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link" href="../docs/deployment.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link" href="../docs/ci-integrations.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link" href="../docs/contributing.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>Dashboard tour</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Start here</span>
+  <h1>Dashboard tour</h1>
+  <p class="lede">Four views, two altitudes. The overview answers how the portfolio is doing; the run and test pages answer why something went red. This walks each one, and says what a panel means rather than what it is called.</p>
+</header>
+<h2 id="the-shell">The shell</h2>
+
+<p>Every view shares a top bar: the brand, <b>Overview</b> and <b>Runs</b>, a relative
+timestamp of the last refresh, a connection indicator, and the theme toggle.</p>
+
+<p>The connection indicator has three states — <b>Connecting</b>, <b>Live</b> and
+<b>Reconnecting</b>. In live mode it reflects the Server-Sent Events stream: green and
+"Live" means results are arriving as they happen. When the stream drops, a banner appears
+above the view and the dashboard keeps working from what it already has; it reconnects by
+itself, and if it has been away long enough for the server's replay buffer to have moved
+past it, it refetches instead of quietly displaying stale numbers. In an offline export
+there is nothing to connect to, so the indicator says so and the banner never appears.</p>
+
+<p>Every view is addressable. The routes are hash-based — <code>#/overview</code>,
+<code>#/runs</code>, <code>#/runs/&lt;uuid&gt;</code>, <code>#/tests/&lt;uuid&gt;</code> —
+with filters carried in the query part, so "the failing integration runs on main for
+payments" is a link you can paste into an incident channel. Hash routing is not a
+stylistic choice: it is the only kind that survives being opened from
+<code>file://</code>, where there is no server to answer a real path.</p>
+
+<div class="note"><span class="note__title">Theme</span>The dashboard follows your operating
+system until you touch the toggle, then remembers your choice. Dark is a designed
+counterpart rather than an inversion: surfaces darken, ink lightens, and the status
+language — pass green, fail red, error deep red, skip amber, xfail purple, running blue —
+survives the switch, so a screenshot taken in either theme reads identically to a
+colleague.</div>
+
+<h2 id="overview">Overview — the portfolio</h2>
+
+<p>The executive altitude. It answers four questions and refuses to answer any others: how
+much testing happened, how much of it passed, is it getting better or worse, and what is on
+fire right now.</p>
+
+<h3 id="overview-filters">Window and filters</h3>
+
+<p>A segmented control picks the window — 7, 14, 30 or 90 days — and six filters narrow it:
+project, team, component, test type, environment and branch. The dropdown values are facets
+the server computes from the data that is actually there, so you are never offered a filter
+that matches nothing. The same filter vocabulary is used on the Runs view, which is what
+lets a selection carry from one to the other.</p>
+
+<h3 id="overview-kpis">The KPI row</h3>
+
+<p>Six tiles: <b>Tests</b>, <b>Passed</b>, <b>Failed</b>, <b>Error</b>, <b>Skipped</b> and
+<b>Running</b>. Two things about them are deliberate and worth knowing.</p>
+
+<p>They count <em>tests</em>, not runs — the run count is the sub-label under "Tests". And a
+pass rate with nothing executed renders as an em dash rather than 0%. A suite that only
+skipped is not a 0% suite, and showing it in red trains people to ignore red.</p>
+
+<h3 id="overview-charts">Outcomes, health, volume, trend and duration</h3>
+
+<ul>
+  <li><b>Test outcomes</b> — the run's status mix as a single proportional bar, in the status
+  colours, with a legend. Statuses with a zero count are omitted rather than drawn as
+  slivers.</li>
+  <li><b>Health</b> — the headline pass rate for the window, with the counts spelled out
+  underneath in a sentence.</li>
+  <li><b>Volume by day</b> — tests executed per day. This is the chart that tells you a
+  suite stopped running before it tells you the suite started failing.</li>
+  <li><b>Pass rate trend</b> — pass rate and failure rate per day across the window.</li>
+  <li><b>Run duration</b> — p50 and p95 per day. Both, because a mean hides the shard that
+  takes eleven minutes.</li>
+</ul>
+
+<p>Every chart is inline SVG, drawn by the dashboard itself, reading its palette back out of
+the CSS custom properties. That is why they re-colour correctly the instant you switch
+theme, and why there is no charting library in the wheel.</p>
+
+<h3 id="overview-live-and-projects">Active runs and project health</h3>
+
+<p><b>Active runs</b> lists what is queued or running right now, and is the panel the demo
+data deliberately keeps one run open for. When nothing is running it says so rather than
+showing an empty table.</p>
+
+<p><b>Project health</b> is one row per project: runs in the last 24 hours, last run and its
+status, pass rate with a delta against the previous period, live runs, and a count of flaky
+tests. Below that, the worst offenders — the tests failing most often, and the flakiest —
+each linking straight to its test page.</p>
+
+<div class="note"><span class="note__title">An empty overview that is not an empty
+install</span>If every run in the workspace is older than the selected window, the overview
+says exactly that instead of rendering a blank state that looks like a fresh installation.
+The payload carries both <code>total_runs</code> (inside the window) and
+<code>total_runs_all_time</code> so the view can tell the two apart.</div>
+
+<h2 id="runs">Runs — the drill-down's front door</h2>
+
+<p>Every run, newest first, with the full filter set: a free-text search over run name,
+branch, commit and tags, plus project, team, component, test type, environment, branch and
+status. Sort and page are here too.</p>
+
+<p>All of it lives in the URL. That is the feature, not tidiness: a filtered list has to be
+a link somebody can paste, and it has to survive a reload and the back button. Sorting is
+handled by the server in live mode and in the browser in an offline snapshot — the view
+knows about neither, it just puts <code>sort</code> and <code>dir</code> in the hash and
+lets whichever provider is mounted honour them.</p>
+
+<p>Each row carries the run's status, project, team and component, its environment and
+branch, the framework and language if the publisher said, the counts, the duration, and a
+live badge while it is still going.</p>
+
+<h2 id="run-detail">Run detail — everything about one run</h2>
+
+<p>The engineering altitude: what a person needs when a pipeline has just gone red.</p>
+
+<h3 id="run-context">Run context</h3>
+
+<p>Where the run came from — framework and version, language, environment, branch, commit,
+CI provider, pipeline id and a link to the pipeline, hostname, OS, and who started it. Every
+field is optional, because publishers know varying amounts, and the panel shows what it was
+told rather than inventing placeholders.</p>
+
+<h3 id="run-comparison">Compared with the previous run</h3>
+
+<p>The panel that earns its place. It shows deltas for pass rate, duration and test count,
+then five lists:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>List</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td><b>Newly failing</b></td><td>Passed in the baseline, fails now. This is the list you read first.</td></tr>
+    <tr><td><b>Still failing</b></td><td>Was already broken. Not your regression, but not nothing.</td></tr>
+    <tr><td><b>Newly passing</b></td><td>Was broken, is fixed.</td></tr>
+    <tr><td><b>Added</b></td><td>Test identities that did not exist in the baseline run.</td></tr>
+    <tr><td><b>Removed</b></td><td>Identities the baseline had and this run did not report — deleted, renamed, or not collected.</td></tr>
+  </tbody>
+</table></div>
+
+<p>The baseline is the previous <em>comparable</em> run: same project, team, component, test
+type, environment and branch. When there is no such run the panel says so, in those words,
+rather than comparing against something unlike it and producing a delta that means nothing.
+There is a link to open the baseline.</p>
+
+<div class="note note--warn"><span class="note__title">Why "Removed" is not always
+alarming</span>A renamed test is a removed identity and an added one, because identity is
+derived from the name. That is the correct answer — it genuinely is a different test now —
+but it means a refactor produces a long "Removed" list. Read it alongside "Added".</div>
+
+<h3 id="run-warnings">Parser warnings</h3>
+
+<p>If the import could not represent something exactly, it is on this panel: severity, code,
+message and where in the input it happened. An unmapped status word, a timestamp with no UTC
+offset, a truncated stack trace, counts that disagreed with the file's own header. Nothing
+is swallowed, because a warning you cannot see is a number you cannot trust.</p>
+
+<h3 id="run-suites-tests">Suites and tests</h3>
+
+<p>The suite tree, with each suite's counts and duration, expandable to the tests inside it.
+Below that, every test in the run as a searchable, sortable table: status (with a
+<span class="st st--flaky">flaky</span> pill where it applies), name, parameters, attempt
+count and duration.</p>
+
+<p>The table's own search, status filter and sort are view-local rather than in the URL:
+they are a way of reading one page, not a place anybody links to. The run itself, and every
+test on it, are linkable.</p>
+
+<h3 id="run-artifacts">Artifacts</h3>
+
+<p>Files attached to the run — screenshots, videos, logs, traces, coverage, and the raw
+uploaded report if <code>store_raw_reports</code> is on. They are stored content-addressed,
+so the same screenshot uploaded from fifty parallel shards is one stored object. They are
+always served as an attachment with the stored content type and
+<code>X-Content-Type-Options: nosniff</code>, never inline: an artifact is attacker-supplied
+content sitting on the dashboard's own origin.</p>
+
+<h2 id="test-detail">Test detail — one test, across every run</h2>
+
+<p>This page exists because identity is stable. A test that got a new id every run would
+have no history, could not be called flaky, and could not be compared with itself.</p>
+
+<h3 id="test-kpis">The numbers</h3>
+
+<p>Flake rate, failure rate, average duration with a small duration trend, and the attempt
+count in the latest run. Flake rate is the percentage of runs in the trailing window in
+which this test behaved flakily — it was flaky within that run, or its outcome disagreed
+with the window's majority. Fewer than two usable runs and it renders as nothing at all:
+one data point cannot describe consistency.</p>
+
+<h3 id="test-attempts">Latest result, attempt by attempt</h3>
+
+<p>Every attempt gets its own panel, in order, each with its status, the framework's original
+word for that status where it differed, the duration, the failure type and message, the stack
+trace, and any stdout, stderr or captured logs.</p>
+
+<p>A retry is a separate execution with its own output, not a correction of the one before
+it — so the failure that a rerun later "fixed" is still on the page. That is the argument for
+the event model, made visible.</p>
+
+<div class="note"><span class="note__title">The bytes are the bytes</span>Stack traces, logs
+and stdout arrive as text nodes inside a <code>&lt;pre&gt;</code>. There is no formatting
+pass, no ANSI translation and no markup: what the framework produced is what you read. A
+test named <code>&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;</code> renders as that
+text, in both the live dashboard and the offline file, and there is a test asserting
+it.</div>
+
+<h3 id="test-history">History</h3>
+
+<p>A strip of squares, newest on the left, one per run, each coloured by outcome and linking
+to its run — the shape of a flaky test is visible at a glance. Underneath, the same history
+as a table: run time, status, attempt count, duration, branch and environment.</p>
+
+<div class="note"><span class="note__title">In an offline export</span>A snapshot contains
+the runs it was built from, so a test's history in an exported file is bounded by what that
+export included. When it is partial the page says so on a banner rather than presenting a
+short history as a complete one.</div>
+
+<h2 id="offline">The same dashboard, offline</h2>
+
+<p>Everything above is identical in the file <code>test-hub export</code> writes. The views,
+the charts, the filters, the routing, the theme toggle. What differs is where the data comes
+from: a frozen snapshot object embedded in the page instead of a REST API and an event
+stream. The footer of an exported file names the generator version and how many runs are in
+it.</p>
+
+<p>What an export cannot do is update while you watch, and it cannot fetch a run that was not
+included in it. Those are the two things the live mode is for.</p>
+<nav class="pagenav" aria-label="Pagination">
+<a class="pagenav__prev" href="../docs/features.html"><span>&larr;&nbsp;Previous</span><b>Features</b></a>
+<a class="pagenav__next" href="../docs/cli-reference.html"><span>Next&nbsp;&rarr;</span><b>CLI reference</b></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#the-shell">The shell</a></li>
+<li class="lvl-2"><a href="#overview">Overview — the portfolio</a></li>
+<li class="lvl-3"><a href="#overview-filters">Window and filters</a></li>
+<li class="lvl-3"><a href="#overview-kpis">The KPI row</a></li>
+<li class="lvl-3"><a href="#overview-charts">Outcomes, health, volume, trend and duration</a></li>
+<li class="lvl-3"><a href="#overview-live-and-projects">Active runs and project health</a></li>
+<li class="lvl-2"><a href="#runs">Runs — the drill-down's front door</a></li>
+<li class="lvl-2"><a href="#run-detail">Run detail — everything about one run</a></li>
+<li class="lvl-3"><a href="#run-context">Run context</a></li>
+<li class="lvl-3"><a href="#run-comparison">Compared with the previous run</a></li>
+<li class="lvl-3"><a href="#run-warnings">Parser warnings</a></li>
+<li class="lvl-3"><a href="#run-suites-tests">Suites and tests</a></li>
+<li class="lvl-3"><a href="#run-artifacts">Artifacts</a></li>
+<li class="lvl-2"><a href="#test-detail">Test detail — one test, across every run</a></li>
+<li class="lvl-3"><a href="#test-kpis">The numbers</a></li>
+<li class="lvl-3"><a href="#test-attempts">Latest result, attempt by attempt</a></li>
+<li class="lvl-3"><a href="#test-history">History</a></li>
+<li class="lvl-2"><a href="#offline">The same dashboard, offline</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

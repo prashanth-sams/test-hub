@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deployment · Test Hub</title>
+<meta name="description" content="Running Test Hub for a team: Docker, systemd, reverse proxies, backups and upgrades.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="Deployment · Test Hub">
+<meta property="og:description" content="Running Test Hub for a team: Docker, systemd, reverse proxies, backups and upgrades.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/deployment.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html">Docs</a><a href="../docs/dashboard-tour.html">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html">CLI</a><a href="../docs/deployment.html" aria-current="page">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link" href="../docs/getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link" href="../docs/dashboard-tour.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link" href="../docs/cli-reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link" href="../docs/configuration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link" href="../docs/python-sdk.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link" href="../docs/events.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link" href="../docs/metrics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link is-active" href="../docs/deployment.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link" href="../docs/ci-integrations.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link" href="../docs/contributing.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>Deployment</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Operating it</span>
+  <h1>Deployment</h1>
+  <p class="lede">One process, one SQLite file and a directory of artifacts. That is the whole deployment — which makes the interesting parts the ones around it: the reverse proxy, the backups, and the two traps that are specific to this application.</p>
+</header>
+<h2 id="what-you-run">What you are actually running</h2>
+
+<p>A single Python process serving both the API and the dashboard on one port, writing to
+a directory. No database server, no cache, no queue, no separate web server.</p>
+
+<div class="codeblock" data-lang="text"><div class="codeblock__head"><span class="codeblock__lang">text</span></div>
+<pre><code>/var/lib/test-hub/
+├── test-hub.db          the database
+├── test-hub.db-wal      the write-ahead log — part of the database
+├── test-hub.db-shm      the shared-memory index — part of the database
+└── artifacts/
+    ├── .incoming/       partial uploads; safe to delete when nothing is running
+    └── aa/bb/&lt;sha256&gt;   content-addressed blobs</code></pre>
+</div>
+
+<div class="note note--warn"><span class="note__title">One worker</span>
+There is no <code>--workers</code> flag, and adding one would be a bug. The live-update
+bus is in-process: two workers means two buses, and half the connected dashboards would
+miss half the events. When one process is no longer enough, the fix is a shared bus behind
+the <code>EventBus</code> protocol, not more workers.</div>
+
+<h2 id="docker">Docker</h2>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ docker build -t test-hub .
+$ docker run --rm -p 127.0.0.1:8000:8000 \
+    -v test-hub-data:/data \
+    -e TEST_HUB_INSECURE_NO_AUTH=true \
+    test-hub</code></pre>
+</div>
+
+<p>The image is multi-stage: the first builds a wheel from the checkout, the second
+installs only that wheel. The runtime image therefore contains exactly what
+<code>pip install test-hub</code> would give a stranger, which means the image doubles as
+a continuous test that the wheel is installable.</p>
+
+<p>It runs as uid 10001 (fixed and high, so a bind-mounted host directory can be chowned
+to a number that does not change between rebuilds), declares <code>/data</code> as a
+volume, and has a healthcheck that uses Python's <code>urllib</code> rather than
+<code>curl</code>, which the slim base does not have.</p>
+
+<h3 id="docker-auth">Why a bare <code>docker run</code> exits 78</h3>
+
+<p>The image binds <code>0.0.0.0</code>, because a container that binds
+<code>127.0.0.1</code> is a container you cannot reach. Test Hub refuses a non-loopback
+bind with no authentication, so it exits <code>78</code> with a message telling you what
+to do. That is deliberate. Pick one:</p>
+
+<ol class="steps">
+  <li>
+    <h3>Real deployment — configure token hashes</h3>
+    <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub token create --label ci    # on any machine with Test Hub
+$ docker run … -e TEST_HUB_API_TOKEN_HASHES='pbkdf2_sha256$120000$&lt;salt&gt;$&lt;hash&gt;' test-hub</code></pre>
+    </div>
+    <p>Quote it — those <code>$</code> are literal. Pass the <em>hash</em>, never the
+    token, and never bake either into an image: a layer is readable by anyone who can pull
+    the tag and survives every <code>docker rmi</code>.</p>
+  </li>
+  <li>
+    <h3>Local poking about — opt out explicitly</h3>
+    <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ docker run … -e TEST_HUB_INSECURE_NO_AUTH=true test-hub</code></pre>
+    </div>
+    <p>Only ever combined with a port published to loopback, as the Compose file does.</p>
+  </li>
+</ol>
+
+<h2 id="compose">Docker Compose</h2>
+
+<p>The shipped <code>docker-compose.yml</code> works on
+<code>http://127.0.0.1:8000</code> after <code>docker compose up -d</code>, with a named
+volume so results survive <code>down</code> and <code>up</code> again.</p>
+
+<div class="codeblock" data-lang="yaml"><div class="codeblock__head"><span class="codeblock__lang">yaml</span></div>
+<pre><code>services:
+  test-hub:
+    build: .
+    image: test-hub:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"      # the prefix is the security model
+    environment:
+      TEST_HUB_INSECURE_NO_AUTH: "true"   # safe ONLY because of the line above
+      TEST_HUB_LOG_FORMAT: "json"
+    volumes:
+      - test-hub-data:/data
+    read_only: true
+    tmpfs: [ "/tmp:size=64m" ]
+    security_opt: [ "no-new-privileges:true" ]
+
+volumes:
+  test-hub-data:
+    name: test-hub-data</code></pre>
+</div>
+
+<div class="note note--warn"><span class="note__title">The <code>$$</code> trap</span>
+Compose interpolates <code>$</code> as a variable reference. A hash pasted verbatim
+becomes <code>pbkdf2_sha256$120000</code> — Compose resolves <code>$SALT</code> and
+<code>$HASH</code> to nothing and silently truncates it. The server then rejects every
+token with a message about the <em>token</em>, and you go looking in the wrong place.
+Write <code>$$</code> for each literal <code>$</code>, in the Compose file, in
+<code>.env</code> and in anything named by <code>env_file:</code>. Verify before you
+deploy:
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div><pre><code>$ docker compose config | grep TEST_HUB_API_TOKEN_HASHES</code></pre></div>
+which re-escapes on output — you should see four <code>$$</code>-separated fields.</div>
+
+<p>For a real deployment: delete <code>TEST_HUB_INSECURE_NO_AUTH</code>, add
+<code>TEST_HUB_API_TOKEN_HASHES</code>, and change the port to <code>"8000:8000"</code>
+only once something in front of it terminates TLS.</p>
+
+<div class="note note--info"><span class="note__title">Not executed here</span>
+No Docker daemon was available when this documentation was written, so the image and the
+Compose file are described from their contents rather than from a recorded run. The parts
+that <em>were</em> executed — the wheel build, a clean-virtualenv install, the healthcheck
+command, and the bind refusal with its exit code — are the parts the container depends
+on.</div>
+
+<h2 id="systemd">systemd</h2>
+
+<div class="codeblock" data-lang="ini" data-caption="/etc/systemd/system/test-hub.service"><div class="codeblock__head"><span class="codeblock__lang">ini</span><span class="codeblock__cap">/etc/systemd/system/test-hub.service</span></div>
+<pre><code>[Unit]
+Description=Test Hub
+After=network-online.target
+
+[Service]
+Type=exec
+User=test-hub
+Environment=TEST_HUB_DATA_DIR=/var/lib/test-hub
+Environment=TEST_HUB_HOST=127.0.0.1
+EnvironmentFile=/etc/test-hub/tokens.env
+ExecStart=/opt/test-hub/.venv/bin/test-hub serve
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/test-hub
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+</div>
+
+<p><code>/etc/test-hub/tokens.env</code> holds one line —
+<code>TEST_HUB_API_TOKEN_HASHES=pbkdf2_sha256$…</code> — mode <code>0600</code>, owned by
+root. No <code>$$</code> doubling here: systemd's <code>EnvironmentFile</code> does not
+interpolate. That trap is Compose's alone.</p>
+
+<p><code>Restart=on-failure</code> and not <code>Restart=always</code>: a configuration
+error exits <code>78</code>, and a supervisor that restarts a misconfiguration forever
+hides it.</p>
+
+<h2 id="proxy">Behind a reverse proxy</h2>
+
+<div class="codeblock" data-lang="nginx"><div class="codeblock__head"><span class="codeblock__lang">nginx</span></div>
+<pre><code>location / {
+    proxy_pass         http://127.0.0.1:8000;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Forwarded-Proto $scheme;
+
+    # Without this, nginx buffers the response and the live stream arrives
+    # all at once — at the end. Test Hub already sends X-Accel-Buffering: no,
+    # which nginx honours, but say it explicitly: it is the single most common
+    # reason a dashboard sits on "Connecting".
+    proxy_buffering    off;
+    proxy_read_timeout 1h;    # an SSE connection is meant to stay open
+}</code></pre>
+</div>
+
+<p>Serving from a sub-path? Set <code>TEST_HUB_ROOT_PATH=/test-hub</code>, or the
+dashboard's own links point at the wrong place.</p>
+
+<p>Terminate TLS at the proxy. Test Hub speaks plain HTTP, and a bearer token sent over
+plain HTTP across a network is a token you have given away.</p>
+
+<h2 id="backups">Backups</h2>
+
+<div class="note note--warn"><span class="note__title">Do not copy a live .db file</span>
+The database is three files — <code>.db</code>, <code>.db-wal</code>,
+<code>.db-shm</code> — and copying only the first while the service is running gives you a
+database missing everything in the write-ahead log. Use SQLite's own backup, which is
+consistent against a running writer:</div>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ sqlite3 /var/lib/test-hub/test-hub.db ".backup '/backups/test-hub-$(date +%F).db'"
+$ tar czf /backups/artifacts-$(date +%F).tgz -C /var/lib/test-hub artifacts</code></pre>
+</div>
+
+<p>Or stop the service and copy all three files together. From a Docker volume:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ docker run --rm -v test-hub-data:/data -v "$PWD:/backup" \
+    busybox tar czf /backup/test-hub-data.tgz /data</code></pre>
+</div>
+
+<p>Artifacts are content-addressed and never rewritten, so an incremental file-level backup
+of <code>artifacts/</code> is efficient. <code>.incoming/</code> holds partial uploads and
+never needs backing up.</p>
+
+<h2 id="upgrades">Upgrades</h2>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ pip install --upgrade test-hub
+$ systemctl restart test-hub</code></pre>
+</div>
+
+<p>Migrations run automatically on start — a user who upgrades should not have to know
+that Alembic exists. Back up first anyway; migrations are reversible in the test suite,
+not in your incident.</p>
+
+<p>Every migration has a working <code>downgrade</code>, and CI asserts that the migrated
+schema matches the ORM exactly, so a model added without a migration fails there rather
+than in your production.</p>
+
+<h2 id="capacity">Capacity</h2>
+
+<p>Size is driven by captured output, not by test counts. A run of a few thousand tests
+with no logs is small; one test with a 200 KiB stack trace is not. Text fields are capped
+at <code>TEST_HUB_MAX_TEXT_FIELD_BYTES</code> and artifacts are deduplicated by SHA-256,
+so fifty shards uploading the same screenshot store one copy.</p>
+
+<p>The real ceiling is write throughput: SQLite serializes writers, so concurrent
+publishers queue. That is correct rather than fast, and it is documented rather than
+hidden — read transactions were deliberately made not to take the write lock so that a
+long export or a dashboard poll cannot stall a publisher. When the queue becomes the
+problem, PostgreSQL behind <code>RunRepository</code> is the next step.</p>
+
+<h2 id="packaging-name">Changing the distribution name</h2>
+
+<p>If PyPI rejects <code>test-hub</code> as confusable with an existing project, one
+script rewrites exactly the <code>name</code> field in <code>pyproject.toml</code> and
+nothing else:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ python tools/set_dist_name.py my-test-hub</code></pre>
+</div>
+
+<p>It validates the new name against PEP 508 and prints a before/after diff. The import
+package (<code>test_hub</code>) and the console script (<code>test-hub</code>) are
+unaffected — only the name people type after <code>pip install</code> changes.</p>
+<nav class="pagenav" aria-label="Pagination">
+<a class="pagenav__prev" href="../docs/security.html"><span>&larr;&nbsp;Previous</span><b>Security</b></a>
+<a class="pagenav__next" href="../docs/ci-integrations.html"><span>Next&nbsp;&rarr;</span><b>CI integrations</b></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#what-you-run">What you are actually running</a></li>
+<li class="lvl-2"><a href="#docker">Docker</a></li>
+<li class="lvl-3"><a href="#docker-auth">Why a bare docker run exits 78</a></li>
+<li class="lvl-2"><a href="#compose">Docker Compose</a></li>
+<li class="lvl-2"><a href="#systemd">systemd</a></li>
+<li class="lvl-2"><a href="#proxy">Behind a reverse proxy</a></li>
+<li class="lvl-2"><a href="#backups">Backups</a></li>
+<li class="lvl-2"><a href="#upgrades">Upgrades</a></li>
+<li class="lvl-2"><a href="#capacity">Capacity</a></li>
+<li class="lvl-2"><a href="#packaging-name">Changing the distribution name</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

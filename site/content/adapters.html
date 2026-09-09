@@ -1,0 +1,957 @@
+<!--META {"title": "Adapters", "eyebrow": "Contracts", "description": "The ReportAdapter protocol: detection scores, ParseContext, warnings, entry-point registration, and a complete third-party adapter package that was built and run.", "lede": "An adapter turns bytes into a stream of domain events. That is the whole job \u2014 it never touches the database, never learns that HTTP exists, and never decides what a run is called. This page is the protocol, the six rules that are not negotiable, and a working third-party package that was installed into a real environment to write it."} -->
+<h2 id="protocol">The protocol, and where the seam is</h2>
+
+<p>Everything Test Hub can read arrives through one interface, and it produces
+<a href="events.html">domain events</a> — nothing else. It is a
+<code>Protocol</code>, so there is no base class you are obliged to inherit and no
+registration ceremony beyond a single entry point:</p>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.adapters.base">
+<pre><code>class ReportAdapter(Protocol):
+    name: str
+
+    def detect(self, stream: IO[bytes], filename: str | None, content_type: str | None) -&gt; float: ...
+    def parse(self, stream: IO[bytes], context: ParseContext) -&gt; Iterable[DomainEvent]: ...</code></pre>
+</div>
+
+<p>The seam is deliberately narrow, and the narrowness is what buys two things. An
+adapter is unit-testable against a fixture file with no server, no database and no
+event loop &mdash; the test suite further down runs in 0.07 seconds. And the file-import
+path and the live-publishing path share <em>every line of code after the adapter
+returns</em>, so a bug in folding or a change to how flakiness is counted cannot
+apply to one and not the other.</p>
+
+<p><code>name</code> must be unique across installed adapters and stable over time. It
+is stored on every run the adapter parsed, shown in the CLI and the API, and is what
+<code>--format &lt;name&gt;</code> selects. Renaming it later orphans that history.</p>
+
+<h3 id="base-adapter">BaseAdapter, if you want the boring parts written</h3>
+
+<p><code>test_hub.adapters.base.BaseAdapter</code> supplies a stream sniffer that
+rewinds, the extension and content-type half of detection, and a
+<code>describe()</code> that feeds <code>test-hub formats</code> and
+<code>GET /api/v1/adapters</code>. Because <code>ReportAdapter</code> is structural,
+inheriting is a convenience and never a requirement &mdash; a plain class with the two
+methods is a perfectly good adapter.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Class attribute</th><th>What it is used for</th></tr></thead>
+  <tbody>
+    <tr><td><code>display_name</code></td><td>The human name in <code>test-hub formats</code> and the adapters endpoint.</td></tr>
+    <tr><td><code>description</code></td><td>One line, shown in the same two places and inside the 415 that lists what the server accepts.</td></tr>
+    <tr><td><code>extensions</code></td><td>Lowercase and dotted, e.g. <code>(".hopper.json", ".hopper")</code>. Contributes 0.3 through <code>hint_score()</code>.</td></tr>
+    <tr><td><code>content_types</code></td><td>MIME types, matched on the part before the <code>;</code>. Also 0.3.</td></tr>
+    <tr><td><code>priority</code></td><td>Tie-break when two adapters return the same score. Higher wins. <code>testhub-json</code> is 100, <code>junit-xml</code> is 50.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="detection">Detection, and what each score actually means</h2>
+
+<p><code>detect</code> returns a confidence in <code>[0.0, 1.0]</code>. The registry
+asks every installed adapter in name order, rewinding the stream between each one, and
+keeps the highest score at or above <code>MIN_CONFIDENCE</code>, which is
+<code>0.3</code>. Ties break on <code>priority</code> and then on <code>name</code>, so
+two adapters that both answer 0.9 resolve identically on every machine and in every
+process rather than according to whichever entry point
+<code>importlib.metadata</code> happened to yield first.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Score</th><th>What it means</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>0.0</code></td><td>Definitely not mine. Return this rather than raising.</td><td>The stream starts with <code>&lt;</code> and your format is JSON.</td></tr>
+    <tr><td><code>0.3</code></td><td>The filename extension or the content type fits, and nothing else was checked. This is the floor for selection: a file can be chosen on its name alone, but only when nothing claims it harder.</td><td><code>results.hopper</code> whose content could not be read.</td></tr>
+    <tr><td><code>0.6</code></td><td>The content sniffs right &mdash; the root element or the required top-level keys are present.</td><td>A JSON object carrying both a <code>run</code> object and a <code>tests</code> array.</td></tr>
+    <tr><td><code>0.9</code></td><td>The content is unmistakably yours: a namespace, a generator tag, a marker key.</td><td>A <code>&lt;testsuites&gt;</code> root, or a top-level <code>"hopper":</code> key.</td></tr>
+    <tr><td><code>1.0</code></td><td>The content <em>declares itself</em> as yours. Reserve this for a real discriminator.</td><td><code>"kind": "test-hub-report"</code>.</td></tr>
+  </tbody>
+</table></div>
+
+<p><code>--format</code> on the CLI, or the <code>format</code> form field over REST,
+skips detection entirely and is reported with a <code>detection_confidence</code> of
+<code>1.0</code>, because nothing was guessed. An explicit format wins even when the
+content plainly looks like something else: you asked for a specific parser and are
+entitled to that parser's error message rather than a silent substitution.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Forcing the wrong parser on purpose">
+<pre><code>$ test-hub ingest results.hopper.json --project checkout-service --format junit-xml
+
+  error: this file is not well-formed XML: not well-formed (invalid token): line 1, column 0
+    reason: ParseError</code></pre>
+</div>
+
+<div class="note"><span class="note__title">A wart worth knowing</span>The CLI prints
+<code>adapter&nbsp; hopper (detected, 100% confident)</code> in both cases, because it
+renders the same <code>detection_confidence</code> field either way. The word
+&ldquo;detected&rdquo; is not evidence that detection ran; a confidence of exactly
+<code>1.0</code> is either a self-declaring document or an explicit
+<code>--format</code>.</div>
+
+<h3 id="detection-rules">Three rules for detect</h3>
+
+<ul>
+  <li><b>Never raise.</b> Return <code>0.0</code>. A detector that throws is caught,
+  logged at warning level and scored 0.0 anyway, but the log line is noise nobody
+  needs.</li>
+  <li><b>Read a few kilobytes, not the file.</b> <code>BaseAdapter.sniff(stream)</code>
+  reads <code>SNIFF_BYTES</code> (8192) and rewinds. The registry rewinds between
+  adapters too, so you are not obliged to be tidy &mdash; but an adapter that reads
+  200&nbsp;MB to make up its mind makes every import on the server slow, including the
+  ones it loses.</li>
+  <li><b>Never claim &ldquo;any JSON&rdquo; or &ldquo;any XML&rdquo;.</b> This is the
+  rule with teeth, and it has its own section below.</li>
+</ul>
+
+<h3 id="never-claim-everything">Why an adapter must not claim arbitrary JSON or XML</h3>
+
+<p>An adapter that answers 0.6 for every JSON object will swallow coverage reports,
+ESLint output and half of somebody's <code>package.json</code>. Each of those then
+arrives as a run with a plausible-looking pass rate that is silently wrong, and a wrong
+pass rate on a dashboard is worse than an import that failed, because nobody goes
+looking for it. Require a discriminator your format actually has.</p>
+
+<p>Test Hub holds itself to this. <code>testhub-json</code> refuses a JSON document with
+no <code>kind</code> key even though it has already read the whole thing, and unknown
+input produces a 415 whose body is the list of installed adapters:</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Nothing claimed this file">
+<pre><code>$ curl -s -w '\nHTTP %{http_code}\n' -X POST http://127.0.0.1:8000/api/v1/imports \
+    -F "file=@results.tap" -F "project=demo"
+
+{"error":"unknown_format","message":"no installed adapter recognised this input
+ (filename='results.tap', content_type='application/octet-stream').
+Installed adapters:
+  junit-xml        .xml, .junit, .junit.xml JUnit/xUnit XML from pytest, Surefire, Gradle, Jest, Playwright and friends.
+  testhub-json     .json                  Test Hub's own report and raw event JSON (kind: test-hub-report/-events).
+Pass --format &lt;name&gt; to skip detection and force one of these.", "detail": {...}}
+HTTP 415</code></pre>
+</div>
+
+<p>There is a second refusal that reads much like the first and comes from somewhere
+else entirely. When an adapter
+<em>does</em> claim a file &mdash; on its extension, or on a shape heuristic &mdash; and
+then cannot parse it, you get a 422 from that adapter rather than a 415 from the
+registry. A <code>.json</code> file with no <code>kind</code> takes this path, because
+<code>testhub-json</code> scores 0.3 on the extension alone:</p>
+
+<div class="codeblock" data-lang="output" data-caption="Claimed, then refused with a reason">
+<pre><code>{"error":"adapter_error","message":"this is JSON, but not a Test Hub document: the
+ top-level object must carry \"kind\": \"test-hub-report\" or \"kind\":
+ \"test-hub-events\". Found kind=None.","detail":{"kind":null,"adapter":"testhub-json"}}
+HTTP 422</code></pre>
+</div>
+
+<p>Both are refusals and neither is a guess. The distinction matters when you are
+writing a client: 415 means &ldquo;install an adapter or pass <code>--format</code>&rdquo;,
+422 means &ldquo;the right adapter looked at your file and it is wrong&rdquo;.</p>
+
+<h2 id="parse-context">ParseContext</h2>
+
+<p>Everything an adapter needs that is not in the file &mdash; the metadata a human
+supplied on the command line or in the REST request:</p>
+
+<div class="codeblock" data-lang="python" data-caption="test_hub.adapters.base.ParseContext">
+<pre><code>@dataclass(slots=True)
+class ParseContext:
+    workspace_id: uuid.UUID
+    project_key: str
+    run_id: uuid.UUID
+    name: str | None
+    team: str | None
+    component: str | None
+    test_type: TestType
+    trigger: TriggerType
+    context: RunContext
+    tags: list[str]
+    metadata: dict[str, Any]
+    source: str                  # default "urn:test-hub:import"
+    filename: str | None
+    max_text_bytes: int          # default 256 KiB; mirrors TEST_HUB_MAX_TEXT_FIELD_BYTES
+    warnings: WarningCollector
+
+    def next_sequence(self) -&gt; int: ...</code></pre>
+</div>
+
+<p>Merge what the file knows with what the context says, and <b>where the two conflict,
+the context wins</b>. The person typing <code>--environment staging</code> has more
+information than a report exported three hours ago on another machine. Only
+<code>workspace_id</code> and <code>project_key</code> are required; every other field
+has a default.</p>
+
+<p>Call <code>context.next_sequence()</code> for every event rather than counting
+yourself. Events emitted by nested generators then still come out strictly increasing,
+and a sub-parser handed the same context cannot restart the numbering at 1.</p>
+
+<p><code>max_text_bytes</code> is there so that an adapter never builds a 40&nbsp;MB
+string it is about to have truncated. Respect it when you concatenate captured
+output.</p>
+
+<h2 id="warnings">WarningCollector: warn rather than approximate</h2>
+
+<p>The contract with the user is one sentence: <b>anything you cannot represent exactly
+becomes a warning, not an exception and not a silent approximation.</b> A warning
+travels in the <code>ImportResult</code>, is stored on the run, is printed by the CLI
+and is returned by the API. It is how &ldquo;your report claimed 40 tests and I found
+19&rdquo; reaches a human.</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>context.warnings.add(
+    "unknown_status",
+    f"hopper outcome {word!r} has no canonical equivalent; recorded as unknown",
+    location="checkout/pay",
+)
+context.warnings.info("synthesized_timestamps", "the report had no timestamp; using import time")</code></pre>
+</div>
+
+<p><code>add()</code> takes a stable <code>code</code> that consumers match on, a
+<code>message</code> truncated at 512 characters, an optional <code>location</code>, a
+<code>severity</code> of <code>warning</code> (the default) or <code>info</code>, and
+any further keyword arguments, which land in <code>detail</code>. The collector is
+bounded at 500 warnings, then counts what it drops and appends a single
+<code>warnings_truncated</code> note &mdash; a pathological file must still produce a
+bounded response.</p>
+
+<p>Here is what four different warnings look like coming out of one deliberately
+awkward report:</p>
+
+<div class="codeblock" data-lang="output" data-caption="Real output from a report with a naive timestamp, an unknown test type, an unknown status word and a gap in its attempt numbering">
+<pre><code>  imported run 126f68ff-fd60-439d-8fa7-041e3feb1703
+  adapter   testhub-json (detected, 100% confident)
+  project   warn-demo
+  3 tests  2 passed  66.7% pass
+
+  4 parser warning(s):
+    naive_timestamp [run]: the report contains timestamps with no UTC offset; they are read as UTC
+    unknown_enum [run]: TestType 'chaos' is not a value Test Hub knows; using other
+    unknown_status [tests[0]]: status 'wobbly' is not a word Test Hub knows; recorded as unknown
+    attempt_renumbered [s]: attempt numbers [3] for 'b' were not 1..n; they were re-sequenced in the order given</code></pre>
+</div>
+
+<p>Codes the built-in adapters already use are worth reusing rather than inventing
+near-synonyms for: <code>unknown_status</code>, <code>unknown_enum</code>,
+<code>counts_mismatch</code>, <code>naive_timestamp</code>,
+<code>synthesized_timestamps</code>, <code>attempt_renumbered</code>,
+<code>invalid_slug</code>, <code>text_truncated</code>,
+<code>suite_output_lifted</code>, <code>status_disagrees</code>,
+<code>missing_test_name</code>, <code>workspace_override</code>. The full field list is
+on the <a href="canonical-schema.html#parser-warning">canonical schema</a> page.</p>
+
+<h2 id="identity">Derive identity through test_hub.domain.identity</h2>
+
+<p>Never invent test or suite ids, and never carry them from the file unless the file's
+ids are themselves derived the same way.</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>from test_hub.domain.identity import suite_id, test_identity
+
+suite = suite_id(project=context.project_key, suite_path="checkout/cart")
+test = test_identity(
+    project=context.project_key,
+    suite_path="checkout/cart",
+    test_name="adds an item",
+    class_name=None,
+    params={"currency": "EUR"},
+)</code></pre>
+</div>
+
+<p>Both are UUIDv5 in a fixed namespace, computed from <em>what the test is</em> and
+never from <em>when or where it ran</em>. That is not tidiness. It is the entire reason
+<code>GET /api/v1/tests/{id}</code> has a history to show. Hash a line number and every
+run invents a fresh set of tests: nothing compares, nothing trends, and no test is ever
+flaky because no test ever appears twice.</p>
+
+<p>You may omit <code>test_id</code> from a <code>test.finished</code> payload entirely
+and let the server derive it from the identity components you did supply. That is
+usually the right choice &mdash; one implementation, no drift. The exact hashed string,
+the normalization rules and the excluded fields are on the
+<a href="canonical-schema.html#identity">canonical schema</a> page.</p>
+
+<h2 id="retries">A retry is a new attempt, never an overwrite</h2>
+
+<p>Emit a second <code>test.finished</code> for the same <code>test_id</code> with
+<code>attempt_number</code> incremented. Nothing in Test Hub ever updates an attempt's
+outcome with a later one, because attempt&nbsp;1 failing and attempt&nbsp;2 passing is
+the entire observable definition of a flaky test, and an <code>UPDATE</code> erases
+it.</p>
+
+<p>The awkward part is formats that nest earlier attempts inside the final one. Maven
+Surefire writes a retried test as <em>one</em> <code>&lt;testcase&gt;</code>:</p>
+
+<div class="codeblock" data-lang="xml">
+<pre><code>&lt;testcase name="settlesBatchWithinSla" classname="com.example.ledger.SettlementIT" time="9.204"&gt;
+  &lt;flakyFailure message="settlement took 11.4s, SLA is 10s" type="org.opentest4j.AssertionFailedError"&gt;…&lt;/flakyFailure&gt;
+  &lt;flakyFailure message="settlement took 10.7s, SLA is 10s" type="org.opentest4j.AssertionFailedError"&gt;…&lt;/flakyFailure&gt;
+  &lt;system-out&gt;batch=BATCH-88421 rows=12044 elapsed=9.2s&lt;/system-out&gt;
+&lt;/testcase&gt;</code></pre>
+</div>
+
+<p><code>flakyFailure</code> and <code>flakyError</code> mean &ldquo;this failed, then a
+rerun passed&rdquo;, so the <code>&lt;testcase&gt;</code>'s own absent outcome is the
+pass. <code>rerunFailure</code> and <code>rerunError</code> mean &ldquo;the rerun failed
+too&rdquo;, so its own <code>&lt;failure&gt;</code> is the final word. Either way the
+nested elements are the <em>earlier</em> attempts and the element's own outcome is the
+<em>last</em> one. Importing the fixture above and reading the attempts back out of the
+store shows what that produces:</p>
+
+<div class="codeblock" data-lang="output" data-caption="Attempts stored for tests/fixtures/junit/surefire-retries.xml">
+<pre><code>name                      attempt  status   original_status
+------------------------  -------  -------  ---------------
+archivesSettledBatches          1  passed
+rejectsUnbalancedJournal        1  failed   rerunfailure
+rejectsUnbalancedJournal        2  error    rerunerror
+rejectsUnbalancedJournal        3  failed   failure
+settlesBatchWithinSla           1  failed   flakyfailure
+settlesBatchWithinSla           2  failed   flakyfailure
+settlesBatchWithinSla           3  passed
+
+  3 tests  2 passed  1 failed  1 flaky  66.7% pass</code></pre>
+</div>
+
+<p>Three tests from seven attempts. Collapsing <code>settlesBatchWithinSla</code> into a
+single &ldquo;passed&rdquo; is how a flaky suite stays invisible for a year, and
+splitting it into three tests is how a pass rate stops meaning anything.</p>
+
+<p>If your format has a <em>status word</em> for flakiness rather than attempt records,
+emit what you can and warn. <code>normalize_status</code> maps Playwright's
+<code>flaky</code> to <code>xfailed</code> so that it does not become
+<code>unknown</code>, but that is a fallback and not the intent: an adapter that can see
+the individual attempts should emit the individual attempts. Both definitions of
+flaky, within a run and across runs, are on the <a href="metrics.html">metrics</a>
+page.</p>
+
+<h2 id="statuses">Map the status word, and keep the original</h2>
+
+<p>Run the framework's word through <code>normalize_status</code> and put the raw word
+in <code>original_status</code>:</p>
+
+<div class="codeblock" data-lang="python">
+<pre><code>from test_hub.domain.status import TestStatus, normalize_status
+
+status = normalize_status(word)
+if status is TestStatus.UNKNOWN and word:
+    context.warnings.add("unknown_status", f"{word!r} has no canonical equivalent", location=path)</code></pre>
+</div>
+
+<p>The table is a lookup, not a heuristic, and it is deliberately generous: it already
+knows <code>ok</code>, <code>green</code>, <code>broken</code>, <code>crashed</code>,
+<code>inconclusive</code>, <code>unexpectedSuccess</code>, <code>notRunnable</code>,
+<code>expectedFailure</code> and about sixty more, with case, whitespace, hyphens and
+underscores collapsed before lookup. A word it does not know becomes
+<code>unknown</code> &mdash; never <code>passed</code> by accident &mdash; and your
+warning is what tells the user their dialect needs one more line in the table. The
+round trip verified in the worked example below is <code>"broken"</code> &rarr;
+<code>status: "error"</code>, <code>original_status: "broken"</code>.</p>
+
+<h2 id="safety">Safety: reports are untrusted uploads</h2>
+
+<p>Two of these are not negotiable.</p>
+
+<h3 id="defusedxml">Parse XML with defusedxml, never xml.etree</h3>
+
+<div class="codeblock" data-lang="python">
+<pre><code>from defusedxml.ElementTree import iterparse as defused_iterparse</code></pre>
+</div>
+
+<p>The two classic attacks are both entity tricks: a billion-laughs bomb that turns 200
+bytes into gigabytes of resident memory, and an XXE that makes the server read
+<code>/etc/passwd</code> and put it into a stack trace on somebody's dashboard. Both are
+refused at the parser rather than mitigated afterwards.
+<code>tests/fixtures/junit/billion-laughs.xml</code> and <code>xxe.xml</code> exist to
+keep that true; both currently produce this, with no expansion at all:</p>
+
+<div class="codeblock" data-lang="output" data-caption="Both fixtures, POSTed to /api/v1/imports">
+<pre><code>{"error":"adapter_error","message":"this XML declares a DTD or entities and was
+ refused before it was expanded. Entity expansion is how an 'XML bomb' turns a
+ 200-byte upload into gigabytes of memory, and how an XXE reads files off the
+ server, so Test Hub never processes it. Re-export the report without a
+ DOCTYPE.","detail":{"reason":"DTDForbidden"}}
+HTTP 422</code></pre>
+</div>
+
+<p>Add equivalent fixtures for your own format.</p>
+
+<h3 id="streaming">Stream; do not build a DOM</h3>
+
+<p>Use <code>iterparse</code> with <code>elem.clear()</code>, and detach each finished
+element from its parent as soon as you have turned it into events. The built-in JUnit
+adapter holds one suite's worth of elements plus the event it is currently yielding,
+whatever the file's size. A 200&nbsp;MB Surefire aggregate parsed into a DOM is a
+multi-gigabyte resident set and an out-of-memory kill, which to whoever is watching
+looks like Test Hub crashing rather than like a large upload.</p>
+
+<h3 id="paths-and-totals">Two more, less dramatic and no less real</h3>
+
+<ul>
+  <li><b>Do not build a path from anything in the file.</b> The artifact store refuses
+  names containing separators, <code>..</code>, NUL bytes or Windows device names
+  outright rather than repairing them. If you emit <code>artifact.published</code>
+  events, reduce a reported filename to its last component first.</li>
+  <li><b>Do not trust the file's own totals.</b> <code>tests="200" failures="3"</code>
+  is advisory and frequently wrong &mdash; a partially uploaded shard, a framework that
+  counts retries, a hand-edited file. Counts are folded from the cases actually parsed.
+  Emit a <code>counts_mismatch</code> warning when the file disagrees with you, rather
+  than hiding the disagreement or, worse, believing it.</li>
+</ul>
+
+<h2 id="registration">Registration is one entry point</h2>
+
+<div class="codeblock" data-lang="toml">
+<pre><code>[project.entry-points."test_hub.adapters"]
+hopper = "test_hub_hopper.adapter:HopperAdapter"</code></pre>
+</div>
+
+<p>The value may name a class, a zero-argument factory or a ready-made singleton; all
+three appear in the wild and all three work. The entry-point key is used only for
+logging &mdash; the registry keys on your adapter's <code>.name</code> attribute &mdash;
+so make the two match to save the next person some confusion.</p>
+
+<div class="note note--warn"><span class="note__title">Your package must be
+installed</span>Discovery is
+<code>importlib.metadata.entry_points(group="test_hub.adapters")</code>. A checkout on
+<code>PYTHONPATH</code> publishes no entry points and your adapter will not appear;
+<code>pip install .</code> or <code>pip install -e .</code> is what makes it exist. Test
+Hub's own two adapters carry a by-module-path fallback for exactly that situation, which
+is why <code>junit-xml</code> keeps working from a bare source tree and yours will
+not.</div>
+
+<p>An entry point that raises on import is skipped with a warning rather than taking the
+process down. One broken plugin must not stop the server parsing a JUnit file, and it
+must not be silent either:</p>
+
+<div class="codeblock" data-lang="output" data-caption="A plugin whose module raises at import time">
+<pre><code>$ test-hub formats
+
+skipping adapter entry point 'broken' (th_broken.adapter:BrokenAdapter): RuntimeError: this plugin was built against an older Test Hub
+
+  3 adapter(s) installed
+  …</code></pre>
+</div>
+
+<p>Registering a name that already exists replaces the earlier adapter and logs a
+warning. That is deliberate: it is how an operator overrides a built-in with a patched
+fork without uninstalling anything.</p>
+
+<h2 id="worked-example">A complete adapter package</h2>
+
+<p>Everything in this section was built and run in a real environment: the package
+installs, the tests pass, <code>test-hub formats</code> lists the adapter, and
+<code>test-hub ingest</code> imports a file with it. The format belongs to an invented
+runner called <b>Hopper</b>, chosen because it is small enough to read and has one of
+every problem.</p>
+
+<h3 id="the-format">The format</h3>
+
+<div class="codeblock" data-lang="json" data-caption="results.hopper.json">
+<pre><code>{
+  "hopper": {"version": 1, "suite": "checkout smoke"},
+  "started_at": "2026-04-02T09:00:00Z",
+  "finished_at": "2026-04-02T09:00:07Z",
+  "cases": [
+    {"group": "checkout/cart", "name": "adds an item", "outcome": "ok", "seconds": 0.42},
+    {"group": "checkout/cart", "name": "applies a coupon", "outcome": "broken", "seconds": 1.1,
+     "error": {"kind": "AssertionError", "message": "expected 9.99, got 10.99",
+               "trace": "at cart.spec:41"}},
+    {"group": "checkout/pay", "name": "charges the card", "outcome": "ok", "seconds": 2.3,
+     "params": {"currency": "EUR"}},
+    {"group": "checkout/pay", "name": "handles a decline", "outcome": "deferred", "seconds": 0.0}
+  ]
+}</code></pre>
+</div>
+
+<p>Note what makes it adaptable: a marker key to detect on, a stable grouping key per
+case, an optional attempt number, and a status vocabulary that mostly maps and sometimes
+does not. <code>deferred</code> is in there on purpose &mdash; it is the case that must
+warn instead of guessing.</p>
+
+<h3 id="the-pyproject">pyproject.toml</h3>
+
+<div class="codeblock" data-lang="toml" data-caption="test-hub-hopper/pyproject.toml">
+<pre><code>[build-system]
+requires = ["hatchling&gt;=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "test-hub-hopper"
+version = "0.1.0"
+description = "Test Hub adapter for Hopper runner reports."
+requires-python = "&gt;=3.11"
+dependencies = ["test-hub&gt;=0.1"]
+
+[project.entry-points."test_hub.adapters"]
+hopper = "test_hub_hopper.adapter:HopperAdapter"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/test_hub_hopper"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The domain classes are called TestStatus, TestRun… so pytest's default
+# `Test*` class rule would try to collect them. Narrow it, as Test Hub does.
+python_classes = ["*Tests", "Describe*"]</code></pre>
+</div>
+
+<p>Depend on <code>test-hub</code> itself. You import its domain models, and pinning a
+floor is how a user finds out that your adapter needs a newer schema version instead of
+discovering it through a <code>KeyError</code>.</p>
+
+<h3 id="the-adapter">src/test_hub_hopper/adapter.py</h3>
+
+<div class="codeblock" data-lang="python" data-caption="The whole adapter">
+<pre><code>"""Adapter for the Hopper runner's JSON report."""
+
+from __future__ import annotations
+
+import json
+import re
+import uuid
+from collections.abc import Iterator
+from datetime import UTC, datetime
+from typing import IO, Any
+
+from test_hub.adapters.base import SNIFF_BYTES, BaseAdapter, ParseContext
+from test_hub.domain.events import (
+    DomainEvent,
+    EventType,
+    RunFinishedData,
+    RunQueuedData,
+    RunStartedData,
+    SuiteFinishedData,
+    SuiteStartedData,
+    TestFinishedData,
+    make_event,
+)
+from test_hub.domain.identity import TEST_HUB_NAMESPACE, suite_id, test_identity
+from test_hub.domain.models import FailureDetail, utcnow
+from test_hub.domain.status import normalize_status
+from test_hub.errors import AdapterError
+
+_MARKER = re.compile(rb'"hopper"\s*:')
+
+
+def _event_id(source: str, run_id: uuid.UUID, sequence: int, kind: EventType) -&gt; uuid.UUID:
+    """Deterministic event id, so re-importing the same file applies nothing new."""
+    return uuid.uuid5(TEST_HUB_NAMESPACE, f"{source}\x1f{run_id}\x1f{sequence}\x1f{kind}")
+
+
+class HopperAdapter(BaseAdapter):
+    name = "hopper"
+    display_name = "Hopper JSON"
+    extensions = (".hopper.json", ".hopper")
+    content_types = ("application/vnd.hopper+json",)
+    priority = 10
+    description = "Hopper runner JSON reports (top-level \"hopper\" key)."
+
+    def detect(self, stream: IO[bytes], filename: str | None, content_type: str | None) -&gt; float:
+        head = self.sniff(stream, SNIFF_BYTES)
+        stripped = head.lstrip(b"\xef\xbb\xbf").lstrip()
+        if not stripped.startswith(b"{"):
+            return 0.0
+        if _MARKER.search(head):
+            return 0.9
+        return self.hint_score(filename, content_type)
+
+    def parse(self, stream: IO[bytes], context: ParseContext) -&gt; Iterator[DomainEvent]:
+        raw = stream.read()
+        try:
+            document: Any = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError) as exc:
+            raise AdapterError(f"not valid Hopper JSON: {exc}") from exc
+        if not isinstance(document, dict) or "hopper" not in document:
+            raise AdapterError('this JSON has no top-level "hopper" key')
+
+        header = document.get("hopper") or {}
+        if header.get("version") != 1:
+            context.warnings.add(
+                "unknown_report_version",
+                f"hopper report version {header.get('version')!r} is not 1; "
+                "parsing it as version 1",
+            )
+
+        run_id = context.run_id
+        source = context.source
+        started = _timestamp(document.get("started_at")) or utcnow()
+
+        def emit(kind: EventType, data: Any, when: datetime | None = None) -&gt; DomainEvent:
+            sequence = context.next_sequence()
+            return make_event(
+                kind,
+                run_id=run_id,
+                workspace_id=context.workspace_id,
+                sequence=sequence,
+                data=data,
+                source=source,
+                event_id=_event_id(source, run_id, sequence, kind),
+                time=when or started,
+            )
+
+        yield emit(
+            EventType.RUN_QUEUED,
+            RunQueuedData(
+                project_key=context.project_key,
+                name=context.name or header.get("suite"),
+                team=context.team,
+                component=context.component,
+                test_type=context.test_type,
+                trigger=context.trigger,
+                context=context.context,
+                tags=list(context.tags),
+                metadata=dict(context.metadata),
+            ),
+        )
+        yield emit(EventType.RUN_STARTED, RunStartedData(started_at=started))
+
+        seen: dict[str, uuid.UUID] = {}
+        for case in document.get("cases") or []:
+            path = str(case.get("group") or "hopper")
+            if path not in seen:
+                seen[path] = suite_id(project=context.project_key, suite_path=path)
+                yield emit(
+                    EventType.SUITE_STARTED,
+                    SuiteStartedData(suite_id=seen[path], name=path.rsplit("/", 1)[-1], path=path),
+                )
+
+            status, original = _status(case.get("outcome"), path, context)
+            failure = None
+            if case.get("error"):
+                failure = FailureDetail(
+                    type=str(case["error"].get("kind") or "Error"),
+                    message=str(case["error"].get("message") or ""),
+                    stack_trace=case["error"].get("trace"),
+                )
+            yield emit(
+                EventType.TEST_FINISHED,
+                TestFinishedData(
+                    test_id=test_identity(
+                        project=context.project_key,
+                        suite_path=path,
+                        test_name=str(case.get("name") or "(unnamed)"),
+                        params=case.get("params"),
+                    ),
+                    suite_id=seen[path],
+                    name=str(case.get("name") or "(unnamed)"),
+                    suite_path=path,
+                    params=_params(case.get("params")),
+                    attempt_number=int(case.get("attempt") or 1),
+                    status=status,
+                    original_status=original,
+                    duration_ms=_millis(case.get("seconds")),
+                    failure=failure,
+                    stdout=case.get("stdout"),
+                ),
+            )
+
+        for path, identity in seen.items():
+            yield emit(EventType.SUITE_FINISHED, SuiteFinishedData(suite_id=identity))
+
+        yield emit(
+            EventType.RUN_FINISHED,
+            RunFinishedData(finished_at=_timestamp(document.get("finished_at")) or utcnow()),
+        )
+
+
+def _status(word: Any, where: str, context: ParseContext):
+    status = normalize_status(str(word or ""))
+    if str(status) == "unknown" and word:
+        context.warnings.add(
+            "unknown_status",
+            f"hopper outcome {word!r} has no canonical equivalent; recorded as unknown",
+            location=where,
+        )
+    return status, (str(word) if word else None)
+
+
+def _params(value: Any) -&gt; str | None:
+    if value in (None, "", {}, []):
+        return None
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, sort_keys=True, separators=(",", "="))
+
+
+def _millis(seconds: Any) -&gt; int | None:
+    try:
+        return max(0, round(float(seconds) * 1000))
+    except (TypeError, ValueError):
+        return None
+
+
+def _timestamp(value: Any) -&gt; datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)</code></pre>
+</div>
+
+<p>Three details in there are the ones that matter.</p>
+
+<ul>
+  <li><b>Event ids are derived, not random.</b> <code>make_event</code> defaults
+  <code>id</code> to a fresh UUIDv4, which would make re-importing the same file apply
+  everything twice. <code>_event_id</code> hashes
+  <code>(source, run_id, sequence, type)</code> instead, so a repeated import of the same
+  file into the same run is a no-op by construction. Both built-in adapters do exactly
+  this. The flip side is real and worth stating: two <em>different</em> files imported
+  into one <code>run_id</code> collide on those ids and lose events. One file, one
+  run.</li>
+  <li><b>Every suite is announced before any result arrives.</b>
+  <code>suite.started</code> is emitted the first time a group is seen and all
+  <code>suite.finished</code> events come at the end, because a dashboard that subscribes
+  mid-import needs the tree before the leaves.</li>
+  <li><b>The run's own outcome is not emitted.</b> <code>RunFinishedData</code> carries
+  no status here; the server folds it from the attempts. Sending one would be ignored
+  anyway for everything except <code>cancelled</code>.</li>
+</ul>
+
+<h3 id="the-tests">tests/test_hopper_adapter.py</h3>
+
+<p>An adapter's test suite has a shape. These are the questions worth answering, and this
+file answers each of them once: does it claim its own format, does it refuse other
+people's, does it leave the stream where it found it, is identity derived rather than
+invented, is a retry a second attempt, is a re-import idempotent, does the original
+status word survive, does an unmappable word warn instead of guessing, and does broken
+input raise <code>AdapterError</code> rather than crashing.</p>
+
+<div class="codeblock" data-lang="python" data-caption="What a third-party adapter has to prove about itself">
+<pre><code>"""What a third-party adapter has to prove about itself."""
+
+from __future__ import annotations
+
+import io
+import json
+import uuid
+
+import pytest
+
+from test_hub.adapters.base import MIN_CONFIDENCE, ParseContext
+from test_hub.domain.events import EventType
+# Aliased: pytest collects any module-level `test_*` name, imports included.
+from test_hub.domain.identity import test_identity as compute_identity
+from test_hub.domain.status import TestStatus
+from test_hub.errors import AdapterError
+from test_hub_hopper import HopperAdapter
+
+REPORT = {
+    "hopper": {"version": 1, "suite": "checkout smoke"},
+    "started_at": "2026-04-02T09:00:00Z",
+    "finished_at": "2026-04-02T09:00:07Z",
+    "cases": [
+        {"group": "checkout/cart", "name": "adds an item", "outcome": "ok", "seconds": 0.42},
+        {"group": "checkout/cart", "name": "adds an item", "outcome": "ok", "seconds": 0.40,
+         "attempt": 2},
+        {"group": "checkout/pay", "name": "charges the card", "outcome": "broken",
+         "seconds": 2.3, "error": {"kind": "AssertionError", "message": "boom"}},
+        {"group": "checkout/pay", "name": "handles a decline", "outcome": "deferred"},
+    ],
+}
+
+
+def stream(document: object) -&gt; io.BytesIO:
+    return io.BytesIO(json.dumps(document).encode("utf-8"))
+
+
+def context() -&gt; ParseContext:
+    return ParseContext(
+        workspace_id=uuid.uuid4(), project_key="checkout-service", run_id=uuid.uuid4()
+    )
+
+
+class DetectionTests:
+    def test_claims_its_own_format(self) -&gt; None:
+        assert HopperAdapter().detect(stream(REPORT), "results.hopper.json", None) == 0.9
+
+    def test_does_not_claim_unrelated_json(self) -&gt; None:
+        score = HopperAdapter().detect(stream({"tests": [], "coverage": 91}), "cov.json", None)
+        assert score &lt; MIN_CONFIDENCE
+
+    def test_does_not_claim_xml(self) -&gt; None:
+        assert HopperAdapter().detect(io.BytesIO(b"&lt;testsuites/&gt;"), "r.xml", None) == 0.0
+
+    def test_leaves_the_stream_where_it_found_it(self) -&gt; None:
+        handle = stream(REPORT)
+        HopperAdapter().detect(handle, "results.hopper.json", None)
+        assert handle.tell() == 0
+
+
+class ParsingTests:
+    def test_emits_the_expected_event_shape(self) -&gt; None:
+        events = list(HopperAdapter().parse(stream(REPORT), context()))
+        types = [event.type for event in events]
+        assert types[0] is EventType.RUN_QUEUED
+        assert types[1] is EventType.RUN_STARTED
+        assert types[-1] is EventType.RUN_FINISHED
+        assert types.count(EventType.TEST_FINISHED) == 4
+        assert [event.sequence for event in events] == list(range(1, len(events) + 1))
+
+    def test_identity_is_derived_not_invented(self) -&gt; None:
+        events = list(HopperAdapter().parse(stream(REPORT), context()))
+        first = next(e for e in events if e.type is EventType.TEST_FINISHED)
+        assert uuid.UUID(first.data["test_id"]) == compute_identity(
+            project="checkout-service", suite_path="checkout/cart", test_name="adds an item"
+        )
+
+    def test_a_retry_is_a_second_attempt(self) -&gt; None:
+        events = list(HopperAdapter().parse(stream(REPORT), context()))
+        cart = [
+            e.data for e in events
+            if e.type is EventType.TEST_FINISHED and e.data["suite_path"] == "checkout/cart"
+        ]
+        assert [d["attempt_number"] for d in cart] == [1, 2]
+        assert len({d["test_id"] for d in cart}) == 1
+
+    def test_reimporting_the_same_file_produces_the_same_event_ids(self) -&gt; None:
+        run_id = uuid.uuid4()
+        workspace = uuid.uuid4()
+
+        def once() -&gt; list[str]:
+            ctx = ParseContext(
+                workspace_id=workspace, project_key="checkout-service", run_id=run_id
+            )
+            return [str(event.id) for event in HopperAdapter().parse(stream(REPORT), ctx)]
+
+        assert once() == once()
+
+    def test_the_original_word_survives_normalization(self) -&gt; None:
+        events = list(HopperAdapter().parse(stream(REPORT), context()))
+        pay = next(
+            e.data for e in events
+            if e.type is EventType.TEST_FINISHED and e.data["name"] == "charges the card"
+        )
+        assert pay["status"] == TestStatus.ERROR
+        assert pay["original_status"] == "broken"
+
+
+class WarningTests:
+    def test_an_unmappable_outcome_warns_instead_of_guessing(self) -&gt; None:
+        ctx = context()
+        list(HopperAdapter().parse(stream(REPORT), ctx))
+        codes = [warning.code for warning in ctx.warnings.to_list()]
+        assert "unknown_status" in codes
+
+    def test_a_future_report_version_warns_and_still_parses(self) -&gt; None:
+        ctx = context()
+        document = {**REPORT, "hopper": {"version": 2}}
+        events = list(HopperAdapter().parse(stream(document), ctx))
+        assert any(e.type is EventType.TEST_FINISHED for e in events)
+        assert "unknown_report_version" in [w.code for w in ctx.warnings.to_list()]
+
+
+class RefusalTests:
+    def test_json_without_the_marker_is_refused(self) -&gt; None:
+        with pytest.raises(AdapterError):
+            list(HopperAdapter().parse(stream({"tests": []}), context()))
+
+    def test_broken_json_is_an_adapter_error_not_a_crash(self) -&gt; None:
+        with pytest.raises(AdapterError):
+            list(HopperAdapter().parse(io.BytesIO(b"{not json"), context()))</code></pre>
+</div>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ pytest -q
+.............                                                            [100%]
+13 passed in 0.07s</code></pre>
+</div>
+
+<p>The aliased import in the header is not decoration. <code>from
+test_hub.domain.identity import test_identity</code> puts a module-level callable named
+<code>test_identity</code> in scope, pytest collects it as a test, and you get a
+confusing <code>fixture 'project' not found</code> error sitting next to thirteen
+passing tests. Test Hub's own suite aliases the same import for the same reason, and the
+<code>python_classes</code> setting in <code>pyproject.toml</code> is there because the
+domain classes are called <code>TestStatus</code> and <code>TestRun</code> and pytest's
+default <code>Test*</code> rule would try to collect them too.</p>
+
+<h3 id="install-and-check">Installing and checking it</h3>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ pip install .
+
+$ test-hub formats
+
+  3 adapter(s) installed
+
+  hopper  Hopper JSON
+      Hopper runner JSON reports (top-level "hopper" key).
+      extensions: .hopper.json, .hopper
+
+  junit-xml  JUnit XML
+      JUnit/xUnit XML from pytest, Surefire, Gradle, Jest, Playwright and friends.
+      extensions: .xml, .junit, .junit.xml
+
+  testhub-json  Test Hub JSON
+      Test Hub's own report and raw event JSON (kind: test-hub-report/-events).
+      extensions: .json
+
+  Force one with --format &lt;name&gt;. Add more by installing an adapter package.
+
+$ test-hub ingest results.hopper.json --project checkout-service --type smoke
+
+  imported run 0d1084a7-0e57-4dc4-9239-71701c8c5389
+  adapter   hopper (detected, 90% confident)
+  project   checkout-service
+  stored in /private/tmp/th-site-hopper
+  4 tests  2 passed  1 error  50.0% pass
+
+  1 parser warning(s):
+    unknown_status [checkout/pay]: hopper outcome 'deferred' has no canonical equivalent; recorded as unknown</code></pre>
+</div>
+
+<p>Four cases, four tests, and one unmapped status word that surfaces as a warning rather
+than as a wrong pass rate. That warning is the adapter doing its job. Restart
+<code>test-hub serve</code> and the same adapter appears in
+<code>GET /api/v1/adapters</code>, and every <code>POST /api/v1/imports</code> of a
+Hopper file is detected and parsed &mdash; no configuration and no change to Test Hub
+itself.</p>
+
+<h2 id="checklist">The rules, in one place</h2>
+
+<div class="cards">
+  <div><h4>Never claim what you cannot identify</h4><p>No adapter may answer above
+  <code>0.0</code> for arbitrary JSON or arbitrary XML. Require a discriminator your
+  format really has. A 415 is a better outcome than a wrong number.</p></div>
+  <div><h4>defusedxml only</h4><p>Never <code>xml.etree</code>. DTDs and external
+  entities are refused before expansion, not sanitized afterwards.</p></div>
+  <div><h4>Stream, do not build a DOM</h4><p><code>iterparse</code> plus
+  <code>clear()</code>. Memory should be a function of one suite, not of the upload
+  size.</p></div>
+  <div><h4>Warn rather than approximate</h4><p>Anything you cannot represent exactly is a
+  <code>ParserWarning</code> with a stable code. Never an exception, and never a quiet
+  guess.</p></div>
+  <div><h4>A retry is a new attempt</h4><p>Increment <code>attempt_number</code>; never
+  overwrite an outcome. The disagreement between attempts <em>is</em> the flakiness
+  signal.</p></div>
+  <div><h4>Derive identity</h4><p>Always through
+  <code>test_hub.domain.identity</code>, never from timestamps, line numbers, shards or
+  run ids.</p></div>
+</div>
+
+<h2 id="wanted">Formats we would like</h2>
+
+<p>The first release ships <b>exactly two</b> adapters, <code>junit-xml</code> and
+<code>testhub-json</code>, and says so plainly rather than advertising a matrix of
+formats it does not have. JUnit XML covers a lot of the world by accident &mdash;
+pytest, Surefire, Gradle, Jest, Playwright, Mocha and most of the rest can all emit it
+&mdash; which is precisely why it was the one to build first.</p>
+
+<p>Everything below deserves a real adapter rather than a lossy JUnit export, and every
+one of them is a package somebody else can own and release on their own schedule.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Format</th><th>Why it deserves its own adapter rather than a JUnit export</th></tr></thead>
+  <tbody>
+    <tr><td><b>TRX</b> (MSTest, <code>dotnet test</code>)</td><td>Carries <code>Outcome</code> words JUnit has no room for &mdash; <code>NotRunnable</code>, <code>Inconclusive</code>, <code>Timeout</code> &mdash; all of which <code>normalize_status</code> already maps. It also has real per-test start and end times, which JUnit does not.</td></tr>
+    <tr><td><b>NUnit 3</b></td><td>Native <code>&lt;test-case&gt;</code> with attachments, properties, and its own <code>&lt;reason&gt;</code>/<code>&lt;failure&gt;</code> split.</td></tr>
+    <tr><td><b>Cucumber / Gherkin JSON</b></td><td>Step-level results. Flattening a scenario to one test throws away exactly the information a BDD suite exists to produce.</td></tr>
+    <tr><td><b>Jest</b> (<code>--json</code>)</td><td>Native output has per-assertion failure messages, <code>ancestorTitles</code> for the suite tree, and <code>numRetries</code>, none of which survive its JUnit reporter.</td></tr>
+    <tr><td><b>Playwright</b> (<code>--reporter=json</code>)</td><td>Attempts, traces, screenshots, videos and projects (browser &times; config) as first-class fields. This is the one where the JUnit export loses the most.</td></tr>
+    <tr><td><b>Maven Surefire</b> (native)</td><td>The <code>rerunFailure</code>/<code>flakyFailure</code> handling is already in <code>junit-xml</code>, but Surefire's own report XML additionally carries the full system-out per test and the rerun ordering.</td></tr>
+    <tr><td><b>Gradle test XML</b></td><td>Same family, different quirks around nested suites and <code>standard-out</code> placement.</td></tr>
+    <tr><td><b>Go</b> (<code>go test -json</code>)</td><td>A stream, not a document: an adapter could publish live over <a href="events.html">POST /runs/{id}/events</a> as the events arrive. Subtests give a real hierarchy.</td></tr>
+    <tr><td><b>Rust</b> (<code>cargo test</code> JSON, <code>cargo-nextest</code>)</td><td>Nextest has retries and per-test timing; the libtest JSON stream has neither in a JUnit export.</td></tr>
+    <tr><td><b>Performance formats</b> (JMeter JTL, k6 JSON, Gatling)</td><td>These do not fit the pass/fail model cleanly, and pretending they do is worse than modelling them properly. <code>TestType.PERFORMANCE</code> exists; the interesting design question is what a &ldquo;test&rdquo; is when the answer is a latency distribution.</td></tr>
+  </tbody>
+</table></div>
+
+<p>If you write one, the checklist is the six cards above. Everything else is your
+format's problem, which is the point of putting the seam where it is.</p>

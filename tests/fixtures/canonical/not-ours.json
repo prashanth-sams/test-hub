@@ -1,0 +1,15 @@
+{
+  "name": "notification-gateway",
+  "version": "3.1.0",
+  "scripts": {
+    "test": "vitest run --reporter=junit --outputFile=reports/junit.xml"
+  },
+  "coverage": {
+    "lines": {"total": 4821, "covered": 4390, "pct": 91.06},
+    "branches": {"total": 912, "covered": 764, "pct": 83.77}
+  },
+  "results": [
+    {"suite": "webhooks", "ok": true},
+    {"suite": "signing", "ok": false}
+  ]
+}

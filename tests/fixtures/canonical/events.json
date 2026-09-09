@@ -1,0 +1,142 @@
+{
+  "kind": "test-hub-events",
+  "schema_version": 1,
+  "events": [
+    {
+      "specversion": "1.0",
+      "id": "0f3b6a2c-1d4e-4a5b-8c9d-0e1f2a3b4c5d",
+      "source": "urn:test-hub:publisher:ledger-worker",
+      "type": "run.queued",
+      "time": "2026-03-16T04:00:00Z",
+      "workspace_id": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+      "run_id": "b7d3e9f1-2a4c-4e6f-8081-92a3b4c5d6e7",
+      "sequence": 1,
+      "data": {
+        "project_key": "ledger-worker",
+        "name": "hourly reconciliation",
+        "team": "ledger",
+        "component": "ledger-worker",
+        "test_type": "integration",
+        "trigger": "schedule",
+        "context": {
+          "framework": "junit5",
+          "language": "java",
+          "environment": "prod",
+          "branch": "main",
+          "commit_sha": "1a2b3c4d5e6f70819a2b3c4d5e6f708192a3b4c5",
+          "ci_provider": "jenkins"
+        },
+        "tags": ["hourly"],
+        "metadata": {},
+        "expected_tests": 2
+      }
+    },
+    {
+      "specversion": "1.0",
+      "id": "1f3b6a2c-1d4e-4a5b-8c9d-0e1f2a3b4c5d",
+      "source": "urn:test-hub:publisher:ledger-worker",
+      "type": "run.started",
+      "time": "2026-03-16T04:00:01Z",
+      "workspace_id": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+      "run_id": "b7d3e9f1-2a4c-4e6f-8081-92a3b4c5d6e7",
+      "sequence": 2,
+      "data": {"started_at": "2026-03-16T04:00:01Z", "project_key": "ledger-worker"}
+    },
+    {
+      "specversion": "1.0",
+      "id": "2f3b6a2c-1d4e-4a5b-8c9d-0e1f2a3b4c5d",
+      "source": "urn:test-hub:publisher:ledger-worker",
+      "type": "suite.started",
+      "time": "2026-03-16T04:00:01Z",
+      "workspace_id": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+      "run_id": "b7d3e9f1-2a4c-4e6f-8081-92a3b4c5d6e7",
+      "sequence": 3,
+      "data": {
+        "suite_id": "3d1f8e0a-4b5c-4d6e-9f80-1a2b3c4d5e6f",
+        "name": "ReconciliationIT",
+        "path": "com/example/ledger/ReconciliationIT",
+        "started_at": "2026-03-16T04:00:01Z",
+        "metadata": {"shard": "1/1"}
+      }
+    },
+    {
+      "specversion": "1.0",
+      "id": "3f3b6a2c-1d4e-4a5b-8c9d-0e1f2a3b4c5d",
+      "source": "urn:test-hub:publisher:ledger-worker",
+      "type": "test.finished",
+      "time": "2026-03-16T04:00:09Z",
+      "workspace_id": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+      "run_id": "b7d3e9f1-2a4c-4e6f-8081-92a3b4c5d6e7",
+      "sequence": 4,
+      "data": {
+        "suite_id": "3d1f8e0a-4b5c-4d6e-9f80-1a2b3c4d5e6f",
+        "name": "matchesLedgerAgainstBankFeed",
+        "class_name": "com.example.ledger.ReconciliationIT",
+        "suite_path": "com/example/ledger/ReconciliationIT",
+        "attempt_number": 1,
+        "status": "passed",
+        "original_status": "PASSED",
+        "started_at": "2026-03-16T04:00:01Z",
+        "finished_at": "2026-03-16T04:00:09Z",
+        "duration_ms": 8000
+      }
+    },
+    {
+      "specversion": "1.0",
+      "id": "4f3b6a2c-1d4e-4a5b-8c9d-0e1f2a3b4c5d",
+      "source": "urn:test-hub:publisher:ledger-worker",
+      "type": "test.finished",
+      "time": "2026-03-16T04:00:21Z",
+      "workspace_id": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+      "run_id": "b7d3e9f1-2a4c-4e6f-8081-92a3b4c5d6e7",
+      "sequence": 5,
+      "data": {
+        "suite_id": "3d1f8e0a-4b5c-4d6e-9f80-1a2b3c4d5e6f",
+        "name": "flagsUnmatchedTransactions",
+        "class_name": "com.example.ledger.ReconciliationIT",
+        "suite_path": "com/example/ledger/ReconciliationIT",
+        "attempt_number": 1,
+        "status": "failed",
+        "original_status": "FAILURE",
+        "duration_ms": 11800,
+        "failure": {
+          "type": "org.opentest4j.AssertionFailedError",
+          "message": "expected 0 unmatched rows, found 3",
+          "stack_trace": "org.opentest4j.AssertionFailedError: expected 0 unmatched rows, found 3\n\tat com.example.ledger.ReconciliationIT.flagsUnmatchedTransactions(ReconciliationIT.java:97)"
+        },
+        "stderr": "WARN ReconciliationRunner - bank feed lagged by 4 minutes"
+      }
+    },
+    {
+      "specversion": "1.0",
+      "id": "5f3b6a2c-1d4e-4a5b-8c9d-0e1f2a3b4c5d",
+      "source": "urn:test-hub:publisher:ledger-worker",
+      "type": "suite.finished",
+      "time": "2026-03-16T04:00:21Z",
+      "workspace_id": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+      "run_id": "b7d3e9f1-2a4c-4e6f-8081-92a3b4c5d6e7",
+      "sequence": 6,
+      "data": {
+        "suite_id": "3d1f8e0a-4b5c-4d6e-9f80-1a2b3c4d5e6f",
+        "finished_at": "2026-03-16T04:00:21Z",
+        "duration_ms": 20000
+      }
+    },
+    {
+      "specversion": "1.0",
+      "id": "6f3b6a2c-1d4e-4a5b-8c9d-0e1f2a3b4c5d",
+      "source": "urn:test-hub:publisher:ledger-worker",
+      "type": "run.finished",
+      "time": "2026-03-16T04:00:22Z",
+      "workspace_id": "b037a4b3-53f8-5326-a5d5-f5fad3c31052",
+      "run_id": "b7d3e9f1-2a4c-4e6f-8081-92a3b4c5d6e7",
+      "sequence": 7,
+      "data": {
+        "finished_at": "2026-03-16T04:00:22Z",
+        "status": "failed",
+        "duration_ms": 21000,
+        "metadata": {}
+      }
+    }
+  ]
+}

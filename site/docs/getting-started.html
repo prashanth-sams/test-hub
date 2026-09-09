@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · Test Hub</title>
+<meta name="description" content="Install Test Hub, put data in it, and read that data — locally, from CI, or as one HTML file you can email.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="Getting started · Test Hub">
+<meta property="og:description" content="Install Test Hub, put data in it, and read that data — locally, from CI, or as one HTML file you can email.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/getting-started.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html" aria-current="page">Docs</a><a href="../docs/dashboard-tour.html">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html">CLI</a><a href="../docs/deployment.html">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link is-active" href="../docs/getting-started.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link" href="../docs/dashboard-tour.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link" href="../docs/cli-reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link" href="../docs/configuration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link" href="../docs/python-sdk.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link" href="../docs/events.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link" href="../docs/metrics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link" href="../docs/deployment.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link" href="../docs/ci-integrations.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link" href="../docs/contributing.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>Getting started</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Start here</span>
+  <h1>Getting started</h1>
+  <p class="lede">Three commands get you a dashboard with realistic data in it. The rest of this page is the four things you will actually do afterwards: import a report you already have, publish from a pipeline, send somebody a file, and decide where the data lives.</p>
+</header>
+<h2 id="install">Install it</h2>
+
+<p>Test Hub is one Python package. It needs Python 3.11 or newer and nothing else — no
+Node, no database server, no container runtime. The dashboard is hand-written CSS and
+JavaScript shipped inside the wheel, so there is no build step to run and nothing to
+fetch from a CDN.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="From PyPI"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">From PyPI</span></div>
+<pre><code>$ pip install test-hub</code></pre>
+</div>
+
+<p>That gives you the <code>test-hub</code> command, the <code>test_hub</code> import package
+and the Python publishing SDK. Storage is SQLite in a file, artifacts are a directory of
+files, and both are created on first use.</p>
+
+<h2 id="see-it-with-data">See it with data in it</h2>
+
+<p>An empty dashboard tells you nothing about whether you want one. <code>test-hub demo</code>
+invents a plausible organization — five projects across three teams, two weeks of history,
+real failures, genuinely flaky tests, and one run that is still going so the live indicator
+has something to show.</p>
+
+<ol class="steps">
+  <li>
+    <h3>Seed the sample data</h3>
+    <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub demo</code></pre>
+    </div>
+    <p>It prints what it made:</p>
+    <div class="codeblock" data-lang="output" data-caption="Real output, with the log lines trimmed"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">Real output, with the log lines trimmed</span></div>
+<pre><code>  seeding sample data…
+
+  sample data created
+  5 projects, 31 runs, 258 test results, 270 attempts
+  23 failures and 12 flaky retries, so the red and amber states have something to show
+  one run is still open: f0c9dd0b-4534-4e9c-8ede-844121dd118b
+  stored in /private/tmp/th-docs-site
+
+  next:  test-hub serve</code></pre>
+    </div>
+  </li>
+  <li>
+    <h3>Start the server</h3>
+    <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub serve</code></pre>
+    </div>
+    <div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>  Test Hub  http://127.0.0.1:8000
+  dashboard http://127.0.0.1:8000/
+  API docs  http://127.0.0.1:8000/api/docs
+  data      /Users/you/Library/Application Support/test-hub</code></pre>
+    </div>
+    <p>It binds loopback. Nothing else on the network can reach it, which is why it does
+    not ask you for a token yet. Opening it up is a separate, deliberate step — see
+    <a href="security.html#binding">Security</a>.</p>
+  </li>
+  <li>
+    <h3>Open the dashboard</h3>
+    <p><a href="http://127.0.0.1:8000/">http://127.0.0.1:8000/</a>. The
+    <a href="dashboard-tour.html">dashboard tour</a> walks through what every panel means;
+    the short version is Overview for "how is the portfolio doing", Runs for finding one,
+    and the run and test pages for "why did this go red".</p>
+  </li>
+</ol>
+
+<div class="note note--tip"><span class="note__title">Tip</span>Point
+<code>TEST_HUB_DATA_DIR</code> at a scratch directory while you are experimenting, and the
+demo data never touches the store you keep. Everything below in this page was produced
+with <code>TEST_HUB_DATA_DIR=/tmp/th-docs-site</code>.</div>
+
+<h2 id="import-a-report">Import a report you already have</h2>
+
+<p>If anything in your build writes JUnit XML — pytest with <code>--junitxml</code>, Maven
+Surefire, Gradle, Jest, Playwright, Go's <code>gotestsum</code>, .NET through a converter —
+you already have an input. <code>ingest</code> parses it into the local store.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="One report, with the metadata that makes it findable later"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">One report, with the metadata that makes it findable later</span></div>
+<pre><code>$ test-hub ingest results.xml \
+    --project payments-api \
+    --team payments \
+    --component checkout \
+    --environment staging \
+    --type component</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="Actual output for a five-test Surefire file with one retry in it"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">Actual output for a five-test Surefire file with one retry in it</span></div>
+<pre><code>  imported run 5c45c0b4-bdb1-4686-828f-cb3149216918
+  adapter   junit-xml (detected, 90% confident)
+  project   payments-api
+  stored in /private/tmp/th-docs-site
+  5 tests  2 passed  1 failed  1 error  1 skipped  1 flaky  50.0% pass
+
+  1 parser warning(s):
+    naive_timestamp [testsuite[CheckoutIT]]: timestamps in this report carry no UTC offset; they are read as UTC</code></pre>
+</div>
+
+<p>Three things in that output are worth reading rather than skimming.</p>
+
+<ul>
+  <li><b>The adapter, and how confident detection was.</b> Nothing guessed silently. A
+  <code>&lt;testsuites&gt;</code> root scores 0.9; a file that declares
+  <code>"kind": "test-hub-report"</code> scores 1.0. If detection picks wrong, <code>--format
+  junit-xml</code> overrules it — see <a href="adapters.html#detection">Adapters</a>.</li>
+  <li><b>The counts are folded, not copied.</b> The file's own
+  <code>tests="5" failures="1"</code> attributes were advisory. Test Hub counted the cases it
+  actually parsed. Where the two disagree you get a <code>counts_mismatch</code> warning
+  instead of a wrong number.</li>
+  <li><b>Five tests, six attempts, one flaky.</b> The file had a Surefire
+  <code>&lt;flakyFailure&gt;</code> in it: a test that failed and then passed on a rerun.
+  Test Hub stores both attempts, counts the test once through its last one, and flags it
+  flaky. <a href="metrics.html#flaky">How that is defined.</a></li>
+</ul>
+
+<div class="note"><span class="note__title">Note</span>Every flag above except
+<code>--project</code> is optional, and every one of them is worth setting. They are what
+the filters filter on, and — with the exception of <code>--project</code> — they are also
+what makes a run <em>comparable</em> to the previous one. A run with no environment and no
+branch is compared against other runs with no environment and no branch.</div>
+
+<h2 id="publish-from-ci">Publish from CI to a shared server</h2>
+
+<p>The same import, aimed at a server somebody else is running. <code>publish</code> is
+<code>ingest</code> over HTTP: same adapters, same parsing, same result object.</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ export TEST_HUB_TOKEN='ths_…'          # from `test-hub token create`
+$ test-hub publish results.xml \
+    --url https://test-hub.internal \
+    --project payments-api \
+    --team payments \
+    --type component \
+    --branch "$GIT_BRANCH" \
+    --commit "$GIT_COMMIT" \
+    --token-env TEST_HUB_TOKEN</code></pre>
+</div>
+
+<p>There is deliberately no <code>--token</code> flag. A token on a command line is visible
+in <code>ps</code> to every other user on the machine, lands in shell history, and appears
+in the CI log whenever a step is echoed. <code>--token-env</code> and <code>--token-file</code>
+are the two supported ways in.</p>
+
+<p>You do not need Test Hub installed on the build agent at all. This is a complete
+publisher:</p>
+
+<div class="codeblock" data-lang="shell" data-caption="curl is a first-class client, not a fallback"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">curl is a first-class client, not a fallback</span></div>
+<pre><code>curl -X POST https://test-hub.internal/api/v1/imports \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -F "file=@target/surefire-reports/TEST-com.example.LedgerTest.xml" \
+  -F "project=ledger-worker" \
+  -F "team=payments" \
+  -F "type=integration" \
+  -F "environment=staging" \
+  -F "branch=$GIT_BRANCH" \
+  -F "commit=$GIT_COMMIT"</code></pre>
+</div>
+
+<p>Worked pipelines for GitHub Actions, GitLab CI, Jenkins and friends are on the
+<a href="ci-integrations.html">CI integrations</a> page.</p>
+
+<h2 id="one-file">Send one HTML file to somebody who has no server</h2>
+
+<p>Not everyone who needs to see a result will install anything or be let through a
+firewall. <code>export</code> writes the whole dashboard, the CSS, the JavaScript and the
+data into a single file.</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub export --output test-hub-report.html --title "Payments nightly"</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
+<pre><code>  wrote /tmp/th-report.html
+  854 KB, self-contained — no network needed to open it</code></pre>
+</div>
+
+<p>It is the <em>same</em> dashboard — the same rendering code, reading a frozen snapshot
+object instead of talking to a REST API. There is no second renderer that could drift. Open
+it from <code>file://</code>, attach it to a ticket, publish it as a CI artifact.</p>
+
+<p>To export straight from a directory of report files without touching your store at all —
+which is what you want on a build agent — pass <code>--input</code>:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub export --input ./results --output report.html --project payments-api</code></pre>
+</div>
+
+<h2 id="where-data-lives">Where the data lives</h2>
+
+<p>By default, in the platform's user-data directory — not in whatever folder you happened
+to be standing in, so that <code>test-hub serve</code> run from two different projects is one
+Test Hub rather than two.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Platform</th><th>Default data directory</th></tr></thead>
+  <tbody>
+    <tr><td>macOS</td><td><code>~/Library/Application Support/test-hub</code></td></tr>
+    <tr><td>Linux</td><td><code>$XDG_DATA_HOME/test-hub</code>, or <code>~/.local/share/test-hub</code></td></tr>
+    <tr><td>Windows</td><td><code>%LOCALAPPDATA%\test-hub</code></td></tr>
+  </tbody>
+</table></div>
+
+<p>Inside it: <code>test-hub.db</code> (SQLite, in WAL mode) and <code>artifacts/</code>
+(content-addressed files). The directory is created with mode <code>0700</code> where the
+filesystem supports it. Override it with <code>--data-dir</code> or
+<code>TEST_HUB_DATA_DIR</code>, both of which mean the same thing.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Keep an experiment out of your real store"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">Keep an experiment out of your real store</span></div>
+<pre><code>$ export TEST_HUB_DATA_DIR=/tmp/th-scratch
+$ test-hub demo --reset
+$ test-hub serve</code></pre>
+</div>
+
+<h2 id="what-next">What next</h2>
+
+<div class="cards">
+  <div>
+    <h3>Read the dashboard</h3>
+    <p><a href="dashboard-tour.html">Dashboard tour</a> — every panel, what it counts, and
+    what the comparison panel is telling you.</p>
+  </div>
+  <div>
+    <h3>Wire up a pipeline</h3>
+    <p><a href="ci-integrations.html">CI integrations</a> — GitHub Actions, GitLab, Jenkins,
+    sharded suites, and what to do when a shard fails to upload.</p>
+  </div>
+  <div>
+    <h3>Publish live results</h3>
+    <p><a href="rest-api.html#runs">REST API</a> — open a run, stream results as tests
+    finish, close it. Every call is safe to retry.</p>
+  </div>
+  <div>
+    <h3>Put it somewhere shared</h3>
+    <p><a href="deployment.html">Deployment</a> — Docker, Compose, a reverse proxy, tokens,
+    and backups.</p>
+  </div>
+</div>
+<nav class="pagenav" aria-label="Pagination">
+<span></span>
+<a class="pagenav__next" href="../docs/features.html"><span>Next&nbsp;&rarr;</span><b>Features</b></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#install">Install it</a></li>
+<li class="lvl-2"><a href="#see-it-with-data">See it with data in it</a></li>
+<li class="lvl-2"><a href="#import-a-report">Import a report you already have</a></li>
+<li class="lvl-2"><a href="#publish-from-ci">Publish from CI to a shared server</a></li>
+<li class="lvl-2"><a href="#one-file">Send one HTML file to somebody who has no server</a></li>
+<li class="lvl-2"><a href="#where-data-lives">Where the data lives</a></li>
+<li class="lvl-2"><a href="#what-next">What next</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>

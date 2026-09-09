@@ -1,0 +1,677 @@
+<!--META {"title": "CLI reference", "eyebrow": "Reference", "description": "Every test-hub command, every option, what it exits with, and why there is no --token flag.", "lede": "Seven commands, one of which has two sub-commands. None of them holds any logic of its own — each is a thin wrapper over the same service layer the HTTP API calls, which is why anything you can do here you can also do over HTTP. Everything below was run against test-hub 0.1.0; the outputs are copied out of a terminal, not paraphrased."} -->
+
+<h2 id="shape">The shape of the command line</h2>
+
+<p>Every command takes <code>-h</code> or <code>--help</code>, and the root command takes
+<code>-V</code>/<code>--version</code>. The version line reports two numbers, because they move
+independently: the package version, and the canonical schema version that every payload carries.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub --version
+test-hub 0.1.0 (canonical schema v1)</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub --help, commands only">
+<pre><code>  serve    Start the API and serve the dashboard.
+  ingest   Import a report file into the local store.
+  publish  Send a report to a remote Test Hub server.
+  export   Write a self-contained offline HTML report.
+  demo     Populate the store with realistic sample data.
+  formats  List the installed report adapters.
+  token    Create and hash API tokens.</code></pre>
+</div>
+
+<p>Sub-commands are registered lazily, inside a function, so <code>test-hub --help</code> does not
+import FastAPI, SQLAlchemy and every adapter to print seven lines. That is the difference between
+a help screen that feels instant and one that does not, and it is the reason each command imports
+its own service module in its first line of body rather than at module scope.</p>
+
+<p><code>ingest</code> and <code>publish</code> take <code>--json</code>, and print the very
+object the human summary was rendered from —
+<code>ImportResult.model_dump(mode="json")</code> — rather than a second formatter that could
+drift away from it. So a CI step parses exactly what the terminal described.
+<code>formats --json</code> does the same for the adapter registry.</p>
+
+<h2 id="tokens">There is no <code>--token</code> flag, on purpose</h2>
+
+<p>Neither <code>publish</code> nor <code>token hash</code> will take a token as an argument. This
+is not an oversight to be worked around; it is the one rule that shows up in every command that
+touches a credential.</p>
+
+<ul>
+  <li><b><code>ps</code> is world-readable.</b> On a shared build agent, every other user on the
+  box can read the full argument vector of every running process. A token on a command line is a
+  token handed to anyone with a shell on that machine.</li>
+  <li><b>Shell history keeps it.</b> <code>~/.bash_history</code> and <code>~/.zsh_history</code>
+  are written on exit, are rarely encrypted, and are frequently backed up.</li>
+  <li><b>CI logs echo commands.</b> Most runners print the command before running it, and those
+  logs are often readable by more people than the secret store is.</li>
+</ul>
+
+<p>The two supported ways in:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>Behaviour</th></tr></thead>
+  <tbody>
+    <tr><td><code>--token-env NAME</code></td><td><code>TEST_HUB_TOKEN</code></td>
+    <td>Reads <code>$NAME</code> and strips whitespace. If you name a variable explicitly and it
+    is unset or empty, that is an error. If you leave the default and
+    <code>TEST_HUB_TOKEN</code> happens to be unset, the publish goes ahead unauthenticated —
+    which is the normal case against a local, unauthenticated server.</td></tr>
+    <tr><td><code>--token-file PATH</code></td><td>—</td>
+    <td>Reads the file and strips whitespace. A missing or empty file is always an error. This is
+    the form for Docker/Kubernetes secrets and for GitLab's file-type variables.</td></tr>
+  </tbody>
+</table></div>
+
+<p><code>--token-file</code> wins if you pass both; it is checked first and returns before the
+environment is consulted.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Both failure modes, with their real messages">
+<pre><code>$ test-hub publish results.xml --project p --url http://127.0.0.1:8811 --token-env MY_MISSING_VAR
+error: environment variable MY_MISSING_VAR is not set or is empty; export it before running, or use --token-file
+# exit 78
+
+$ test-hub publish results.xml --project p --url http://127.0.0.1:8811 --token-file /tmp/empty.token
+error: token file /tmp/empty.token is empty
+# exit 78</code></pre>
+</div>
+
+<div class="note note--tip"><span class="note__title">Tip</span>If you must inline a token in a
+one-off command, do it through the environment of that single command —
+<code>TEST_HUB_TOKEN="$SECRET" test-hub publish …</code> — rather than through a flag. The value
+still reaches the process, but it never appears in the argument vector that <code>ps</code>
+shows.</div>
+
+<h2 id="serve">serve</h2>
+
+<p>Starts the REST API and serves the dashboard from the same process. One Uvicorn worker,
+deliberately: the live-update bus is in-process, so a second worker would hold a second bus and
+half the connected dashboards would miss half the events.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--host</code></td><td><code>127.0.0.1</code></td><td>Interface to bind. Anything
+    that is not loopback goes through the bind-safety gate below.</td></tr>
+    <tr><td><code>--port</code></td><td><code>8000</code></td><td>Port to listen on.</td></tr>
+    <tr><td><code>--data-dir</code></td><td>platform default</td><td>Where the SQLite file and the
+    artifact directory live. This is the one option on <code>serve</code> that also reads its
+    environment variable, <code>TEST_HUB_DATA_DIR</code>.</td></tr>
+    <tr><td><code>--reload</code></td><td>off</td><td>Restart on code changes. Rebuilds the app,
+    and therefore the application context, on every change.</td></tr>
+    <tr><td><code>--insecure-no-auth</code></td><td>off</td><td>Permit a non-loopback bind with no
+    tokens configured. Logs a warning on every start and banners the dashboard.</td></tr>
+    <tr><td><code>--open</code> / <code>--no-open</code></td><td><code>--no-open</code></td>
+    <td>Open the dashboard in a browser once the server is up.</td></tr>
+    <tr><td><code>--log-level</code></td><td><code>info</code></td><td><code>debug</code>,
+    <code>info</code>, <code>warning</code> or <code>error</code>.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub serve --port 8811</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="Loopback, no tokens configured">
+<pre><code>  Test Hub  http://127.0.0.1:8811
+  dashboard http://127.0.0.1:8811/
+  API docs  http://127.0.0.1:8811/api/docs
+  data      /private/tmp/th-site-serve</code></pre>
+</div>
+
+<p>Configure token hashes and a fifth line appears, so you can tell from the terminal alone which
+mode you are in:</p>
+
+<div class="codeblock" data-lang="output" data-caption="With TEST_HUB_API_TOKEN_HASHES set">
+<pre><code>  Test Hub  http://127.0.0.1:8811
+  dashboard http://127.0.0.1:8811/
+  API docs  http://127.0.0.1:8811/api/docs
+  data      /private/tmp/th-site-serve
+  auth      bearer token required for writes</code></pre>
+</div>
+
+<p>Bind somewhere the network can reach and the gate runs <em>before</em> the socket is opened, so
+what arrives is an error rather than a listening port:</p>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub serve --host 0.0.0.0 --port 8123">
+<pre><code>error: refusing to bind 0.0.0.0:8123 with no authentication. Create a token with `test-hub token create`, set TEST_HUB_API_TOKEN_HASHES, or pass --insecure-no-auth if this really is a throwaway development host.
+  host: 0.0.0.0
+  port: 8123
+# exit 78</code></pre>
+</div>
+
+<p>Opt out explicitly and it starts, loudly — the warning is logged, the header says
+<code>DISABLED</code>, and the URL printed is the loopback name because
+<code>http://0.0.0.0:8123</code> is neither clickable nor reachable:</p>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub serve --host 0.0.0.0 --port 8877 --insecure-no-auth">
+<pre><code>07:34:25 WARNING test_hub.cli.commands.serve  AUTHENTICATION IS DISABLED and Test Hub is bound to 0.0.0.0:8877. Anyone who can reach this port can read and write every test result.
+  Test Hub  http://localhost:8877
+  dashboard http://localhost:8877/
+  API docs  http://localhost:8877/api/docs
+  data      /private/tmp/th-site-serve
+  auth      DISABLED on a public interface
+
+07:34:25 WARNING test_hub.api.app             AUTHENTICATION IS DISABLED and Test Hub is bound to 0.0.0.0:8877. Anyone who can reach this port can read and write every test result.</code></pre>
+</div>
+
+<p>The warning appears twice because it is raised in two places: by the CLI before it binds, and
+by the application at startup. The second one is the one that matters if you skip the CLI — run
+<code>create_app</code> under your own ASGI server, or use <code>--reload</code>, where the app is
+built in a subprocess on every restart, and the CLI's copy is printed once or not at all.</p>
+
+<div class="note note--warn"><span class="note__title">The environment does not reach these
+flags</span><code>--host</code>, <code>--port</code> and <code>--log-level</code> always send a
+value to the settings overlay, including their defaults, and a supplied value beats the
+environment. So <code>TEST_HUB_HOST=0.0.0.0 TEST_HUB_PORT=9999 test-hub serve</code> binds
+<code>127.0.0.1:8000</code> — verified, not theoretical. Pass the flags. Only
+<code>--data-dir</code> declares an environment variable, and
+<code>TEST_HUB_INSECURE_NO_AUTH</code> works because the flag maps its <code>False</code> to
+"unset". More on that on the <a href="configuration.html#precedence">configuration</a>
+page.</div>
+
+<div class="note note--info"><span class="note__title">About <code>--reload</code></span>It
+watches the directory the package was imported from — the checkout's <code>src/</code> if you
+installed with <code>pip install -e</code>, and <code>site-packages</code> if you installed a
+wheel. In the second case it will restart on any change to any installed package, which is not
+what you wanted. It is a development flag.</div>
+
+<h2 id="ingest">ingest</h2>
+
+<p>Parses a report file and writes it into the local store. No network, no server. Along with
+<code>publish</code> it forms a pair that deliberately takes the same options, so moving a script
+from a laptop into CI is a one-word change.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>PATH</code> (argument)</td><td>required</td><td>The report file. Must exist and
+    be a readable file; a directory is rejected by the argument parser.</td></tr>
+    <tr><td><code>--project</code>, <code>-p</code></td><td><b>required</b></td><td>Project key,
+    e.g. <code>payments-api</code>. Report files do not carry one, so nothing can infer it.</td></tr>
+    <tr><td><code>--team</code></td><td>—</td><td>Owning team. A filter facet, and part of what
+    makes a run comparable to the previous one.</td></tr>
+    <tr><td><code>--component</code></td><td>—</td><td>Component or service under test.</td></tr>
+    <tr><td><code>--type</code></td><td><code>other</code></td><td>One of <code>unit</code>,
+    <code>component</code>, <code>integration</code>, <code>contract</code>,
+    <code>functional</code>, <code>e2e</code>, <code>api</code>, <code>ui</code>,
+    <code>performance</code>, <code>security</code>, <code>accessibility</code>,
+    <code>smoke</code>, <code>regression</code>, <code>acceptance</code>, <code>other</code>.
+    Case-insensitive.</td></tr>
+    <tr><td><code>--trigger</code></td><td><code>local</code></td><td>One of <code>manual</code>,
+    <code>push</code>, <code>pull_request</code>, <code>schedule</code>, <code>api</code>,
+    <code>retry</code>, <code>local</code>, <code>unknown</code>.</td></tr>
+    <tr><td><code>--environment</code>, <code>--env</code></td><td>—</td><td>What the tests ran
+    against — <code>staging</code>, <code>prod</code>. Part of comparability.</td></tr>
+    <tr><td><code>--branch</code>, <code>--commit</code></td><td>—</td><td>Source branch and commit
+    SHA. Branch is part of comparability; commit is not.</td></tr>
+    <tr><td><code>--framework</code>, <code>--language</code></td><td>—</td><td>Free-text run
+    context, stored on the run.</td></tr>
+    <tr><td><code>--pipeline-id</code>, <code>--pipeline-url</code></td><td>—</td><td>Link back to
+    the build that produced the report.</td></tr>
+    <tr><td><code>--name</code></td><td>—</td><td>Human-readable run name.</td></tr>
+    <tr><td><code>--tags</code></td><td>—</td><td>Comma-separated; empty entries are
+    dropped.</td></tr>
+    <tr><td><code>--run-id</code></td><td>new UUID</td><td>Import into an existing run instead of
+    creating one. See the idempotency example below.</td></tr>
+    <tr><td><code>--format</code>, <code>-f</code></td><td>auto-detect</td><td>Force an adapter by
+    name. Names come from <code>test-hub formats</code>.</td></tr>
+    <tr><td><code>--data-dir</code></td><td>platform default</td><td>Also
+    <code>TEST_HUB_DATA_DIR</code>.</td></tr>
+    <tr><td><code>--json</code></td><td>off</td><td>Print the <code>ImportResult</code> as JSON
+    instead of the summary.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell" data-caption="A six-case Surefire file with one flakyFailure in it">
+<pre><code>$ test-hub ingest results.xml \
+    --project payments-api \
+    --team payments \
+    --component checkout \
+    --environment staging \
+    --type integration \
+    --branch main \
+    --commit 9f2c1ab</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output">
+<pre><code>  imported run b8009e5c-a94e-48dd-925f-7f9325612dfc
+  adapter   junit-xml (detected, 90% confident)
+  project   payments-api
+  stored in /private/tmp/th-site-cli
+  6 tests  3 passed  1 failed  1 error  1 skipped  1 flaky  60.0% pass
+
+  2 parser warning(s):
+    naive_timestamp [testsuite[CheckoutIT]]: timestamps in this report carry no UTC offset; they are read as UTC
+    counts_mismatch [CheckoutIT]: suite 'CheckoutIT' declares errors=1, failures=1, skipped=1, tests=5 but errors=1, failures=1, skipped=1, tests=6 were parsed; the parsed numbers are the ones Test Hub keeps</code></pre>
+</div>
+
+<p>That <code>counts_mismatch</code> is the file being caught in a small lie: its
+<code>&lt;testsuite&gt;</code> element declares <code>tests="5"</code> while the element actually
+contains six <code>&lt;testcase&gt;</code> children. Test Hub keeps what it parsed and says so,
+rather than trusting an attribute that the writer computed separately from the cases. Warnings are
+printed ten at a time, then summarised as <code>… and N more</code>, so a pathological file cannot
+flood the terminal.</p>
+
+<h3 id="ingest-idempotent">Re-importing the same file</h3>
+
+<p>Pass <code>--run-id</code> and the second import applies nothing. Event ids for the canonical
+JSON adapter are a UUIDv5 over <code>(source, run_id, sequence, type)</code>, and
+<code>(source, event id)</code> is unique in the store, so the events are recognised as already
+applied:</p>
+
+<div class="codeblock" data-lang="output" data-caption="Second ingest of the same file into the same run">
+<pre><code>  updated run a7be9e5c-4e76-4341-890f-ba7538fc2b40
+  adapter   junit-xml (detected, 90% confident)
+  project   payments-api
+  stored in /private/tmp/th-site-cli
+  6 tests  3 passed  1 failed  1 error  1 skipped  1 flaky  60.0% pass
+  12 event(s) had already been applied and were ignored</code></pre>
+</div>
+
+<p>Note <code>updated</code> rather than <code>imported</code>, and that the counts did not move.
+Without <code>--run-id</code> you get a new run every time, which is the right default —
+re-running a suite is a new run, not a correction to the old one.</p>
+
+<h3 id="ingest-errors">When it will not import</h3>
+
+<div class="codeblock" data-lang="output" data-caption="A .txt file that no adapter recognises — exit 2">
+<pre><code>error: no installed adapter recognised this input (filename='notes.txt').
+Installed adapters:
+  junit-xml        .xml, .junit, .junit.xml JUnit/xUnit XML from pytest, Surefire, Gradle, Jest, Playwright and friends.
+  testhub-json     .json                  Test Hub's own report and raw event JSON (kind: test-hub-report/-events).
+Pass --format &lt;name&gt; to skip detection and force one of these.</code></pre>
+</div>
+
+<p>Forcing an adapter that cannot cope produces the adapter's own complaint, also exit 2 —
+<code>error: this file is not well-formed XML: syntax error: line 1, column 0</code>. Naming an
+adapter that is not installed produces <code>error: unknown format 'nope'</code> followed by the
+same installed-adapter list. In all three cases the list of what <em>is</em> supported travels
+with the error, and it is the same list the HTTP API returns in its 415.</p>
+
+<h2 id="publish">publish</h2>
+
+<p>The same import against somebody else's server. Same adapters, same parsing, same
+<code>ImportResult</code> — the work happens on the server, and this command is an HTTP client
+around <code>POST /api/v1/imports</code>. Everything it does is something <code>curl</code> could
+do; that is a design constraint on the API, not a coincidence.</p>
+
+<p>It takes every option <code>ingest</code> takes, minus <code>--data-dir</code>, plus:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--url</code></td><td><code>http://127.0.0.1:8000</code></td><td>Base URL of the
+    server. Also reads <code>TEST_HUB_URL</code>.</td></tr>
+    <tr><td><code>--token-env</code></td><td><code>TEST_HUB_TOKEN</code></td><td>Name of the
+    variable holding the token. See <a href="#tokens">above</a>.</td></tr>
+    <tr><td><code>--token-file</code></td><td>—</td><td>File holding the token.</td></tr>
+    <tr><td><code>--timeout</code></td><td><code>60.0</code></td><td>Seconds, per request.</td></tr>
+    <tr><td><code>--insecure</code></td><td>off</td><td>Skip TLS certificate verification. Only
+    for a server with a private CA you have not installed yet.</td></tr>
+    <tr><td><code>--idempotency-key</code></td><td>—</td><td>Sent as
+    <code>X-Idempotency-Key</code>. A retried publish under the same key is a no-op instead of a
+    duplicate run.</td></tr>
+    <tr><td><code>--trigger</code></td><td><code>unknown</code></td><td>Differs from
+    <code>ingest</code>, whose default is <code>local</code>. A publish usually comes from a
+    pipeline, and claiming it was local would be a lie.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ export TEST_HUB_TOKEN='ths_…'        # from `test-hub token create`
+$ test-hub publish results.xml \
+    --url http://127.0.0.1:8811 \
+    --project payments-api \
+    --team payments \
+    --type integration \
+    --branch "$GIT_BRANCH" \
+    --commit "$GIT_COMMIT" \
+    --token-env TEST_HUB_TOKEN</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output">
+<pre><code>  imported run 2dbda2c1-f23b-4d9f-9824-2f2788fa1490
+  adapter   junit-xml (detected, 90% confident)
+  project   payments-api
+  stored in http://127.0.0.1:8811
+  6 tests  3 passed  1 failed  1 error  1 skipped  1 flaky  60.0% pass</code></pre>
+</div>
+
+<p>The only difference from the <code>ingest</code> output is the <code>stored in</code> line,
+which names the server instead of a directory. The client retries a connection error and the
+statuses that are worth retrying — 408, 425, 429, 500, 502, 503 and 504 — up to three times, with
+a backoff between attempts. Every other 4xx is returned immediately, because a malformed request
+will be exactly as malformed on the second attempt. Retries reuse the same
+<code>X-Idempotency-Key</code>, so a timeout that had actually succeeded server-side does not
+produce a second run.</p>
+
+<div class="note note--warn"><span class="note__title">Server-side failures surface as exit
+1</span>A rejected token, an unreachable host or a 5xx comes back as
+<code>TestHubClientError</code>, which is a <code>RuntimeError</code> rather than one of Test Hub's
+own error classes — so it escapes the CLI's error handler and prints a Python traceback with exit
+code <b>1</b>, not the exit 5 the taxonomy would suggest. The message on the last line is accurate
+(<code>a valid bearer token is required; send it as `Authorization: Bearer &lt;token&gt;` or
+`X-API-Key: &lt;token&gt;`</code>); the presentation is not. Branch on 0-vs-non-zero for publish,
+not on the specific code.</div>
+
+<p>You do not need Test Hub installed on the build agent at all. The equivalent
+<code>curl</code>, with the same authentication, is on the
+<a href="getting-started.html#publish-from-ci">getting started</a> page.</p>
+
+<h2 id="export">export</h2>
+
+<p>Writes the dashboard, its CSS, its JavaScript and a frozen data snapshot into one HTML file
+with no external references. It is the same rendering code the live dashboard uses, reading a
+<code>SnapshotDataProvider</code> instead of REST — there is no second renderer that could
+drift.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--output</code>, <code>-o</code></td><td><code>test-hub-report.html</code></td>
+    <td>Where to write the file.</td></tr>
+    <tr><td><code>--input</code>, <code>-i</code></td><td>—</td><td>A directory or a single file of
+    reports to export <em>instead of</em> the local store. Must exist.</td></tr>
+    <tr><td><code>--project</code>, <code>-p</code></td><td>—</td><td>Required when
+    <code>--input</code> is used; ignored otherwise.</td></tr>
+    <tr><td><code>--team</code>, <code>--component</code>, <code>--type</code></td><td>—,
+    —, <code>other</code></td><td>Metadata applied to every file parsed under
+    <code>--input</code>.</td></tr>
+    <tr><td><code>--title</code></td><td><code>Test Hub report</code></td><td>Title shown inside
+    the report.</td></tr>
+    <tr><td><code>--days</code></td><td><code>30</code></td><td>How much history to include.</td></tr>
+    <tr><td><code>--max-runs</code></td><td><code>200</code></td><td>Ceiling on runs in the
+    snapshot. The export fully materializes, so this is the knob that keeps a large store from
+    producing an unopenable file.</td></tr>
+    <tr><td><code>--format</code>, <code>-f</code></td><td>auto-detect</td><td>Force an adapter for
+    <code>--input</code> files.</td></tr>
+    <tr><td><code>--data-dir</code></td><td>platform default</td><td>Which store to export.</td></tr>
+    <tr><td><code>--open</code></td><td>off</td><td>Open the written file in a browser.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell" data-caption="From the local store">
+<pre><code>$ test-hub export --output report.html --title "Payments nightly"</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output">
+<pre><code>  wrote /private/tmp/th-site-work/report.html
+  295 KB, self-contained — no network needed to open it</code></pre>
+</div>
+
+<h3 id="export-input">Exporting straight from a directory of reports</h3>
+
+<p>On a build agent you usually have shard results on disk and no store at all.
+<code>--input</code> parses them into a throwaway temporary database and exports that, so your
+real data directory is never touched:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub export --input ./results --output agent.html --project payments-api --type integration</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output">
+<pre><code>  parsed results.xml
+
+  wrote /private/tmp/th-site-work/agent.html
+  274 KB, self-contained — no network needed to open it</code></pre>
+</div>
+
+<p>It walks the directory recursively and considers only <code>.xml</code> and <code>.json</code>
+files, because a results folder routinely contains screenshots, videos and logs, and warning about
+each one would bury the warnings that matter. Files are sorted before parsing so the same directory
+produces the same output twice.</p>
+
+<p>One unparseable file does not abandon the rest — it is reported as
+<code>skipped &lt;name&gt;: &lt;reason&gt;</code> and the walk continues. Only if <em>every</em>
+candidate fails does the command give up, and only if there were no candidates at all does it
+refuse before starting. Both refusals are configuration errors, exit 78:</p>
+
+<div class="codeblock" data-lang="output" data-caption="--input without --project">
+<pre><code>error: --project is required with --input: report files do not carry a project key, so Test Hub cannot guess which project they belong to
+# exit 78</code></pre>
+</div>
+
+<h2 id="demo">demo</h2>
+
+<p>Fills the store with a plausible organization so you can judge the dashboard against data
+instead of against an empty state. Five projects across three teams, two weeks of history, real
+failures, genuine flaky retries, and — unless you turn it off — one run that is still open so the
+live indicator has something to show.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--days</code></td><td><code>14</code></td><td>How far back to spread the
+    runs.</td></tr>
+    <tr><td><code>--runs</code></td><td><code>6</code></td><td>Runs per project.</td></tr>
+    <tr><td><code>--live</code> / <code>--no-live</code></td><td><code>--live</code></td><td>Include
+    one run that is still going.</td></tr>
+    <tr><td><code>--data-dir</code></td><td>platform default</td><td>Which store to seed.</td></tr>
+    <tr><td><code>--reset</code></td><td>off</td><td>Delete <code>test-hub.db</code> and its
+    <code>-wal</code>/<code>-shm</code> siblings first.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub demo, log lines trimmed">
+<pre><code>  seeding sample data…
+
+  sample data created
+  5 projects, 31 runs, 258 test results, 270 attempts
+  23 failures and 12 flaky retries, so the red and amber states have something to show
+  one run is still open: 975fa3df-3260-4444-ac7c-c65957c82513
+  stored in /private/tmp/th-site-demo
+
+  next:  test-hub serve</code></pre>
+</div>
+
+<p>The counts follow the flags. <code>--days 7 --runs 3 --no-live</code> produces a smaller,
+fully-closed dataset, and <code>--reset</code> says what it removed before it starts:</p>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub demo --reset --days 7 --runs 3 --no-live">
+<pre><code>  removed the existing database (1 file(s))
+
+  seeding sample data…
+
+  sample data created
+  5 projects, 15 runs, 129 test results, 138 attempts
+  13 failures and 9 flaky retries, so the red and amber states have something to show
+  stored in /private/tmp/th-site-demo
+
+  next:  test-hub serve</code></pre>
+</div>
+
+<div class="note note--warn"><span class="note__title">--reset deletes the database it is pointed
+at</span>It removes <code>test-hub.db</code> from whatever <code>--data-dir</code> /
+<code>TEST_HUB_DATA_DIR</code> resolves to, which by default is your real store — not a demo one.
+Point <code>TEST_HUB_DATA_DIR</code> at a scratch directory before you experiment. Everything on
+this page was produced under <code>/private/tmp</code> for exactly that reason.</div>
+
+<h2 id="formats">formats</h2>
+
+<p>What this installation can parse. The same list appears inside the error when auto-detection
+fails, and in the API's 415 body, so the terminal and the server never disagree about what is
+installed.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--json</code></td><td>off</td><td>Print the registry description as JSON,
+    including <code>content_types</code> and <code>priority</code>, which the human view
+    omits.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub formats">
+<pre><code>  2 adapter(s) installed
+
+  junit-xml  JUnit XML
+      JUnit/xUnit XML from pytest, Surefire, Gradle, Jest, Playwright and friends.
+      extensions: .xml, .junit, .junit.xml
+
+  testhub-json  Test Hub JSON
+      Test Hub's own report and raw event JSON (kind: test-hub-report/-events).
+      extensions: .json
+
+  Force one with --format &lt;name&gt;. Add more by installing an adapter package.</code></pre>
+</div>
+
+<div class="codeblock" data-lang="json" data-caption="test-hub formats --json, first entry">
+<pre><code>{
+  "name": "junit-xml",
+  "display_name": "JUnit XML",
+  "description": "JUnit/xUnit XML from pytest, Surefire, Gradle, Jest, Playwright and friends.",
+  "extensions": [".xml", ".junit", ".junit.xml"],
+  "content_types": ["application/xml", "text/xml", "application/x-junit+xml"],
+  "priority": 50
+}</code></pre>
+</div>
+
+<p><code>priority</code> is the tie-break when two adapters both claim an input;
+<code>testhub-json</code> sits at 100 and <code>junit-xml</code> at 50. The <code>name</code> field
+is what <code>--format</code> expects. Adapters are discovered through the
+<code>test_hub.adapters</code> entry-point group — the two in the box use exactly the mechanism a
+third-party package would, so installing another one makes it appear here with no further
+configuration. <a href="adapters.html">Writing one.</a></p>
+
+<h2 id="token">token</h2>
+
+<p>Two sub-commands, both of which exist because Test Hub stores only PBKDF2 digests. Nothing on
+the server can recover a token; the plaintext exists in exactly one place, for as long as your
+terminal scrollback keeps it.</p>
+
+<h3 id="token-create">token create</h3>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--label</code></td><td><code>ci</code></td><td>A note for your own records. It
+    appears in a comment in the printed snippet and is <em>not</em> stored anywhere — the server
+    never sees it.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub token create --label ci-github">
+<pre><code>  Token (shown once — copy it now)
+  ths_Itl-rN2xWt77MMFWbio3kn8OqyNelvebooRMFnD6p2E
+
+  Configure the server with the hash, not the token:
+  export TEST_HUB_API_TOKEN_HASHES="pbkdf2_sha256$120000$2c78b65c9fb65300c908c68af1250978$7a9b282ed5a62cdfe0a53dfba669a5967131fb58c160e5f92bbc961ba1a22b85"
+
+  Publishers use the token itself:
+  export TEST_HUB_TOKEN="ths_Itl-rN2xWt77MMFWbio3kn8OqyNelvebooRMFnD6p2E"   # label: ci-github
+  test-hub publish results.xml --url https://… --project p --token-env TEST_HUB_TOKEN
+
+  Test Hub keeps only the hash. Nothing can recover this token from the server.</code></pre>
+</div>
+
+<p>The token is 256 bits of <code>secrets.token_urlsafe</code> behind a <code>ths_</code> prefix.
+The prefix costs four characters and buys two things: secret scanners can be taught to recognise
+it, and a human reading a log can tell what they are looking at.</p>
+
+<div class="note note--warn"><span class="note__title">Do not paste that hash line into a shell as
+printed</span>It is printed inside double quotes, and a PBKDF2 hash contains four
+<code>$</code> characters. In <code>bash</code> or <code>zsh</code>, <code>"…$120000$…"</code>
+expands <code>$1</code>, <code>$5</code> and <code>$0</code> before the variable is ever set. The
+line above, pasted verbatim into zsh, produced
+<code>pbkdf2_sha256f46ca…/bin/zshdd92bd…</code> — the server then rejects every token and tells you
+the token is wrong, which sends you looking in the wrong place. Retype the quotes as single quotes,
+or write the value into a file. There is more on this, including the
+<code>docker-compose</code> variant, on the
+<a href="configuration.html#list-values">configuration</a> page.</div>
+
+<h3 id="token-hash">token hash</h3>
+
+<p>Hashes a token you already have — for rotating a server's configuration without reissuing a
+token to every publisher, or for hashing a token that came out of a password manager.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>--token-env</code></td><td><code>TEST_HUB_TOKEN</code></td><td>Name of the
+    environment variable holding the token to hash. There is no argument form, for the same reason
+    <code>publish</code> has none.</td></tr>
+  </tbody>
+</table></div>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ TEST_HUB_TOKEN='ths_…' test-hub token hash
+pbkdf2_sha256$120000$84cf00d22b1abb3857b796badcfb460d$266c36495c2a60ff1ebc6d6c67821e9bcfd60e231d8390bde1914c659541cee3</code></pre>
+</div>
+
+<p>Four <code>$</code>-separated fields: algorithm, iteration count, salt hex, digest hex. The salt
+is random per call, so hashing the same token twice gives two different lines and both verify.
+Unlike every other failure on this page, an unset variable here exits <b>2</b> through Typer rather
+than through the error taxonomy:</p>
+
+<div class="codeblock" data-lang="output">
+<pre><code>  environment variable TEST_HUB_TOKEN is not set or is empty
+# exit 2</code></pre>
+</div>
+
+<h2 id="exit-codes">Exit codes</h2>
+
+<p>Every deliberate failure in Test Hub is one of a small set of error classes, and each class
+carries both an HTTP status and an exit code. They are mapped to HTTP in one place and to an exit
+code in one place, so <code>test-hub ingest</code> and <code>POST /api/v1/imports</code> disagree
+about nothing except the transport. A CI step can therefore branch on <em>why</em> it failed rather
+than only on the fact that it did.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Exit</th><th>Error class</th><th><code>error</code> code</th><th>HTTP</th><th>Means</th></tr></thead>
+  <tbody>
+    <tr><td><code>0</code></td><td>—</td><td>—</td><td>—</td><td>Success.</td></tr>
+    <tr><td><code>1</code></td><td><code>TestHubError</code></td><td><code>test_hub_error</code></td><td>500</td>
+    <td>The base class, and also where anything unanticipated lands — including a failed
+    <code>publish</code> and an invalid setting value.</td></tr>
+    <tr><td><code>2</code></td><td><code>ValidationError</code></td><td><code>validation_error</code></td><td>422</td>
+    <td>Well-formed input that said something impossible. Typer's own usage errors (a missing
+    <code>--project</code>, a file that does not exist) also exit 2.</td></tr>
+    <tr><td><code>2</code></td><td><code>AdapterError</code></td><td><code>adapter_error</code></td><td>422</td>
+    <td>An adapter claimed the input and then could not parse it.</td></tr>
+    <tr><td><code>2</code></td><td><code>UnknownFormatError</code></td><td><code>unknown_format</code></td><td>415</td>
+    <td>No installed adapter recognised the input. Carries the installed-adapter list.</td></tr>
+    <tr><td><code>3</code></td><td><code>NotFoundError</code></td><td><code>not_found</code></td><td>404</td>
+    <td>A run, test or artifact that does not exist. Reached over HTTP; the local CLI commands
+    create what they need rather than failing.</td></tr>
+    <tr><td><code>4</code></td><td><code>ConflictError</code></td><td><code>conflict</code></td><td>409</td>
+    <td>A write contradicted a write that already landed.</td></tr>
+    <tr><td><code>5</code></td><td><code>AuthenticationError</code></td><td><code>unauthorized</code></td><td>401</td>
+    <td>No token, or a token that does not verify.</td></tr>
+    <tr><td><code>5</code></td><td><code>AuthorizationError</code></td><td><code>forbidden</code></td><td>403</td>
+    <td>A valid token that is not allowed to do this.</td></tr>
+    <tr><td><code>6</code></td><td><code>PayloadTooLargeError</code></td><td><code>payload_too_large</code></td><td>413</td>
+    <td>A report, an artifact or a decompressed upload past its configured ceiling.</td></tr>
+    <tr><td><code>78</code></td><td><code>ConfigurationError</code></td><td><code>configuration_error</code></td><td>500</td>
+    <td><code>EX_CONFIG</code>. Test Hub was asked to start, or to run, in a state that is not safe
+    or not coherent.</td></tr>
+    <tr><td><code>130</code></td><td>—</td><td>—</td><td>—</td><td>Ctrl-C. Prints
+    <code>interrupted</code> and stops.</td></tr>
+  </tbody>
+</table></div>
+
+<p>78 is <code>EX_CONFIG</code> from <code>sysexits.h</code>, chosen so a supervisor — systemd,
+Kubernetes, a Compose healthcheck — can tell "you configured this wrong" apart from "it crashed"
+and stop restarting something that will never come up.</p>
+
+<div class="codeblock" data-lang="shell" data-caption="Branching on the reason, verified against a 1 KB limit">
+<pre><code>$ TEST_HUB_MAX_REPORT_BYTES=1024 test-hub ingest results.xml --project payments-api
+error: report exceeds the 1024 byte limit (TEST_HUB_MAX_REPORT_BYTES); split the upload or raise the limit
+  limit_bytes: 1024
+
+$ echo $?
+6</code></pre>
+</div>
+
+<p>Structured detail is printed under the message, one <code>key: value</code> per line, on stderr
+along with the message itself. Standard output stays clean, so <code>--json</code> piped into
+<code>jq</code> is not polluted by an error.</p>
+
+<div class="note note--info"><span class="note__title">Two honest gaps</span>Codes 3, 4 and 5 are
+defined and are what the HTTP API returns, but the CLI does not currently reach them: the SDK
+client raises its own <code>TestHubClientError</code>, which is not part of the taxonomy, so an
+authentication failure during <code>publish</code> exits 1 with a traceback. Likewise an invalid
+value for a <code>TEST_HUB_*</code> variable surfaces as a Pydantic
+<code>ValidationError</code> traceback and exit 1 rather than exit 78. Both were verified against
+0.1.0.</div>

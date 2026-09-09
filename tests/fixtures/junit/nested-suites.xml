@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invented fixture: payments-api, suites nested two levels deep. -->
+<testsuites name="payments-api integration" tests="4" failures="1" errors="0" skipped="0" time="12.75">
+  <testsuite name="payments-api" tests="4" failures="1" errors="0" skipped="0" time="12.75"
+             timestamp="2026-03-11T22:05:00+00:00">
+    <properties>
+      <property name="git.branch" value="release/2026.03"/>
+      <property name="environment" value="staging"/>
+    </properties>
+    <testcase name="healthEndpointResponds" classname="payments.api.HealthIT" time="0.212"/>
+    <testsuite name="authorizations" tests="2" failures="1" errors="0" skipped="0" time="8.44">
+      <testcase name="authorizesValidCard" classname="payments.api.AuthorizationIT" time="3.101"/>
+      <testcase name="rejectsExpiredCard" classname="payments.api.AuthorizationIT" time="5.339">
+        <failure message="expected status 402 but got 500" type="AssertionError">
+AssertionError: expected status 402 but got 500
+  at payments.api.AuthorizationIT.rejectsExpiredCard(AuthorizationIT.java:141)
+        </failure>
+      </testcase>
+      <testsuite name="three-d-secure" tests="1" failures="0" errors="0" skipped="0" time="4.09">
+        <testcase name="challengesWhenIssuerRequests" classname="payments.api.ThreeDSecureIT"
+                  time="4.09"/>
+      </testsuite>
+    </testsuite>
+  </testsuite>
+</testsuites>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Invented fixture: ledger-worker, Maven Surefire with rerunFailingTestsCount=2.
+  `flakyFailure` children are EARLIER attempts; the <testcase>'s own outcome is the last one.
+  `settlesBatchWithinSla` therefore has three attempts: failed, failed, passed.
+-->
+<testsuite name="com.example.ledger.SettlementIT" package="com.example.ledger"
+           tests="3" failures="1" errors="0" skipped="0" time="41.882"
+           timestamp="2026-03-12T02:14:55Z" hostname="build-agent-11">
+  <properties>
+    <property name="branch" value="main"/>
+    <property name="commit" value="1a2b3c4d5e6f70819a2b3c4d5e6f708192a3b4c5"/>
+    <property name="environment" value="staging"/>
+    <property name="ci" value="jenkins"/>
+    <property name="url" value="https://build.example.test/job/ledger-worker/2211/"/>
+  </properties>
+  <testcase name="settlesBatchWithinSla" classname="com.example.ledger.SettlementIT" time="9.204">
+    <flakyFailure message="settlement took 11.4s, SLA is 10s" type="org.opentest4j.AssertionFailedError">
+org.opentest4j.AssertionFailedError: settlement took 11.4s, SLA is 10s
+	at com.example.ledger.SettlementIT.settlesBatchWithinSla(SettlementIT.java:73)
+      <system-out>batch=BATCH-88421 rows=12044 elapsed=11.4s</system-out>
+    </flakyFailure>
+    <flakyFailure message="settlement took 10.7s, SLA is 10s" type="org.opentest4j.AssertionFailedError">
+      <stackTrace>org.opentest4j.AssertionFailedError: settlement took 10.7s, SLA is 10s
+	at com.example.ledger.SettlementIT.settlesBatchWithinSla(SettlementIT.java:73)</stackTrace>
+      <system-err>WARN  SettlementRunner - ledger lock contention on shard 3</system-err>
+    </flakyFailure>
+    <system-out>batch=BATCH-88421 rows=12044 elapsed=9.2s</system-out>
+  </testcase>
+  <testcase name="rejectsUnbalancedJournal" classname="com.example.ledger.SettlementIT" time="28.51">
+    <rerunFailure message="expected balance 0 but was -42" type="java.lang.AssertionError">
+java.lang.AssertionError: expected balance 0 but was -42
+	at com.example.ledger.SettlementIT.rejectsUnbalancedJournal(SettlementIT.java:118)
+    </rerunFailure>
+    <rerunError message="ledger database went away" type="java.sql.SQLNonTransientConnectionException">
+java.sql.SQLNonTransientConnectionException: ledger database went away
+	at com.example.ledger.JournalRepository.load(JournalRepository.java:64)
+    </rerunError>
+    <failure message="expected balance 0 but was -42" type="java.lang.AssertionError">
+java.lang.AssertionError: expected balance 0 but was -42
+	at com.example.ledger.SettlementIT.rejectsUnbalancedJournal(SettlementIT.java:118)
+    </failure>
+  </testcase>
+  <testcase name="archivesSettledBatches" classname="com.example.ledger.SettlementIT" time="4.168"/>
+</testsuite>

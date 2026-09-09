@@ -1,0 +1,243 @@
+<!--META {"title": "Features", "eyebrow": "Start here", "description": "What Test Hub does, why each capability is built the way it is, and what it deliberately does not do.", "lede": "A feature list is only useful if it says what the feature costs. This one gives the reason for each decision and names the tradeoff, so you can tell in advance whether Test Hub is the shape of tool you want."} -->
+
+<h2 id="one-model">One canonical model, whatever produced the results</h2>
+
+<p>Test Hub does not care what language your tests are written in, what framework ran them,
+or what started the run. Everything that arrives is normalized into one hierarchy:</p>
+
+<div class="codeblock" data-lang="text" data-caption="test_hub.domain.models">
+<pre><code>Workspace
+  └── Project
+        └── TestRun            one execution of a suite of tests
+              ├── TestSuite    a file / class / feature grouping
+              │     └── TestCase        a test's identity within the run
+              │           └── TestAttempt   one execution of it (retries!)
+              ├── Artifact     a file produced by the run
+              └── Event        the append-only log the run was folded from</code></pre>
+</div>
+
+<p>These are Pydantic models carrying a <code>schema_version</code>, and they are the public
+wire contract. The SQLAlchemy rows on disk are a separate, private thing; nothing serializes
+an ORM object. That separation is what lets the table layout change — a new index, a split
+table, PostgreSQL — without a version bump that every consumer has to react to. The full
+reference is on the <a href="canonical-schema.html">canonical schema</a> page.</p>
+
+<h2 id="statuses">Ten statuses, and the framework's own word beside every one</h2>
+
+<p>Every framework spells its outcomes differently. Test Hub stores exactly one normalized
+status per attempt and <em>always</em> keeps the original string next to it in
+<code>TestAttempt.original_status</code>.</p>
+
+<p><span class="st st--passed">passed</span> <span class="st st--failed">failed</span>
+<span class="st st--error">error</span> <span class="st st--skipped">skipped</span>
+<span class="st st--xfailed">xfailed</span> <span class="st st--xpassed">xpassed</span>
+<span class="st st--running">running</span> <span class="st st--queued">queued</span>
+<span class="st st--queued">cancelled</span> <span class="st st--queued">unknown</span></p>
+
+<p>The normalization is a lookup table, not a heuristic. A word it does not recognise becomes
+<code>unknown</code> and raises a parser warning on the import; it never becomes
+<code>passed</code> by accident. The table and its exact behaviour are on the
+<a href="canonical-schema.html#statuses">canonical schema</a> page.</p>
+
+<h2 id="retries">Retries are attempts, never overwrites</h2>
+
+<p>This is the decision the rest of the product is built on. A rerun produces a new
+<code>TestAttempt</code> with <code>attempt_number</code> incremented; the earlier attempt is
+preserved exactly as it was recorded. Nothing in Test Hub ever mutates an attempt.</p>
+
+<p>Two things follow. First, flakiness is <em>observable</em> — a test that failed and then
+passed is visibly a test that failed and then passed, not a green tick. Second, a retried
+test does not count twice: each test contributes once, through its <em>last</em> attempt, and
+its retry history stays available beside that.</p>
+
+<div class="note"><span class="note__title">Why "last", not "best" or "worst"</span>A test
+that failed and then passed on retry is green <em>and</em> flaky. A test that passed and then
+failed on a rerun is red. Both facts stay on the page; the count follows the last thing that
+actually happened.</div>
+
+<h2 id="identity">Stable test identity</h2>
+
+<p>A test's identity has to survive being re-run, re-ordered, re-parameterized in a different
+order, moved to a different line and executed on another machine. If it does not, every run
+invents a new set of tests, and history, comparison and flakiness are all worthless.</p>
+
+<p>Test Hub therefore derives a UUIDv5 from <em>what the test is</em> and never from
+<em>when or where it ran</em>:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Part of the identity</th><th>Deliberately excluded</th></tr></thead>
+  <tbody>
+    <tr><td>project key</td><td>timestamps</td></tr>
+    <tr><td>suite path</td><td>line numbers, file offsets</td></tr>
+    <tr><td>class name</td><td>durations</td></tr>
+    <tr><td>test name</td><td>worker / shard id, hostname</td></tr>
+    <tr><td>normalized parameters</td><td>run id, build number, branch</td></tr>
+  </tbody>
+</table></div>
+
+<p>Named parameters are sorted by name, so <code>(b=2, a=1)</code> and <code>(a=1, b=2)</code>
+are one test. Rendered object addresses and bare UUIDs inside parametrized ids are scrubbed to
+stable tokens, because otherwise a framework that prints
+<code>&lt;Foo object at 0x7f3c…&gt;</code> into a test name invents a new test every run. The
+exact hashed string is documented and testable, so a publisher in any language can compute the
+same UUID without ever talking to the server —
+<a href="canonical-schema.html#identity">see the recipe</a>.</p>
+
+<h2 id="two-modes">Two products, one dashboard</h2>
+
+<p>A live service and a single self-contained HTML file. They are the same dashboard code
+behind two implementations of one <code>DataProvider</code> interface: the snapshot provider
+reads a frozen object embedded in the file, the live provider reads REST and Server-Sent
+Events. There is no second renderer, so there is nothing to drift.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>&nbsp;</th><th>Snapshot</th><th>Live</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">Command</th><td><code>test-hub export</code></td><td><code>test-hub serve</code></td></tr>
+    <tr><th scope="row">Output</th><td>one <code>.html</code> file</td><td>a service on a port</td></tr>
+    <tr><th scope="row">Needs a server to read</th><td>no</td><td>yes</td></tr>
+    <tr><th scope="row">Works with the network off</th><td>yes</td><td>the dashboard is local</td></tr>
+    <tr><th scope="row">Updates while you watch</th><td>no</td><td>yes, over SSE</td></tr>
+    <tr><th scope="row">Data provider</th><td><code>SnapshotDataProvider</code></td><td><code>LiveDataProvider</code></td></tr>
+  </tbody>
+</table></div>
+
+<p>The cost is stated in the architecture decision record: every view has to render from a
+plain object graph and tolerate both "no more data will arrive" and "more data will arrive".
+Views never call <code>fetch</code> themselves.</p>
+
+<h2 id="live">Live updates over SSE</h2>
+
+<p>Results appear in the browser within a couple of seconds without a refresh. The transport
+is Server-Sent Events rather than WebSockets because the traffic is entirely one-way, and SSE
+gives three things for free that would otherwise have to be built: automatic reconnection in
+the browser, <code>Last-Event-ID</code> replay, and passage through any HTTP proxy with no
+upgrade handshake.</p>
+
+<p>The bus keeps a bounded ring buffer per workspace. A client that reconnects inside the
+buffer is replayed; one that has been away longer gets an explicit <code>resync</code>
+directive telling it to refetch over REST. Silently skipping the gap would leave a dashboard
+confidently displaying stale numbers, which is a worse failure than a reload. The frame
+format and every field are on the <a href="events.html#sse">event contract</a> page.</p>
+
+<h2 id="idempotent">Idempotent ingestion, everywhere</h2>
+
+<p>Repost an event, a batch or a whole report — nothing duplicates and no count moves. This is
+not a nicety: CI steps get retried, networks time out after the server has already committed,
+and a publisher that cannot retry safely is a publisher that loses data.</p>
+
+<ul>
+  <li><code>(source, event id)</code> is unique in the store, so an individual event can only
+  ever be applied once.</li>
+  <li><code>X-Idempotency-Key</code> covers a whole batch.</li>
+  <li><code>POST /api/v1/runs</code> with a <code>run_id</code> you chose returns the existing
+  run instead of creating a second one.</li>
+  <li>The canonical JSON adapter derives event ids as a UUIDv5 over
+  <code>(source, run_id, sequence, type)</code>, so importing the same file twice against the
+  same run applies zero new events.</li>
+</ul>
+
+<div class="codeblock" data-lang="shell" data-caption="The same batch, posted twice">
+<pre><code>$ curl -sX POST "$HUB/api/v1/runs/$RUN/events" -H 'X-Idempotency-Key: batch-1' -d @events.json
+{"run_id": "4ff8b164-…", "applied": 2, "ignored": 0, …}
+
+$ curl -sX POST "$HUB/api/v1/runs/$RUN/events" -H 'X-Idempotency-Key: batch-1' -d @events.json
+{"run_id": "4ff8b164-…", "applied": 0, "ignored": 2, …}</code></pre>
+</div>
+
+<h2 id="comparison">Run comparison against the previous comparable run</h2>
+
+<p>"47 failures" means nothing on its own. "3 newly failing, 44 still failing, 2 newly passing"
+means somebody broke three things and the other 44 were already broken.</p>
+
+<p>Every run is compared against the previous <em>comparable</em> run — the same project, team,
+component, test type, environment and branch. That is the narrowest slice that makes the
+comparison honest: comparing a staging e2e run against a unit run on a feature branch would
+produce a delta that means nothing. The comparison names newly failing, newly passing, still
+failing, added and removed tests by identity, plus deltas on pass rate, duration and total.</p>
+
+<h2 id="flaky">Flaky detection, two definitions, both written down</h2>
+
+<p>Within a run, a test is flaky when it both failed and succeeded across its attempts in that
+one run. Across runs, it is flaky when it disagreed with its own recent history. Both formulas
+are implemented exactly once, in <code>test_hub.domain.metrics</code>, and nothing else in the
+codebase is allowed to compute one — so the number in the offline snapshot and the number in
+the live API cannot disagree. <a href="metrics.html">The formulas.</a></p>
+
+<h2 id="altitudes">Two altitudes, kept apart on purpose</h2>
+
+<p>The overview answers "how is the portfolio doing" and is cheap enough to poll. The run and
+test pages are the engineering drill-down and are allowed to return a lot. They are separate
+endpoints and separate payload types, so that making the drill-down richer cannot make the
+front page slower.</p>
+
+<h2 id="adapters-feature">Formats are plugins, including ours</h2>
+
+<p>Two adapters ship in the box: JUnit/xUnit XML, and Test Hub's own canonical JSON. Both are
+registered through the <code>test_hub.adapters</code> entry-point group — exactly the mechanism
+a third-party package uses. There is no privileged internal path, which means the plugin API is
+the one we ourselves have to live with.</p>
+
+<p>Test Hub deliberately does <strong>not</strong> advertise support for "any JSON" or "any
+XML". An adapter that guesses produces silently wrong numbers, and a wrong pass rate is worse
+than a failed import. Unknown input returns a 415 that lists every installed adapter.
+<a href="adapters.html">Writing one.</a></p>
+
+<h2 id="secure">Secure by default, loudly</h2>
+
+<p>Test Hub ingests untrusted text — test output routinely contains credentials, HTML and
+things that look like markup — and renders it in a browser. The defaults assume that:</p>
+
+<div class="cards">
+  <div><h4>Loopback binding</h4><p>Binding anywhere else <em>requires</em> authentication or an
+  explicit <code>--insecure-no-auth</code> that warns on every start. There is no silent path to
+  an open Test Hub on a network.</p></div>
+  <div><h4>Hashed tokens</h4><p>PBKDF2-SHA256. The plaintext exists once, in the output of
+  <code>test-hub token create</code>. A stolen database is a list of digests.</p></div>
+  <div><h4>Entity-free XML</h4><p>Parsed through <code>defusedxml</code>: DTDs and external
+  entities are refused, not expanded. Billion-laughs and XXE fixtures are in the test
+  suite.</p></div>
+  <div><h4>A CSP it can actually keep</h4><p><code>default-src 'none'</code>, because the
+  frontend has no inline scripts, no inline styles and no remote origins for the policy to have
+  to allow.</p></div>
+  <div><h4>Bounded everything</h4><p>Upload size, decompression size, per-field text length,
+  events per batch, SSE clients, warnings per parse.</p></div>
+  <div><h4>Secret redaction</h4><p>Configurable patterns applied to logs and stored failure
+  text — bearer tokens, private keys, database URLs, cloud keys, JWTs.</p></div>
+</div>
+
+<p>The full threat model, including what is explicitly out of scope, is on the
+<a href="security.html">security</a> page.</p>
+
+<h2 id="no-node">No Node, no CDN, no build step</h2>
+
+<p>The frontend is hand-written CSS and classic (non-module) JavaScript shipped inside the
+wheel. Charts are inline SVG drawn by hand. This is not asceticism, it buys four specific
+things: ES modules do not load over <code>file://</code>, so the snapshot could not be one file;
+the CSP can forbid remote origins outright; a Python package that needs <code>npm</code> to
+build is a packaging liability; and the offline export cannot quietly start leaking a request
+to a font host.</p>
+
+<p>The same rule applies to this documentation site. It loads nothing from the internet
+either.</p>
+
+<h2 id="not-in-v1">Deliberately not in the first release</h2>
+
+<p>Named, with the extension points left in place, because a feature list that only lists
+features is a sales document:</p>
+
+<ul>
+  <li>Test authoring or manual test management.</li>
+  <li>Test execution and orchestration — Test Hub reads results, it does not run tests.</li>
+  <li>AI failure analysis.</li>
+  <li>SSO, SAML and SCIM.</li>
+  <li>Full multi-tenancy. Every row already carries a <code>workspace_id</code>; there is one
+  workspace and no UI to change it.</li>
+  <li>Kubernetes manifests, licence enforcement, notifications and issue-tracker
+  integrations.</li>
+</ul>
+
+<p>Three known limits of the first release are documented rather than hidden: single-process
+write throughput, an in-process SSE bus that stops one Uvicorn worker from becoming four, and a
+snapshot export that fully materializes and is therefore not meant for a million tests.
+<a href="deployment.html#limits">Where each one starts to bite.</a></p>

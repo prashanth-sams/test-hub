@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Invented fixture: well-formed enough to detect, broken enough to fail parsing. -->
+<testsuites name="payments-api" tests="2" failures="0" errors="0" skipped="0">
+  <testsuite name="payments.api.RefundIT" tests="2" failures="0" errors="0" skipped="0" time="2.5">
+    <testcase name="refundsFullAmount" classname="payments.api.RefundIT" time="1.2"/>
+    <testcase name="refundsPartialAmount" classname="payments.api.RefundIT" time="1.3">
+  </testsuite>
+</testsuites>

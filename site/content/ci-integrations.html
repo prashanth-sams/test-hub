@@ -1,0 +1,221 @@
+<!--META {"title": "CI integrations", "eyebrow": "Operating it", "description": "Publishing results from GitHub Actions, Jenkins or anything else that can make an HTTP request.", "lede": "There is no Test Hub plugin to install. Every CI system here uses curl or the test-hub CLI against the same REST API, so the pattern transfers to whichever one you actually use."} -->
+
+<h2 id="the-shape">The shape of it</h2>
+
+<p>Three patterns, in the order you will want them:</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Pattern</th><th>Use it when</th></tr></thead>
+  <tbody>
+    <tr><td><a href="#on-finish">Publish on finish</a></td><td>Almost always. Three lines, works with any framework that writes JUnit XML.</td></tr>
+    <tr><td><a href="#shards">One run from many shards</a></td><td>A matrix or parallel build, so four shards become one run rather than four.</td></tr>
+    <tr><td><a href="#streaming">Stream while running</a></td><td>The suite takes long enough that people watch it.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="token">First, a token</h2>
+
+<p>On any machine with Test Hub installed:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ test-hub token create --label ci</code></pre>
+</div>
+
+<p>It prints two things. The <strong>token</strong> goes into your CI system's secret
+store. The <strong>hash</strong> goes into the server's
+<code>TEST_HUB_API_TOKEN_HASHES</code>. The server never sees the token, and nothing can
+recover it from the server if you lose it — create another and remove the old hash.</p>
+
+<h2 id="on-finish">Publish when the suite finishes</h2>
+
+<h3 id="gh-finish">GitHub Actions</h3>
+
+<div class="codeblock" data-lang="yaml">
+<pre><code>      - name: Run tests
+        run: pytest --junitxml=results.xml
+
+      - name: Publish results
+        if: always()
+        env:
+          TEST_HUB_TOKEN: ${{ secrets.TEST_HUB_TOKEN }}
+          TEST_HUB_URL: https://test-hub.internal
+        run: |
+          curl --fail-with-body -sS -X POST "$TEST_HUB_URL/api/v1/imports" \
+            -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+            -F "file=@results.xml" \
+            -F "project=payments-api" -F "team=payments" -F "type=component" \
+            -F "environment=ci" \
+            -F "branch=${GITHUB_REF_NAME}" -F "commit=${GITHUB_SHA}" \
+            -F "ci_provider=github-actions" \
+            -F "pipeline_id=${GITHUB_RUN_ID}" \
+            -F "pipeline_url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"</code></pre>
+</div>
+
+<div class="note note--warn"><span class="note__title">Two lines that are not optional</span>
+<code>if: always()</code> — without it the publish step is skipped exactly when the tests
+failed, which is the run you most wanted to see. And
+<code>--fail-with-body</code> — without it <code>curl</code> exits 0 on a
+<code>4xx</code>, so the step goes green while nothing was published.</div>
+
+<h3 id="jenkins-finish">Jenkins</h3>
+
+<div class="codeblock" data-lang="groovy">
+<pre><code>pipeline {
+  agent any
+  environment {
+    TEST_HUB_URL   = 'https://test-hub.internal'
+    TEST_HUB_TOKEN = credentials('test-hub-token')
+  }
+  stages {
+    stage('Test') {
+      // Do not let a failing suite abort before the results are published.
+      steps { sh 'pytest --junitxml=results.xml || true' }
+    }
+  }
+  post {
+    always {
+      sh '''
+        set -eu
+        curl --fail-with-body -sS -X POST "$TEST_HUB_URL/api/v1/imports" \
+          -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+          -F "file=@results.xml" \
+          -F "project=payments-api" -F "team=payments" -F "type=component" \
+          -F "branch=${BRANCH_NAME:-$GIT_BRANCH}" -F "commit=${GIT_COMMIT}" \
+          -F "ci_provider=jenkins" \
+          -F "pipeline_id=${BUILD_NUMBER}" -F "pipeline_url=${BUILD_URL}"
+      '''
+    }
+  }
+}</code></pre>
+</div>
+
+<p><code>set -eu</code> matters as much as <code>--fail-with-body</code>: a
+<code>sh</code> step reports the status of the <em>last</em> command, so without
+<code>-e</code> a failing <code>curl</code> in the middle of a script is invisible.</p>
+
+<h3 id="cli-form">Or the CLI, if Python is already there</h3>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ pip install test-hub
+$ test-hub publish results.xml \
+    --url https://test-hub.internal \
+    --project payments-api --team payments --type component \
+    --branch "$GIT_BRANCH" --commit "$GIT_COMMIT" \
+    --token-env TEST_HUB_TOKEN</code></pre>
+</div>
+
+<p><code>--token-env</code> names the variable. The value never appears on the command
+line, where it would be readable in <code>ps</code> by anything else on the agent and
+captured by any step that traces its commands. There is deliberately no
+<code>--token</code> flag.</p>
+
+<h2 id="shards">One run from many shards</h2>
+
+<p>A matrix job produces one report per shard. Published naively that is four runs with a
+quarter of the tests each, and the dashboard shows four unrelated half-red runs instead of
+one complete one.</p>
+
+<p>Generate one run id before the shards start, and give it to every one:</p>
+
+<div class="codeblock" data-lang="yaml" data-caption="GitHub Actions">
+<pre><code>jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.gen.outputs.run_id }}
+    steps:
+      - id: gen
+        run: echo "run_id=$(uuidgen | tr 'A-Z' 'a-z')" &gt;&gt; "$GITHUB_OUTPUT"
+
+  test:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: { shard: [1, 2, 3, 4] }
+    runs-on: ubuntu-latest
+    steps:
+      - run: pytest --junitxml=results.xml --shard=${{ matrix.shard }}/4
+      - if: always()
+        env:
+          TEST_HUB_TOKEN: ${{ secrets.TEST_HUB_TOKEN }}
+        run: |
+          test-hub publish results.xml \
+            --url https://test-hub.internal \
+            --project payments-api --type component \
+            --run-id "${{ needs.prepare.outputs.run_id }}" \
+            --token-env TEST_HUB_TOKEN</code></pre>
+</div>
+
+<div class="codeblock" data-lang="groovy" data-caption="Jenkins — generate once, use in every parallel branch">
+<pre><code>stage('Prepare') {
+  steps {
+    script {
+      env.TEST_HUB_RUN_ID = sh(returnStdout: true,
+        script: 'python3 -c "import uuid; print(uuid.uuid4())"').trim()
+    }
+  }
+}</code></pre>
+</div>
+
+<p>Order does not matter, and re-running a single shard is safe: its events were already
+applied, so they are ignored and no count moves. That is the same idempotency guarantee
+that makes a retried publish free.</p>
+
+<h2 id="streaming">Stream while the suite runs</h2>
+
+<p>Open a run, post results as they finish, close it at the end. Each call is safe to
+retry.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>RUN=$(curl --fail-with-body -sS -X POST "$HUB/api/v1/runs" \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"project_key":"storefront-web","test_type":"e2e"}' | jq -r .id)
+
+# … the suite POSTs to $HUB/api/v1/runs/$RUN/events as tests finish …
+
+curl --fail-with-body -sS -X POST "$HUB/api/v1/runs/$RUN/finish" \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -H 'content-type: application/json' -d '{}'</code></pre>
+</div>
+
+<p>Results appear in every connected dashboard within a couple of seconds, with a LIVE
+badge on the run. A cancelled job that never reaches the close step leaves the run open,
+which is the honest representation: nobody told Test Hub it finished.</p>
+
+<p>The <a href="python-sdk.html">Python SDK</a> wraps this if you are writing a framework
+plugin; the <a href="rest-api.html">REST API</a> is the whole contract if you are not.</p>
+
+<h2 id="artifacts">Screenshots and traces</h2>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>curl --fail-with-body -sS -X POST "$HUB/api/v1/runs/$RUN/artifacts" \
+  -H "Authorization: Bearer $TEST_HUB_TOKEN" \
+  -F "file=@test-results/failure.png" \
+  -F "kind=screenshot" -F "test_id=$TEST_ID"</code></pre>
+</div>
+
+<p>Content-addressed, so fifty shards uploading the same screenshot store one copy.</p>
+
+<h2 id="troubleshooting">Things that go wrong</h2>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Symptom</th><th>Cause</th></tr></thead>
+  <tbody>
+    <tr><td>Step is green, nothing in the dashboard</td><td><code>curl</code> without <code>--fail-with-body</code>, or a <code>sh</code> script without <code>set -e</code>.</td></tr>
+    <tr><td>Results only appear when tests pass</td><td>Missing <code>if: always()</code> / publishing in <code>post { success }</code>, or a failing test command aborting the stage.</td></tr>
+    <tr><td>Four runs instead of one</td><td>The shards did not share a <code>--run-id</code>.</td></tr>
+    <tr><td><code>415 unknown_format</code></td><td>Not JUnit XML or Test Hub JSON. <code>GET /api/v1/adapters</code> lists what this server accepts.</td></tr>
+    <tr><td><code>401 unauthorized</code></td><td>The secret is unset — in most CI systems a missing secret expands to an empty string rather than failing.</td></tr>
+    <tr><td>Branch shows as <code>HEAD</code> or <code>&lt;n&gt;/merge</code></td><td>On a GitHub pull request <code>GITHUB_REF_NAME</code> is the merge ref; use <code>github.head_ref</code>. On Jenkins prefer <code>BRANCH_NAME</code> over <code>GIT_BRANCH</code>, which includes the remote.</td></tr>
+    <tr><td>Publish times out on a large report</td><td>Raise <code>--timeout</code>, and check <code>TEST_HUB_MAX_REPORT_BYTES</code> on the server. Gzipped reports are accepted and decompressed with their own limit.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The full worked pipelines, including scripted-pipeline and systemd variants, are in
+<code>docs/ci/github-actions.md</code> and <code>docs/ci/jenkins.md</code> in the
+repository.</p>

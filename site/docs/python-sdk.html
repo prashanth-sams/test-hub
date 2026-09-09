@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Python SDK · Test Hub</title>
+<meta name="description" content="TestHubClient — publishing results from Python, for framework plugins and scripts.">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="test-hub site/tools/build.py">
+<meta property="og:title" content="Python SDK · Test Hub">
+<meta property="og:description" content="TestHubClient — publishing results from Python, for framework plugins and scripts.">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Test Hub">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/css/site.css">
+<script>
+/* Resolve the theme before first paint: no white flash for a dark reader.
+   An explicit choice wins; otherwise follow the OS. Wrapped because reading
+   localStorage throws outright in a browser configured to block site data. */
+(function () {
+  var theme = null;
+  try { theme = localStorage.getItem('testHubDocsTheme'); } catch (e) { theme = null; }
+  if (theme !== 'light' && theme !== 'dark') {
+    theme = window.matchMedia
+      && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.classList.add('js');
+}());
+</script>
+<!-- canonical: docs/python-sdk.html -->
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar__inner">
+    <button class="iconbtn navburger" type="button" aria-label="Open navigation"
+            aria-expanded="false" aria-controls="sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <a class="brand" href="../index.html">
+      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span>
+      <span class="brand__tag">docs</span>
+    </a>
+    <nav class="navlinks" aria-label="Sections"><a href="../docs/getting-started.html">Docs</a><a href="../docs/dashboard-tour.html">Dashboard</a><a href="../docs/rest-api.html">API</a><a href="../docs/cli-reference.html">CLI</a><a href="../docs/deployment.html">Deploy</a></nav>
+    <div class="topbar__spacer"></div>
+    <button class="searchbtn" type="button" data-search-root="../" aria-label="Search the documentation" aria-haspopup="dialog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="searchbtn__label">Search</span><kbd class="searchbtn__kbd"><span class="searchbtn__mod">Ctrl</span>K</kbd></button>
+    <a class="iconbtn" href="https://github.com/prashanth-sams/test-hub" rel="noopener" title="Source on GitHub"
+       aria-label="Source on GitHub"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg></a>
+    <button class="iconbtn themetoggle" type="button" aria-label="Switch theme"
+            aria-pressed="false" title="Switch theme">
+      <svg class="themetoggle__sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <circle cx="12" cy="12" r="4.2"/>
+        <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/>
+      </svg>
+      <svg class="themetoggle__moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+<div class="navscrim" hidden></div>
+<div class="docs">
+<aside class="sidebar" id="sidebar"><nav aria-label="Documentation">
+<div class="sidebar__group">
+<span class="sidebar__label">Start here</span>
+<a class="sidebar__link" href="../docs/getting-started.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg><span>Getting started</span></a>
+<a class="sidebar__link" href="../docs/features.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m12 3 2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/><path d="M19 3v4M17 5h4M5 17v2M4 18h2"/></svg><span>Features</span></a>
+<a class="sidebar__link" href="../docs/dashboard-tour.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span>Dashboard tour</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Reference</span>
+<a class="sidebar__link" href="../docs/cli-reference.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 9 3 3-3 3M13 15h5"/></svg><span>CLI reference</span></a>
+<a class="sidebar__link" href="../docs/configuration.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg><span>Configuration</span></a>
+<a class="sidebar__link" href="../docs/rest-api.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg><span>REST API</span></a>
+<a class="sidebar__link is-active" href="../docs/python-sdk.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></svg><span>Python SDK</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Contracts</span>
+<a class="sidebar__link" href="../docs/adapters.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg><span>Adapters</span></a>
+<a class="sidebar__link" href="../docs/canonical-schema.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/></svg><span>Canonical schema</span></a>
+<a class="sidebar__link" href="../docs/events.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 5c6 0 6 14 12 14M3 12c4 0 4 7 8 7M3 19h1"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/></svg><span>Event contract</span></a>
+<a class="sidebar__link" href="../docs/metrics.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg><span>Metrics</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Operating it</span>
+<a class="sidebar__link" href="../docs/security.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg><span>Security</span></a>
+<a class="sidebar__link" href="../docs/deployment.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><span>Deployment</span></a>
+<a class="sidebar__link" href="../docs/ci-integrations.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="5" cy="6" r="2.5"/><circle cx="5" cy="18" r="2.5"/><circle cx="19" cy="12" r="2.5"/><path d="M5 8.5v7M7.5 6h5a4 4 0 0 1 4 4v.5M7.5 18h5a4 4 0 0 0 4-4v-.5"/></svg><span>CI integrations</span></a>
+</div>
+<div class="sidebar__group">
+<span class="sidebar__label">Project</span>
+<a class="sidebar__link" href="../docs/faq.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.8-2.8 2.8M12 17h.01"/></svg><span>FAQ</span></a>
+<a class="sidebar__link" href="../docs/contributing.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Contributing</span></a>
+</div>
+</nav></aside>
+<main class="docmain" id="main" tabindex="-1">
+<div class="crumbs">
+  <a href="../index.html">Home</a>
+  <span aria-hidden="true">/</span>
+  <span>Python SDK</span>
+</div>
+<header class="dochero">
+  <span class="eyebrow">Reference</span>
+  <h1>Python SDK</h1>
+  <p class="lede">A convenience over an API designed for curl, never a requirement. Everything the SDK does is a plain HTTP request you could make yourself; it exists so a framework plugin does not have to hand-roll multipart uploads and retry logic.</p>
+</header>
+<div class="note note--info"><span class="note__title">You may not need this</span>
+If your CI step can run <code>curl</code>, use <a href="rest-api.html">the REST API</a>
+directly — there is nothing here that it cannot do. The SDK earns its place inside a
+Python test framework, where you are already in a Python process and want to stream
+results as tests finish.</div>
+
+<h2 id="install">Install</h2>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ pip install test-hub</code></pre>
+</div>
+
+<p>The SDK ships in the same package as the server. If you only want to publish, that is
+still the package — it is one dependency, and the server code is never imported unless you
+start one.</p>
+
+<h2 id="client">TestHubClient</h2>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>from test_hub.sdk import TestHubClient
+
+with TestHubClient(
+    "https://test-hub.internal",
+    token=os.environ["TEST_HUB_TOKEN"],
+    timeout=60.0,
+    verify=True,     # False only for a self-signed internal certificate
+    retries=3,
+) as client:
+    ...</code></pre>
+</div>
+
+<p>Use it as a context manager so the connection pool is closed. It is safe to keep one
+client for a whole test session.</p>
+
+<div class="tablewrap">
+<table>
+  <thead><tr><th>Argument</th><th>Default</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>base_url</code></td><td><code>http://127.0.0.1:8000</code></td><td>The server.</td></tr>
+    <tr><td><code>token</code></td><td><code>None</code></td><td>Sent as <code>Authorization: Bearer</code>. Read it from the environment, never hard-code it.</td></tr>
+    <tr><td><code>timeout</code></td><td><code>60.0</code></td><td>Seconds per request.</td></tr>
+    <tr><td><code>verify</code></td><td><code>True</code></td><td>TLS certificate verification.</td></tr>
+    <tr><td><code>retries</code></td><td><code>3</code></td><td>See <a href="#retries">retry policy</a>.</td></tr>
+    <tr><td><code>client</code></td><td><code>None</code></td><td>Bring your own <code>httpx.Client</code>, for proxies or custom transports.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 id="publish-report">Publishing a finished report</h2>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>from test_hub.domain.models import RunContext
+
+result = client.publish_report(
+    "results.xml",
+    project_key="payments-api",
+    team="payments",
+    component="checkout",
+    test_type="component",          # a string is fine; the enum is not required
+    trigger="push",
+    context=RunContext(
+        framework="pytest", language="python",
+        environment="staging", branch="main", commit_sha="8f21c0d",
+    ),
+    tags=["nightly"],
+)
+
+print(result.adapter, result.counts.total, result.counts.pass_rate)
+# junit-xml 5 50.0</code></pre>
+</div>
+
+<p>Returns an <code>ImportResult</code> — a typed model, so
+<code>result.counts.pass_rate</code> is a <code>float | None</code> rather than a dict
+lookup. <code>result.warnings</code> carries anything the adapter could not represent
+exactly.</p>
+
+<p>A file object works too, for a report you generated in memory:</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>client.publish_report(io.BytesIO(xml_bytes), project_key="p", filename="results.xml")</code></pre>
+</div>
+
+<h3 id="idempotent-publish">Making a retry free</h3>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>client.publish_report("results.xml", project_key="p", run_id=shared_run_id)</code></pre>
+</div>
+
+<p>Passing the same <code>run_id</code> twice applies zero events the second time and
+moves no count — which is how four parallel shards become one run, and why a retried CI
+step is safe. <code>idempotency_key</code> does the same at the batch level.</p>
+
+<h2 id="streaming">Streaming results as they happen</h2>
+
+<p>The path a framework plugin wants: open a run, report each test as it finishes, close
+it.</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>run = client.open_run(
+    project_key="storefront-web",
+    team="growth",
+    test_type="e2e",
+    context=RunContext(framework="Playwright", language="typescript"),
+    expected_tests=len(collected),
+)
+
+client.finish_test(
+    run.id,
+    suite="e2e/basket.spec.ts",
+    name="adds an item to the basket",
+    status="passed",
+    duration_ms=812,
+    project_key="storefront-web",
+)
+
+finished = client.close_run(run.id)
+print(finished.status, finished.counts.pass_rate)</code></pre>
+</div>
+
+<p><code>project_key</code> is passed to <code>finish_test</code> because the stable test
+identity is derived from it. Give it the same value you opened the run with, or the test
+will not join up with its own history.</p>
+
+<h3 id="failures">Reporting a failure</h3>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>from test_hub.domain.models import FailureDetail
+
+client.finish_test(
+    run.id, suite="e2e/checkout.spec.ts", name="recovers from a declined card",
+    status="failed", duration_ms=2500, project_key="storefront-web",
+    failure=FailureDetail(
+        type="AssertionError",
+        message="expected 402 but got 500",
+        stack_trace=traceback.format_exc(),
+        expected="402", actual="500",
+    ),
+    stdout=captured_out, stderr=captured_err, logs=captured_logs,
+)</code></pre>
+</div>
+
+<p>Status words are normalized, so whatever your framework calls it is fine —
+<code>"Success"</code>, <code>"FAILURE"</code>, <code>"expected failure"</code> all map
+correctly, and the original word is preserved. A word Test Hub does not recognise becomes
+<code>unknown</code> and raises a warning; it never quietly becomes a pass.</p>
+
+<h3 id="retries">Reporting a retry</h3>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>for attempt, outcome in enumerate(run_with_retries(test), start=1):
+    client.finish_test(
+        run.id, suite=test.suite, name=test.name,
+        status=outcome.status, attempt_number=attempt,
+        duration_ms=outcome.duration_ms, project_key="storefront-web",
+    )</code></pre>
+</div>
+
+<div class="note note--warn"><span class="note__title">Increment, never overwrite</span>
+A retry is a second attempt, not a correction of the first. Re-reporting attempt 1 with a
+different outcome loses the failure, and reporting it as a separate test inflates the
+count and makes the pass rate wrong. Incrementing <code>attempt_number</code> gives you
+one test, counted once, correctly marked flaky.</div>
+
+<h2 id="artifacts">Artifacts</h2>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>artifact = client.upload_artifact(
+    run.id, "test-results/failure.png", kind="screenshot", test_id=test_id,
+)
+print(artifact.sha256, artifact.size_bytes)</code></pre>
+</div>
+
+<p>Content-addressed, so uploading the same screenshot from fifty shards stores one
+copy.</p>
+
+<h2 id="reading">Reading</h2>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>client.health()                      # version, schema version, workspace id
+client.overview(window_days=30)      # the portfolio view
+client.get_run(run_id)               # a run with suites, tests and comparison
+client.workspace_id()                # fetched once from /healthz, then cached</code></pre>
+</div>
+
+<p>These return plain dictionaries rather than models: they are for scripts and
+assertions, and pinning them to a model would break every time a field was added.</p>
+
+<h2 id="errors">Errors</h2>
+
+<p>Everything raises <code>TestHubClientError</code>, carrying the server's structured
+error so you can branch on a code rather than parse a message:</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>from test_hub.sdk import TestHubClientError
+
+try:
+    client.publish_report("notes.txt", project_key="p")
+except TestHubClientError as error:
+    print(error.status_code)                      # 415
+    print(error.code)                             # unknown_format
+    print(error.detail["installed_adapters"])     # what this server does accept</code></pre>
+</div>
+
+<p>A server that cannot be reached at all raises the same type, with
+<code>status_code is None</code> and a message naming the URL.</p>
+
+<h3 id="retry-policy">Retry policy</h3>
+
+<p>Retried: connection errors, timeouts, <code>408</code>, <code>425</code>,
+<code>429</code> and <code>5xx</code>. Not retried: every other <code>4xx</code>, because
+a malformed request will be just as malformed the second time.</p>
+
+<p>Backoff is exponential and capped at 8 seconds, and honours a <code>Retry-After</code>
+header when the server sends one. A retried request carries the same
+<code>X-Idempotency-Key</code>, so a timeout that actually succeeded on the server does not
+produce a duplicate run.</p>
+
+<p>Set <code>retries=0</code> to handle it yourself.</p>
+
+<h2 id="plugin">A framework plugin, end to end</h2>
+
+<div class="codeblock" data-lang="python" data-caption="Sketch of a pytest plugin"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">Sketch of a pytest plugin</span></div>
+<pre><code>import os
+import pytest
+from test_hub.sdk import TestHubClient, TestHubClientError
+
+PROJECT = os.environ.get("TEST_HUB_PROJECT", "unknown")
+
+
+def pytest_configure(config):
+    url = os.environ.get("TEST_HUB_URL")
+    if not url:
+        return                       # no server configured: do nothing, quietly
+    config._hub = TestHubClient(url, token=os.environ.get("TEST_HUB_TOKEN"))
+    config._run = config._hub.open_run(
+        project_key=PROJECT, test_type="unit",
+        run_id=os.environ.get("TEST_HUB_RUN_ID"),   # set by CI so shards merge
+    )
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    hub = getattr(item.config, "_hub", None)
+    if hub is None or report.when != "call":
+        return
+    try:
+        hub.finish_test(
+            item.config._run.id,
+            suite=str(item.path.relative_to(item.config.rootpath)),
+            name=item.name,
+            status=report.outcome,          # "passed" / "failed" / "skipped"
+            duration_ms=int(report.duration * 1000),
+            project_key=PROJECT,
+        )
+    except TestHubClientError:
+        # Never fail somebody's test run because the dashboard is unreachable.
+        pass
+
+
+def pytest_sessionfinish(session):
+    hub = getattr(session.config, "_hub", None)
+    if hub is not None:
+        try:
+            hub.close_run(session.config._run.id)
+        finally:
+            hub.close()</code></pre>
+</div>
+
+<div class="note note--tip"><span class="note__title">Never break the build</span>
+The two <code>except</code> blocks are the important part. Test Hub being down, slow or
+misconfigured must never turn a passing suite red — a reporting tool that can fail your
+build is a reporting tool people remove.</div>
+
+<h2 id="offline-identity">Computing identity offline</h2>
+
+<p>You do not need the SDK, or a server, to know what a test's id will be:</p>
+
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>from test_hub.domain.identity import test_identity
+
+test_identity(
+    project="payments-api",
+    suite_path="tests/checkout/test_authorization.py",
+    test_name="test_authorizes_a_valid_card",
+    class_name=None,
+    params={"currency": "EUR"},
+)</code></pre>
+</div>
+
+<p>It is a UUIDv5 over five <code>\x1f</code>-separated fields in a fixed namespace, and
+<code>identity_source()</code> is public precisely so an implementation in another
+language can be checked against it byte for byte. See
+<a href="canonical-schema.html">the canonical schema</a>.</p>
+<nav class="pagenav" aria-label="Pagination">
+<a class="pagenav__prev" href="../docs/rest-api.html"><span>&larr;&nbsp;Previous</span><b>REST API</b></a>
+<a class="pagenav__next" href="../docs/adapters.html"><span>Next&nbsp;&rarr;</span><b>Adapters</b></a>
+</nav>
+</main>
+<aside class="toc" aria-label="On this page">
+  <div class="toc__title">On this page</div>
+  <ul>
+<li class="lvl-2"><a href="#install">Install</a></li>
+<li class="lvl-2"><a href="#client">TestHubClient</a></li>
+<li class="lvl-2"><a href="#publish-report">Publishing a finished report</a></li>
+<li class="lvl-3"><a href="#idempotent-publish">Making a retry free</a></li>
+<li class="lvl-2"><a href="#streaming">Streaming results as they happen</a></li>
+<li class="lvl-3"><a href="#failures">Reporting a failure</a></li>
+<li class="lvl-3"><a href="#retries">Reporting a retry</a></li>
+<li class="lvl-2"><a href="#artifacts">Artifacts</a></li>
+<li class="lvl-2"><a href="#reading">Reading</a></li>
+<li class="lvl-2"><a href="#errors">Errors</a></li>
+<li class="lvl-3"><a href="#retry-policy">Retry policy</a></li>
+<li class="lvl-2"><a href="#plugin">A framework plugin, end to end</a></li>
+<li class="lvl-2"><a href="#offline-identity">Computing identity offline</a></li>
+  </ul>
+</aside>
+</div>
+<footer class="footer">
+  <div class="footer__grid">
+    <div class="footer__about">
+      <a class="brand" href="../index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="2.5" y="12.5" width="4" height="8.5" rx="1.2" fill="var(--status-passed)"/><rect x="8.2" y="6.5" width="4" height="14.5" rx="1.2" fill="var(--accent)"/><rect x="13.9" y="9.5" width="4" height="11.5" rx="1.2" fill="var(--status-skipped)"/><rect x="19.6" y="3" width="2.4" height="18" rx="1.2" fill="var(--status-failed)"/></svg><span class="brand__text">Test&nbsp;Hub</span></a>
+      <p>Universal test observability — every team, framework and test run in one place.</p>
+      <p class="footer__links">
+        <a href="https://github.com/prashanth-sams/test-hub" rel="noopener">GitHub</a> ·
+        <a href="https://pypi.org/project/test-hub/" rel="noopener">PyPI</a> ·
+        <a href="https://github.com/prashanth-sams/test-hub/issues" rel="noopener">Issues</a>
+      </p>
+    </div>
+    <div><h2>Start here</h2><ul><li><a href="../docs/getting-started.html">Getting started</a></li><li><a href="../docs/features.html">Features</a></li><li><a href="../docs/dashboard-tour.html">Dashboard tour</a></li></ul></div><div><h2>Reference</h2><ul><li><a href="../docs/cli-reference.html">CLI reference</a></li><li><a href="../docs/configuration.html">Configuration</a></li><li><a href="../docs/rest-api.html">REST API</a></li><li><a href="../docs/python-sdk.html">Python SDK</a></li></ul></div><div><h2>Contracts</h2><ul><li><a href="../docs/adapters.html">Adapters</a></li><li><a href="../docs/canonical-schema.html">Canonical schema</a></li><li><a href="../docs/events.html">Event contract</a></li><li><a href="../docs/metrics.html">Metrics</a></li></ul></div><div><h2>Operating it</h2><ul><li><a href="../docs/security.html">Security</a></li><li><a href="../docs/deployment.html">Deployment</a></li><li><a href="../docs/ci-integrations.html">CI integrations</a></li></ul></div><div><h2>Project</h2><ul><li><a href="../docs/faq.html">FAQ</a></li><li><a href="../docs/contributing.html">Contributing</a></li></ul></div>
+  </div>
+  <div class="footer__bottom">
+    <span>Apache-2.0 licensed.</span>
+    <span>This site loads nothing from the internet — same rule as the dashboard.</span>
+  </div>
+</footer>
+<script src="../assets/js/site.js"></script>
+</body>
+</html>
