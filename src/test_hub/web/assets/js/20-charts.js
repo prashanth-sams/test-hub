@@ -176,7 +176,7 @@
       }));
       node.appendChild(svg('text', {
         x: padding.left - 8, y: y + 3.5, 'text-anchor': 'end',
-        fill: axisColor, 'font-size': 10.5
+        fill: axisColor, 'font-size': 11.5
       }, formatY(value)));
     }
 
@@ -187,7 +187,7 @@
       node.appendChild(svg('text', {
         x: xFor(p), y: height - 8,
         'text-anchor': p === 0 ? 'start' : (p === points.length - 1 ? 'end' : 'middle'),
-        fill: axisColor, 'font-size': 10.5
+        fill: axisColor, 'font-size': 11.5
       }, points[p].label));
     }
 
@@ -307,7 +307,7 @@
         stroke: gridColor, 'stroke-width': 1, 'shape-rendering': 'crispEdges'
       }));
       node.appendChild(svg('text', {
-        x: padding.left - 8, y: y + 3.5, 'text-anchor': 'end', fill: axisColor, 'font-size': 10.5
+        x: padding.left - 8, y: y + 3.5, 'text-anchor': 'end', fill: axisColor, 'font-size': 11.5
       }, util.formatNumber(Math.round(value))));
     }
 
@@ -343,7 +343,7 @@
       if (b % step === 0 || b === buckets.length - 1) {
         node.appendChild(svg('text', {
           x: round1(x + barWidth / 2), y: height - 8, 'text-anchor': 'middle',
-          fill: axisColor, 'font-size': 10.5
+          fill: axisColor, 'font-size': 11.5
         }, bucket.label));
       }
     }
@@ -403,14 +403,14 @@
     if (spec.centerValue !== undefined && spec.centerValue !== null) {
       node.appendChild(svg('text', {
         x: size / 2, y: size / 2 + (spec.centerLabel ? 0 : 6), 'text-anchor': 'middle',
-        fill: color('--text', '#111621'), 'font-size': spec.centerFontSize || 22,
+        fill: color('--text', '#111621'), 'font-size': spec.centerFontSize || 24,
         'font-weight': 640
       }, String(spec.centerValue)));
     }
     if (spec.centerLabel) {
       node.appendChild(svg('text', {
         x: size / 2, y: size / 2 + 18, 'text-anchor': 'middle',
-        fill: color('--text-subtle', '#66707f'), 'font-size': 11
+        fill: color('--text-subtle', '#66707f'), 'font-size': 12
       }, spec.centerLabel));
     }
 

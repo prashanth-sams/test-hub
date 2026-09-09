@@ -107,7 +107,7 @@
     return el('a', {
       attrs: { href: href, rel: 'noreferrer noopener', target: '_blank' },
       className: 'row row--tight'
-    }, [document.createTextNode(text), icon('external', 13)]);
+    }, [document.createTextNode(text), icon('external', 14)]);
   }
 
   function deltaText(value, options) {
@@ -169,7 +169,7 @@
         el('div', { className: 'row row--tight' }, [
           // The icon is decorative: it repeats what the title already says, so
           // it is aria-hidden and the heading keeps the whole accessible name.
-          spec.icon ? el('span', { className: 'card__icon' }, icon(spec.icon, 16)) : null,
+          spec.icon ? el('span', { className: 'card__icon' }, icon(spec.icon, 18)) : null,
           el('h2', { className: 'card__title', text: spec.title || '' }),
           spec.badge || null
         ]),
@@ -372,7 +372,7 @@
       className: 'banner' + (spec.tone ? ' banner--' + spec.tone : ''),
       attrs: { role: spec.tone === 'error' ? 'alert' : 'status' }
     }, [
-      icon(spec.icon || (spec.tone === 'error' ? 'alert' : 'clock'), 16),
+      icon(spec.icon || (spec.tone === 'error' ? 'alert' : 'clock'), 18),
       el('div', {}, [
         spec.title ? el('div', { className: 'banner__title', text: spec.title }) : null,
         spec.text ? el('div', { text: spec.text }) : null
@@ -400,7 +400,7 @@
 
   function emptyState(spec) {
     return el('div', { className: 'empty' }, [
-      el('div', { className: 'empty__icon' }, icon(spec.icon || 'inbox', 20)),
+      el('div', { className: 'empty__icon' }, icon(spec.icon || 'inbox', 22)),
       el('p', { className: 'empty__title', text: spec.title || 'Nothing here yet' }),
       spec.hint ? el('p', { className: 'empty__hint', text: spec.hint }) : null,
       spec.action || null
@@ -413,10 +413,10 @@
     if (spec.onRetry) {
       actions.push(el('button', {
         className: 'btn', attrs: { type: 'button' }, on: { click: spec.onRetry }
-      }, [icon('refresh', 14), document.createTextNode('Try again')]));
+      }, [icon('refresh', 15), document.createTextNode('Try again')]));
     }
     return el('div', { className: 'errorbox', attrs: { role: 'alert' } }, [
-      el('div', { className: 'errorbox__icon' }, icon('alert', 20)),
+      el('div', { className: 'errorbox__icon' }, icon('alert', 22)),
       el('p', { className: 'errorbox__title', text: spec.title || 'That did not load' }),
       el('p', { className: 'errorbox__hint', text: error.message || String(error) || 'Unknown error' }),
       error.hint ? el('p', { className: 'errorbox__detail', text: error.hint }) : null,
@@ -848,7 +848,7 @@
         'aria-label': spec.label || 'Menu',
         title: spec.title || spec.label || 'Menu'
       }
-    }, icon(spec.icon || 'gear', 16));
+    }, icon(spec.icon || 'gear', 18));
 
     var root = el('div', { className: 'menu' }, [trigger, panel]);
 
@@ -985,7 +985,7 @@
         }
       }
     }, [
-      icon('moon', 15),
+      icon('moon', 17),
       el('span', { className: 'switchrow__label', text: 'Dark mode' }),
       track
     ]);

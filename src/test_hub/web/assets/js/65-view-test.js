@@ -221,7 +221,7 @@
         className: 'attempt__head',
         attrs: { type: 'button', 'aria-expanded': String(isOpen) }
       }, [
-        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 14)),
+        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 15)),
         el('span', { className: 'attempt__n', text: 'Attempt ' + (attempt.attempt_number || number) }),
         ui.statusPill(attempt.status),
         attempt.original_status && attempt.original_status !== attempt.status

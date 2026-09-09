@@ -143,6 +143,27 @@ def test_storage_access_is_guarded() -> None:
         assert "try" in boot[max(0, index - 200) : index], f"{call} is not inside a try block"
 
 
+def test_type_sizes_come_from_the_scale() -> None:
+    """Dense UI drifts small one hint at a time until half the page is 11px.
+
+    Every size the dashboard uses for text is a `--fs-*` token, so the drift is
+    visible in review and the whole scale can be moved in one edit. The only
+    literals allowed are the display numbers — a 42px hero figure is a one-off,
+    not a step on a scale — and they are all comfortably large.
+    """
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+
+    for token in ("--fs-3xs", "--fs-2xs", "--fs-xs", "--fs-sm", "--fs-md", "--fs-lg"):
+        assert re.search(rf"^\s+{token}: \d", css, re.M), f"{token} is not defined"
+
+    offenders = []
+    for number, line in enumerate(css.splitlines(), 1):
+        match = re.search(r"font-size:\s*([0-9.]+)px", line)
+        if match and float(match.group(1)) < 20:
+            offenders.append(f"{number}: {line.strip()[:70]}")
+    assert not offenders, "text sized off the scale:\n" + "\n".join(offenders)
+
+
 def test_colour_literals_live_only_in_the_token_blocks() -> None:
     """Every colour must be a custom property, or the dark theme has holes in it."""
     css = CSS_FILES[0].read_text(encoding="utf-8")

@@ -184,7 +184,7 @@
           el('button', {
             className: 'btn btn--sm', attrs: { type: 'button' },
             on: { click: function () { store.retry(); } }
-          }, [ui.icon('refresh', 14), document.createTextNode('Refresh')])
+          }, [ui.icon('refresh', 15), document.createTextNode('Refresh')])
         ])
       ]);
     }
@@ -232,12 +232,12 @@
                 el('div', { className: 'hero__label', text: 'test cases' }),
                 el('div', { className: 'hero__meta' }, [
                   el('span', { className: 'hero__pill' }, [
-                    ui.icon('clock', 13),
+                    ui.icon('clock', 14),
                     el('span', { text: util.formatDuration(run.duration_ms) })
                   ]),
                   context.environment
                     ? el('span', { className: 'hero__pill' }, [
-                      ui.icon('monitor', 13),
+                      ui.icon('monitor', 14),
                       el('span', { text: context.environment })
                     ])
                     : null,
@@ -375,7 +375,7 @@
         className: 'tree__row',
         attrs: { type: 'button', 'aria-expanded': 'false' }
       }, [
-        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 14)),
+        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 15)),
         el('span', { className: 'tree__name', text: label }),
         el('span', { className: 'statuspill', dataset: { status: status },
           text: util.formatNumber(ids.length) })
@@ -520,7 +520,7 @@
         className: 'tree__row',
         attrs: { type: 'button', 'aria-expanded': String(expanded) }
       }, [
-        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 14)),
+        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 15)),
         el('span', { className: 'tree__name' }, [
           el('span', { text: node.suite.name || node.suite.path }),
           node.suite.path && node.suite.path !== node.suite.name

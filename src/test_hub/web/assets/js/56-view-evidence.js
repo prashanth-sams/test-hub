@@ -389,12 +389,17 @@
       return [ui.card({
         title: 'Captures',
         icon: 'camera',
-        actions: [lens.el],
+        flush: true,
         hint: chosen.length > shown.length
           ? 'Showing the first ' + util.formatNumber(shown.length) + ' of ' +
             util.formatNumber(chosen.length)
           : null,
-        body: body
+        body: [
+          el('div', { className: 'card__toolbar' }, [
+            el('div', { className: 'filters__row' }, [lens.el])
+          ]),
+          el('div', { className: 'card__body' }, body)
+        ]
       })];
     }
   });

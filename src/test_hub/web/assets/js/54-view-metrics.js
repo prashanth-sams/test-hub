@@ -411,8 +411,15 @@
           ? 'Showing ' + util.formatNumber(shown.length) + ' of ' +
             util.formatNumber(rows.length) + ' — search to narrow it'
           : util.formatNumber(rows.length) + ' ' + util.pluralize(rows.length, 'test'),
-        actions: [lensGroup.el, finder],
-        body: body
+        // The controls go in a toolbar under the head, not in it: they are
+        // labelled fields, and a labelled field in a card head makes the head
+        // as tall as two rows and leaves the title floating beside it.
+        body: [
+          el('div', { className: 'card__toolbar' }, [
+            el('div', { className: 'filters__row' }, [lensGroup.el, finder])
+          ]),
+          body
+        ]
       });
     }
 

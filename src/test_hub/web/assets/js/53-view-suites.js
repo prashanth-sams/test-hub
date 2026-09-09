@@ -407,8 +407,13 @@
         title: 'Suites',
         icon: 'briefcase',
         flush: true,
-        actions: [finder],
-        body: body
+        hint: util.formatNumber(rows.length) + ' of ' + util.formatNumber(all.length) + ' shown',
+        body: [
+          el('div', { className: 'card__toolbar' }, [
+            el('div', { className: 'filters__row' }, [finder])
+          ]),
+          body
+        ]
       });
     }
 

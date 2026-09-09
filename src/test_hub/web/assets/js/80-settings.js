@@ -84,7 +84,7 @@
         attrs: { role: 'menuitem', href: '#/settings' },
         on: { click: function () { control.close(); } }
       }, [
-        ui.icon('gear', 15),
+        ui.icon('gear', 17),
         el('span', { className: 'menu__item-label', text: 'Retention and data\u2026' })
       ])
     ];

@@ -21,6 +21,11 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Added
 
+- **A type scale, one step larger.** Every font size in the dashboard is now one
+  of eight named `--fs-*` tokens rather than a literal, and the whole scale moved
+  up a step: body text is 15px, tables and buttons 14px, and nothing that is not
+  a badge sits below 12px. Icons, control padding, table rows and the chart axis
+  labels grew with it. A test fails the build if new text is sized off the scale.
 - **Six more pages in the rail, and a rail that can hold them.** Test Suites
   (every suite folded by path across the recent runs, sortable, searchable, and
   expandable into its tests), Test Metrics (one row per test identity with runs,
