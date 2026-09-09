@@ -481,7 +481,7 @@ table.sr-only,
 .nav::-webkit-scrollbar { display: none; }
 .nav__group { display: flex; flex-direction: column; gap: 1px; }
 .nav__label {
-  padding: 0 10px var(--sp-1);
+  padding: 0 10px var(--sp-1) 20px;
   font-size: var(--fs-3xs);
   font-weight: 700;
   letter-spacing: 0.09em;
@@ -492,8 +492,13 @@ table.sr-only,
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 8px;
+  /* Asymmetric on purpose. The report insets its glyphs 27.8px from the rail's
+     edge — 12px of link padding plus a 10% margin on the icon itself — and
+     that gutter is most of what stops a 180px rail reading as cramped. The
+     sidebar's own 8px makes up the rest of the 28px here; the right side stays
+     tight because nothing is aligned against it. */
+  padding: 8px 10px 8px 20px;
   border-radius: var(--r-sm);
   color: var(--rail-muted);
   /* A step above body text, matching the report's 16px rail. The rail holds
