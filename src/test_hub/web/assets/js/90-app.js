@@ -61,7 +61,7 @@
     for (var n = 0; n < navLinks.length; n++) {
       var iconName = navLinks[n].getAttribute('data-icon');
       if (iconName) {
-        navLinks[n].insertBefore(ui.icon(iconName, 18), navLinks[n].firstChild);
+        navLinks[n].insertBefore(ui.railIcon(iconName, 18), navLinks[n].firstChild);
       }
     }
 

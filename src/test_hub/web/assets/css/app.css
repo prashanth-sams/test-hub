@@ -506,13 +506,16 @@ table.sr-only,
   white-space: nowrap;
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
-.nav__link svg { flex: none; opacity: 0.75; }
+/* No dimming: the rail's glyphs are solid, and they carry the same weight as
+   the word beside them exactly as they do in the report, where the icon is
+   plain `currentcolor`. Fading a filled shape to 0.75 is what made the old
+   outline icons read as a smudge. */
+.nav__link svg { flex: none; }
 .nav__link:hover { background: var(--rail-bg-soft); color: var(--rail-text); text-decoration: none; }
 .nav__link[aria-current="page"] {
   background: var(--rail-active-bg);
   color: var(--rail-active-text);
 }
-.nav__link[aria-current="page"] svg { opacity: 1; }
 /* The current route also gets a bar down its leading edge. Colour alone is
  * carrying the state otherwise, and against a dark rail the tinted background
  * is a subtle signal to anyone who does not separate those two blues. */

@@ -330,13 +330,18 @@ def test_wide_content_scrolls_inside_its_own_box() -> None:
 
 def test_the_nav_icons_come_from_the_icon_set() -> None:
     """Inline SVG in the markup is a second copy of path data to keep in step;
-    `data-icon` is resolved against the one set in 40-components.js."""
+    `data-icon` is resolved in 40-components.js, against the rail's solid glyphs
+    first and the outline set behind it — which is the fallback `railIcon`
+    itself takes, so a name that is in neither would draw the inbox icon rather
+    than fail."""
     assert "<svg" not in INDEX_MARKUP, "the markup draws its own icons"
     names = re.findall(r'data-icon="([^"]+)"', INDEX_MARKUP)
     assert names, "the rail's links carry no icons"
     icons = components_source()
     for name in names:
-        assert re.search(rf"^\s+{name}: \[", icons, re.M), f"no {name} icon in the set"
+        outline = re.search(rf"^\s+{re.escape(name)}: \[", icons, re.M)
+        solid = re.search(rf"^\s+'{re.escape(name)}': {{", icons, re.M)
+        assert outline or solid, f"no {name} icon in either set"
 
 
 # ------------------------------------------------------------------- settings
