@@ -1,4 +1,4 @@
-<!--META {"title": "Canonical schema", "eyebrow": "Contracts", "description": "schema_version and the compatibility promise, the Workspace-to-TestAttempt hierarchy, the ten normalized statuses, stable test identity, and the test-hub-report JSON format.", "lede": "Everything that crosses a boundary \u2014 an HTTP response, the JSON frozen inside an offline export, the output of an adapter \u2014 is one of a small set of Pydantic models. Database rows are never serialized directly. This page is that contract: what is promised, what is derived, and what a publisher in any language has to reproduce to interoperate."} -->
+<!--META {"title": "Canonical schema", "eyebrow": "Contracts", "description": "schema_version and the compatibility promise, the Workspace-to-TestAttempt hierarchy, the ten normalized statuses, stable test identity, and the test-hub-report JSON format.", "lede": "Everything that crosses a boundary \u2014 an HTTP response, the output of an adapter \u2014 is one of a small set of Pydantic models. Database rows are never serialized directly. This page is that contract: what is promised, what is derived, and what a publisher in any language has to reproduce to interoperate."} -->
 <p>The models live in <code>test_hub.domain.models</code> and are the public wire
 contract. The SQLAlchemy rows on disk are a separate, private thing, and nothing ever
 serializes an ORM object. That separation is what lets the table layout change &mdash; a
@@ -33,7 +33,7 @@ document a consumer might have received with no surrounding context.</p>
   <tbody>
     <tr>
       <td><code>TestRun</code>, <code>RunDetail</code>, <code>TestDetail</code>,
-      <code>OverviewSnapshot</code>, <code>ImportResult</code>, <code>Snapshot</code>,
+      <code>OverviewSnapshot</code>, <code>ImportResult</code>,
       and <code>DomainEvent</code> (as <code>schemaversion</code>, following the
       CloudEvents attribute-naming rules)</td>
       <td><code>Workspace</code>, <code>Project</code>, <code>RunSummary</code>,
@@ -392,7 +392,7 @@ every one and the dashboard shows them on the run.</p>
 and appends a <code>warnings_truncated</code> note, so a pathological file still produces
 a bounded response. <a href="adapters.html#warnings">How an adapter raises one.</a></p>
 
-<h3 id="derived-views">RunComparison, TestDetail, OverviewSnapshot, ImportResult, Snapshot</h3>
+<h3 id="derived-views">RunComparison, TestDetail, OverviewSnapshot, ImportResult</h3>
 
 <p>Five read models that are computed rather than stored.</p>
 
@@ -403,7 +403,6 @@ a bounded response. <a href="adapters.html#warnings">How an adapter raises one.<
     <tr><td><code>TestDetail</code></td><td>Everything known about one stable test identity across runs: the identity fields, the <code>latest</code> <code>TestCase</code>, a <code>history</code> of <code>TestHistoryPoint</code> newest first, and three derived numbers — <code>flake_rate</code>, <code>failure_rate</code> and <code>average_duration_ms</code>. Note that <code>TestDetail.failure_rate</code> and <code>RunCounts.failure_rate</code> are different quantities over different denominators.</td></tr>
     <tr><td><code>OverviewSnapshot</code></td><td>The portfolio view, deliberately separate from <code>RunDetail</code>: the overview must stay cheap enough to poll, while the drill-down is allowed to be large. Carries merged <code>counts</code>, run totals inside and outside the window, <code>live_runs</code>, <code>recent_runs</code>, <code>projects</code>, a <code>trend</code>, the ten most failing and ten flakiest tests, and the distinct facet values for the filter dropdowns.</td></tr>
     <tr><td><code>ImportResult</code></td><td>What every import returns, whether it came from the CLI, the SDK or REST: <code>run_id</code>, <code>project_key</code>, <code>adapter</code>, <code>format</code>, <code>detection_confidence</code>, <code>created</code>, <code>counts</code>, <code>suites_imported</code>, <code>tests_imported</code>, <code>attempts_imported</code>, <code>events_applied</code>, <code>events_ignored</code>, <code>warnings</code> and <code>duration_ms</code>.</td></tr>
-    <tr><td><code>Snapshot</code></td><td>The complete frozen payload embedded in an offline HTML export, and exactly what the snapshot data provider reads in the browser. Its <code>kind</code> is the literal <code>"test-hub-snapshot"</code> — note that this is <em>not</em> one of the two <code>kind</code> values the JSON adapter accepts on import. An export is a report to read, not a report to re-ingest.</td></tr>
   </tbody>
 </table></div>
 
@@ -820,13 +819,12 @@ there is no second artefact to keep in step. Every model's docstring becomes the
 page does.</p>
 
 <div class="codeblock" data-lang="shell">
-<pre><code>$ python -c "import json; from test_hub.domain.models import Snapshot; \
-    print(len(json.dumps(Snapshot.model_json_schema())))"
-32803</code></pre>
+<pre><code>$ python -c "import json; from test_hub.domain.models import RunDetail; \
+    print(len(json.dumps(RunDetail.model_json_schema())))"</code></pre>
 </div>
 
-<p><code>Snapshot</code>'s schema pulls in 25 definitions and is about 33&nbsp;KB of
-JSON.</p>
+<p><code>RunDetail</code>'s schema pulls in most of the model tree, and every definition in
+it carries the docstring from the model it came from.</p>
 
 <div class="note note--warn"><span class="note__title">Ask for the serialization schema
 when you are describing a response</span>Pydantic's default is the <em>validation</em>

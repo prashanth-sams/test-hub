@@ -30,26 +30,16 @@
     ]);
   }
 
-  /* The About block answers "what am I looking at" — which for this product is
-   * a genuine question, because the same dashboard code renders both a live
-   * server and a frozen file (ADR-0001 D1) and the two look identical. */
+  /* The About block answers "what am I looking at": which server, which
+   * version of it, and which schema that version speaks. */
   function aboutRows(provider) {
     var meta = provider.meta || {};
-    var snapshot = provider.kind === 'snapshot';
-    var rows = [
-      aboutRow('Source', snapshot ? 'Offline export' : 'Live server'),
+    return [
+      aboutRow('Source', 'Live server'),
       aboutRow('Version', meta.generator_version ? 'test-hub ' + meta.generator_version : null),
-      aboutRow('Schema', meta.schema_version ? 'v' + meta.schema_version : null)
+      aboutRow('Schema', meta.schema_version ? 'v' + meta.schema_version : null),
+      aboutRow('API', meta.apiBase || '/api/v1')
     ];
-    if (snapshot) {
-      rows.push(aboutRow('Runs in file', util.formatNumber(meta.run_count || 0)));
-      if (meta.generated_at) {
-        rows.push(aboutRow('Exported', util.formatDateTime(meta.generated_at)));
-      }
-    } else {
-      rows.push(aboutRow('API', meta.apiBase || '/api/v1'));
-    }
-    return rows;
   }
 
   function create(ctx) {
@@ -90,7 +80,7 @@
     ];
 
     util.appendChild(control.panel, [
-      provider.kind === 'snapshot' ? null : ui.menuSection('Data', dataItems),
+      ui.menuSection('Data', dataItems),
       about
     ]);
     fillAbout();

@@ -81,7 +81,6 @@ which is the only place any of them are defined.
 cli ──▶ api ──▶ service ──▶ storage ──▶ (sqlite / filesystem)
  │       │         │
  │       │         └──▶ domain ◀── adapters
- ├──▶ export ──────────▶ domain
  └──▶ sdk ─(http)─▶ api
 ```
 
@@ -96,7 +95,6 @@ architectural rule of this project and most review comments come back to it.
 | `service/` | Folding events into rows, queries, the event bus | `domain`, `storage`, `adapters` |
 | `api/` | FastAPI app, auth, request/response models | `service` and below |
 | `cli/` | The Typer app | anything |
-| `export/` | The single-file HTML snapshot writer | `domain`, `service` |
 | `sdk/` | The Python publishing client | `domain`; talks to the API over HTTP |
 | `web/` | The dashboard, shipped in the wheel | — |
 
@@ -293,7 +291,7 @@ line is a sentence you could put after "this commit will…":
 | `chore` | everything else |
 
 Useful scopes: `adapters`, `domain`, `storage`, `service`, `api`, `cli`, `web`,
-`export`, `sdk`, `docs`, `docker`.
+`demo`, `sdk`, `docs`, `docker`.
 
 ```
 feat(adapters): add TRX adapter for MSTest and NUnit output

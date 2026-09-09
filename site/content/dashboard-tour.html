@@ -12,8 +12,7 @@ the rail becomes a bar: a phone has no width to spare for a permanent column.</p
 "Live" means results are arriving as they happen. When the stream drops, a banner appears
 above the view and the dashboard keeps working from what it already has; it reconnects by
 itself, and if it has been away long enough for the server's replay buffer to have moved
-past it, it refetches instead of quietly displaying stale numbers. In an offline export
-there is nothing to connect to, so the indicator says so and the banner never appears.</p>
+past it, it refetches instead of quietly displaying stale numbers.</p>
 
 <p>Every view is addressable. The routes are hash-based — <code>#/overview</code>,
 <code>#/analytics</code>, <code>#/runs</code>, <code>#/runs/&lt;uuid&gt;</code>,
@@ -146,10 +145,10 @@ branch, commit and tags, plus project, team, component, test type, environment, 
 status. Sort and page are here too.</p>
 
 <p>All of it lives in the URL. That is the feature, not tidiness: a filtered list has to be
-a link somebody can paste, and it has to survive a reload and the back button. Sorting is
-handled by the server in live mode and in the browser in an offline snapshot — the view
-knows about neither, it just puts <code>sort</code> and <code>dir</code> in the hash and
-lets whichever provider is mounted honour them.</p>
+a link somebody can paste, and it has to survive a reload and the back button. The view does
+not know how sorting is done — it puts <code>sort</code> and <code>dir</code> in the hash,
+and the provider honours them on the server where it can and in the browser where a filter
+the API cannot express forced it to fetch a page and refine it. The table says which.</p>
 
 <p>Each row carries the run's status, project, team and component, its environment and
 branch, the framework and language if the publisher said, the counts, the duration, and a
@@ -246,27 +245,10 @@ the event model, made visible.</p>
 and stdout arrive as text nodes inside a <code>&lt;pre&gt;</code>. There is no formatting
 pass, no ANSI translation and no markup: what the framework produced is what you read. A
 test named <code>&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;</code> renders as that
-text, in both the live dashboard and the offline file, and there is a test asserting
-it.</div>
+text, and there is a test asserting it.</div>
 
 <h3 id="test-history">History</h3>
 
 <p>A strip of squares, newest on the left, one per run, each coloured by outcome and linking
 to its run — the shape of a flaky test is visible at a glance. Underneath, the same history
 as a table: run time, status, attempt count, duration, branch and environment.</p>
-
-<div class="note"><span class="note__title">In an offline export</span>A snapshot contains
-the runs it was built from, so a test's history in an exported file is bounded by what that
-export included. When it is partial the page says so on a banner rather than presenting a
-short history as a complete one.</div>
-
-<h2 id="offline">The same dashboard, offline</h2>
-
-<p>Everything above is identical in the file <code>test-hub export</code> writes. The views,
-the charts, the filters, the routing, the theme toggle. What differs is where the data comes
-from: a frozen snapshot object embedded in the page instead of a REST API and an event
-stream. The footer of an exported file names the generator version and how many runs are in
-it.</p>
-
-<p>What an export cannot do is update while you watch, and it cannot fetch a run that was not
-included in it. Those are the two things the live mode is for.</p>

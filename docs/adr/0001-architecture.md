@@ -1,9 +1,14 @@
 # ADR-0001 — Test Hub architecture
 
-- **Status**: Accepted
+- **Status**: Accepted, partly superseded
 - **Date**: 2026-09-08
 - **Deciders**: Test Hub maintainers
 - **Supersedes**: —
+- **Amended by**: [ADR-0002](0002-data-retention.md) (D4, D8)
+- **Superseded in part by**: [ADR-0003](0003-drop-the-offline-export.md) — D1's
+  second provider, and every "snapshot" or "offline file" below, are gone. The
+  decisions themselves are left as written: this file records what was decided
+  in September 2026, not what is true today.
 
 ## Context
 

@@ -19,23 +19,14 @@
   These are local files served from the same origin; the parse cost is a few
   milliseconds and the alternative is a white flash on every load in dark mode.
 
-  The three marker pairs below are the contract with the snapshot exporter. It
-  replaces each block with an inlined equivalent — the stylesheet as one <style>,
-  the scripts as one <script>, the snapshot placeholder as the embedded data —
-  and the result is this same file with no external references. Keep the markers
-  exact; the load order of the scripts is the order in assets/manifest.json.
+  The load order below is the order in assets/manifest.json, and the two must
+  not drift: tests/test_frontend_assets.py fails the build if they do.
 -->
 
-<!-- test-hub:styles:start -->
 <link rel="stylesheet" href="assets/css/app.css">
-<!-- test-hub:styles:end -->
 
-<!-- test-hub:snapshot -->
-
-<!-- test-hub:scripts:start -->
 <script src="assets/js/00-util.js"></script>
 <script src="assets/js/10-provider.js"></script>
-<script src="assets/js/11-snapshot-provider.js"></script>
 <script src="assets/js/12-live-provider.js"></script>
 <script src="assets/js/20-charts.js"></script>
 <script src="assets/js/30-store.js"></script>
@@ -51,7 +42,6 @@
 <script src="assets/js/70-view-settings.js"></script>
 <script src="assets/js/80-settings.js"></script>
 <script src="assets/js/90-app.js"></script>
-<!-- test-hub:scripts:end -->
 </head>
 <body>
 <a class="sr-only skiplink" href="#th-view">Skip to content</a>

@@ -215,9 +215,8 @@ prevent.</p>
     truncated.</td></tr>
     <tr><td><code>store_raw_reports</code></td><td><code>TEST_HUB_STORE_RAW_REPORTS</code></td>
     <td><code>true</code></td><td>Keep the original uploaded file as an artifact, so you can
-    re-parse it later when an adapter improves. Turning it off saves disk and loses that. The
-    <code>export --input</code> path sets it to <code>false</code> for its throwaway database,
-    because nothing will ever read those back.</td></tr>
+    re-parse it later when an adapter improves. Turning it off saves disk and loses
+    that.</td></tr>
   </tbody>
 </table></div>
 
@@ -398,8 +397,7 @@ and sends <code>resync</code> to a stale one. Use 1 if you want the smallest wor
     from the slug, so an offline publisher can compute the same id without asking the
     server.</td></tr>
     <tr><td><code>workspace_name</code></td><td><code>TEST_HUB_WORKSPACE_NAME</code></td>
-    <td><code>Default workspace</code></td><td>Display name, used in the dashboard and in the
-    snapshot export.</td></tr>
+    <td><code>Default workspace</code></td><td>Display name, used in the dashboard.</td></tr>
     <tr><td><code>log_level</code></td><td><code>TEST_HUB_LOG_LEVEL</code></td><td><code>info</code></td>
     <td><code>debug</code>, <code>info</code>, <code>warning</code> or <code>error</code> —
     validated, anything else fails to start. Set it on <code>serve</code> with

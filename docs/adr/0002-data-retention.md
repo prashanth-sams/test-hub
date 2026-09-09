@@ -394,9 +394,10 @@ Each of these fails on today's code, which is the point of listing them:
   dashboard means persisting settings somewhere, which is a store this product
   does not have — and a *saved* policy that nothing enforces on a timer would be a
   promise the server does not keep (D1).
-- **No archival.** Pruned data is gone, not exported. An operator who wants a
-  cold copy runs `test-hub export` for the window first — that is what the
-  offline snapshot is for, and the docs say so next to the destructive command.
+- **No archival.** Pruned data is gone. An operator who wants a cold copy takes a
+  database backup first, and the docs say so next to the destructive command.
+  (This bullet originally pointed at `test-hub export`, which
+  [ADR-0003](0003-drop-the-offline-export.md) removed.)
 - **No idempotency-key expiry of its own.** Keys die with their run, so a key
   belonging to a run inside the window lives as long as the run does, which is far
   longer than the minutes it is useful for. A short independent TTL on that table

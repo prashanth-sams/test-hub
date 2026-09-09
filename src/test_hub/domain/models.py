@@ -1,7 +1,7 @@
 """The canonical model — Test Hub's public wire contract.
 
-Everything that crosses a boundary (HTTP body, snapshot JSON, adapter output)
-is one of these models. Database rows are *never* serialized directly; see
+Everything that crosses a boundary (HTTP body, adapter output) is one of these
+models. Database rows are *never* serialized directly; see
 ADR-0001 D3. Every top-level payload carries ``schema_version`` so a consumer
 can refuse a shape it does not understand instead of guessing.
 
@@ -25,7 +25,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from pydantic import (
     AwareDatetime,
@@ -50,7 +50,6 @@ __all__ = [
     "RunCounts",
     "RunDetail",
     "RunSummary",
-    "Snapshot",
     "TestAttempt",
     "TestCase",
     "TestRun",
@@ -715,23 +714,3 @@ class ImportResult(_VersionedBase):
     )
     warnings: list[ParserWarning] = Field(default_factory=list)
     duration_ms: int | None = None
-
-
-class Snapshot(_VersionedBase):
-    """The complete, frozen payload embedded in a standalone HTML export.
-
-    This is exactly what :class:`SnapshotDataProvider` reads in the browser, and
-    it is a superset of what the live API returns for the same data — the two
-    providers are two ways of obtaining the same shapes.
-    """
-
-    kind: Literal["test-hub-snapshot"] = "test-hub-snapshot"
-    generated_at: AwareDatetime = Field(default_factory=utcnow)
-    generator: ShortText = "test-hub"
-    generator_version: ShortText
-    title: ShortText = "Test Hub report"
-    workspace: Workspace
-    projects: list[Project] = Field(default_factory=list)
-    overview: OverviewSnapshot
-    runs: list[RunDetail] = Field(default_factory=list)
-    tests: list[TestDetail] = Field(default_factory=list)

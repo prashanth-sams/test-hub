@@ -11,9 +11,9 @@
  *    for `prefers-color-scheme` to resolve, because 20-charts.js reads its
  *    palette back with getComputedStyle and an SVG cannot inherit a media
  *    query. Explicit attribute in, explicit colours out.
- *  - Every localStorage access is wrapped. Over file:// — which is exactly how
- *    the exported snapshot is opened — reading localStorage throws outright in
- *    some browsers, and a thrown exception here would leave the page unthemed
+ *  - Every localStorage access is wrapped. Storage can be blocked outright —
+ *    a browser configured to refuse site data throws on read rather than
+ *    returning null — and a thrown exception here would leave the page unthemed
  *    and the rest of the app unloaded.
  *
  * Everything that turns data into DOM goes through `el()` or `textContent`.
@@ -594,8 +594,8 @@
   /* --------------------------------------------------------------- routes */
 
   /**
-   * Hash routing so that every view is linkable and reloadable, including from
-   * a file:// snapshot where there is no server to answer a real path.
+   * Hash routing, so the dashboard is one document the server hands over
+   * whatever the path, and every view is still linkable and reloadable.
    *
    *   #/overview?team=payments   #/runs?status=failed&page=2
    *   #/runs/<uuid>              #/tests/<uuid>

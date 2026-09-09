@@ -8,7 +8,6 @@ The package is layered, and the layers only point one way::
     cli ──▶ api ──▶ service ──▶ storage
      │       │         │
      │       │         └──▶ domain ◀── adapters
-     ├──▶ export ──────────▶ domain
      └──▶ sdk ─(http)─▶ api
 
 :mod:`test_hub.domain` imports nothing else from the package: it is the contract.

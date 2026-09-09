@@ -49,9 +49,9 @@ is computed from.
 
 <!--
 Not "CI is green". What did you actually run, and what did you see? For an
-adapter, name the fixture. For a UI change, say which browser and whether you
-checked it in the snapshot export as well as live — those are two render paths
-and only one of them has a server.
+adapter, name the fixture. For a UI change, say which browser, and whether you
+checked both themes and a narrow viewport — a dark-mode-only regression is the
+easiest one to ship.
 -->
 
 ---

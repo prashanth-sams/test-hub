@@ -6,7 +6,6 @@ business logic::
     test-hub serve      start the API and the dashboard
     test-hub ingest     import a report into the local store
     test-hub publish    send a report to a remote Test Hub
-    test-hub export     write a self-contained offline HTML report
     test-hub demo       fill the store with realistic sample data
     test-hub prune      delete runs older than a retention cutoff
     test-hub token      create and hash API tokens
@@ -77,7 +76,6 @@ def _register() -> None:
     """
     from test_hub.cli.commands import (
         demo,
-        export,
         formats,
         ingest,
         prune,
@@ -89,7 +87,6 @@ def _register() -> None:
     app.command("serve", help="Start the API and serve the dashboard.")(serve.serve)
     app.command("ingest", help="Import a report file into the local store.")(ingest.ingest)
     app.command("publish", help="Send a report to a remote Test Hub server.")(publish.publish)
-    app.command("export", help="Write a self-contained offline HTML report.")(export.export)
     app.command("demo", help="Populate the store with realistic sample data.")(demo.demo)
     app.command("prune", help="Delete runs older than a retention cutoff.")(prune.prune)
     app.command("formats", help="List the installed report adapters.")(formats.formats)

@@ -256,11 +256,6 @@ containers can sit behind a load balancer. Three things need attention:
 
 ## Limits that are not about throughput
 
-**Snapshot export is a full materialization.** `test-hub export` builds the
-entire object graph in memory and writes it into one HTML file — 252 KB for the
-demo data set. It is not intended for a million tests, and the fix is not a
-faster database; it is `--days` and `--max-runs`, which already exist.
-
 **`GET /runs/{id}` has no paging.** A run returns every suite, every test and
 every attempt. A 50 000-test run is one enormous response. That is a deliberate
 altitude choice — the drill-down is allowed to be large, the overview is not —

@@ -380,9 +380,9 @@ bulk of the bytes. To return the database pages to the filesystem, pass
 free space, and holds an exclusive lock throughout, so run it when the service is
 quiet and never on a disk that is already nearly full.
 
-**Nothing is archived.** Pruned data is gone. If you want a cold copy of the
-window first, `test-hub export --days N` writes it to one self-contained HTML
-file, and [Backups](#backups) covers the database.
+**Nothing is archived.** Pruned data is gone. If you want a cold copy first, take
+a database backup — [Backups](#backups) covers how, and a copy taken before the
+prune is the only thing that can bring a pruned run back.
 
 **Scheduling it.** A cron entry on the host, at an hour you chose — the prune
 takes SQLite's write lock in batches, and publishers queue behind each one:

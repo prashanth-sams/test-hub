@@ -267,32 +267,6 @@ publisher:</p>
 <p>Worked pipelines for GitHub Actions, GitLab CI, Jenkins and friends are on the
 <a href="ci-integrations.html">CI integrations</a> page.</p>
 
-<h2 id="one-file">Send one HTML file to somebody who has no server</h2>
-
-<p>Not everyone who needs to see a result will install anything or be let through a
-firewall. <code>export</code> writes the whole dashboard, the CSS, the JavaScript and the
-data into a single file.</p>
-
-<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
-<pre><code>$ test-hub export --output test-hub-report.html --title "Payments nightly"</code></pre>
-</div>
-
-<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
-<pre><code>  wrote /tmp/th-report.html
-  854 KB, self-contained — no network needed to open it</code></pre>
-</div>
-
-<p>It is the <em>same</em> dashboard — the same rendering code, reading a frozen snapshot
-object instead of talking to a REST API. There is no second renderer that could drift. Open
-it from <code>file://</code>, attach it to a ticket, publish it as a CI artifact.</p>
-
-<p>To export straight from a directory of report files without touching your store at all —
-which is what you want on a build agent — pass <code>--input</code>:</p>
-
-<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
-<pre><code>$ test-hub export --input ./results --output report.html --project payments-api</code></pre>
-</div>
-
 <h2 id="where-data-lives">Where the data lives</h2>
 
 <p>By default, in the platform's user-data directory — not in whatever folder you happened
@@ -355,7 +329,6 @@ $ test-hub serve</code></pre>
 <li class="lvl-2"><a href="#see-it-with-data">See it with data in it</a></li>
 <li class="lvl-2"><a href="#import-a-report">Import a report you already have</a></li>
 <li class="lvl-2"><a href="#publish-from-ci">Publish from CI to a shared server</a></li>
-<li class="lvl-2"><a href="#one-file">Send one HTML file to somebody who has no server</a></li>
 <li class="lvl-2"><a href="#where-data-lives">Where the data lives</a></li>
 <li class="lvl-2"><a href="#what-next">What next</a></li>
   </ul>

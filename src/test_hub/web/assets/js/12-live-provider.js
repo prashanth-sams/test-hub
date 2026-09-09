@@ -102,8 +102,7 @@
     self.meta = { apiBase: apiBase, streamUrl: streamUrl };
 
     // Resolves once the server has said which version it is. Null until
-    // `start()`; the snapshot provider has no equivalent, because a snapshot
-    // carries its versions in the embedded object.
+    // `start()`.
     self.serverInfo = null;
 
     /* ------------------------------------------------------------- fetch */
@@ -177,8 +176,8 @@
         if (clean[key] !== undefined) { params[key] = clean[key]; }
       }
       // The query API spells the test-type facet `type` (it is an alias in
-      // api.routes.queries.build_filter) while the URL, the snapshot and every
-      // model field spell it `test_type`. Sending both is free — a server reads
+      // api.routes.queries.build_filter) while the URL and every model field
+      // spell it `test_type`. Sending both is free — a server reads
       // the one it declared and ignores the other — and means the filter works
       // whichever spelling this build settled on.
       if (params.test_type !== undefined) { params.type = params.test_type; }
@@ -217,8 +216,8 @@
      * ``window_days``; the facet parameters ride along in case a build honours
      * them, but this client cannot assume they were applied. Rather than show
      * portfolio-wide totals under an active filter — which would be a lie the
-     * user cannot see — the matching runs are fetched and folded with the same
-     * arithmetic the snapshot provider uses, and the result says so.
+     * user cannot see — the matching runs are fetched and folded with the
+     * shared arithmetic in 10-provider.js, and the result says so.
      */
     function narrowOverview(base, clean) {
       var params = facetParams(clean);
@@ -286,8 +285,8 @@
       // reports an honest total; one that ignores them costs nothing, because
       // the same predicate runs again below.
       if (clean.status) { params.status = clean.status; }
-      // `search` is what api.routes.queries calls it; `q` is what the URL and
-      // the snapshot provider call it. Both go, for the same reason as `type`.
+      // `search` is what api.routes.queries calls it; `q` is what the URL
+      // calls it. Both go, for the same reason as `type`.
       if (clean.q) { params.q = clean.q; params.search = clean.q; }
 
       return request('runs', params).then(function (payload) {
@@ -334,7 +333,7 @@
     //: The order `GET /runs` already returns. Asking for it costs no re-sort.
     var DEFAULT_SORT = 'started_at';
 
-    /** Shared with the snapshot provider in spirit: counts live one level down. */
+    /** Sort keys, for the rows this client had to refine itself. */
     function sortKey(name) {
       if (name === 'pass_rate') {
         return function (summary) { return summary.counts.pass_rate; };
@@ -368,8 +367,8 @@
 
     /* Destructive, and behind the admin scope server-side. It still belongs on
      * the provider rather than in the view: ADR-0001 D1 says views never call
-     * `fetch`, and that rule is worth more here than anywhere else — a view that
-     * built its own DELETE would be a view the snapshot mode could not stub out. */
+     * `fetch`, and a view that built its own DELETE would be a view no test
+     * could exercise without a server to point it at. */
 
     self.getRetention = function () {
       return request('retention');
@@ -608,8 +607,8 @@
     /* The live provider knows what server it is talking to but not what
      * *version* that server is — every payload under /api/v1 is data, not
      * provenance. `/healthz` carries both numbers, so one call at startup is
-     * what lets the footer and the settings menu say the same thing in live
-     * mode that a snapshot says from its embedded meta.
+     * what lets the footer and the settings menu name the version they are
+     * talking to.
      *
      * Deliberately fire-and-forget: a dashboard that cannot reach /healthz —
      * reads behind auth, a proxy that only forwards /api — is missing a version

@@ -1,10 +1,9 @@
 /* Test Hub — boot, routing and the chrome around the views.
  *
  * The one decision this file makes that the rest of the app must never make:
- * which provider is mounted. `window.TEST_HUB_SNAPSHOT` present means the page
- * is a self-contained export and everything comes out of that object; absent
- * means there is a server, and everything comes over REST and SSE (ADR-0001
- * D1). After the two lines below, nothing else in the codebase can tell.
+ * which provider is mounted. There is one — the live REST + SSE client — and it
+ * is named here and nowhere else, so a view still cannot tell where its data
+ * came from (ADR-0001 D1, narrowed by ADR-0003).
  *
  * Everything else here is chrome: the header's connection pill and last-updated
  * clock, the settings menu, the disconnected banner, and a router that mounts
@@ -37,15 +36,11 @@
     connecting: 'Connecting',
     live: 'Live',
     reconnecting: 'Reconnecting',
-    offline: 'Offline',
-    static: 'Static export'
+    offline: 'Offline'
   };
 
   function boot() {
-    var snapshot = window.TEST_HUB_SNAPSHOT || null;
-    var provider = snapshot
-      ? TestHub.SnapshotDataProvider.create(snapshot)
-      : TestHub.LiveDataProvider.create();
+    var provider = TestHub.LiveDataProvider.create();
 
     var store = TestHub.store.create(provider);
     var ctx = { store: store, provider: provider };
@@ -75,8 +70,7 @@
     /* ---------------------------------------------------------- settings */
 
     // Mounted after the provider is chosen, because the About block reports
-    // which one it is — a live server and a frozen export render identically
-    // otherwise (ADR-0001 D1).
+    // what it is connected to.
     if (settingsHost) {
       util.replace(settingsHost, TestHub.settings.create(ctx).el);
     }
@@ -95,10 +89,7 @@
       connPill.setAttribute('data-status', status);
       var text = STATUS_TEXT[status] || util.titleCase(status);
       if (connLabel) { connLabel.textContent = text; }
-      var title = state.statusDetail ||
-        (status === 'static'
-          ? 'This page is a frozen export. Nothing will change while it is open.'
-          : 'Live updates over server-sent events.');
+      var title = state.statusDetail || 'Live updates over server-sent events.';
       connPill.setAttribute('title', title);
     }
 
@@ -110,8 +101,7 @@
         updatedNode.textContent = '';
         return;
       }
-      var prefix = provider.kind === 'snapshot' && !state.lastUpdated ? 'Exported ' : 'Updated ';
-      updatedNode.textContent = prefix + util.timeAgo(stamp);
+      updatedNode.textContent = 'Updated ' + util.timeAgo(stamp);
       updatedNode.setAttribute('title', util.formatDateTime(stamp));
     }
 
@@ -183,25 +173,15 @@
     function syncMeta() {
       var meta = provider.meta || {};
       if (brandSub) {
-        brandSub.textContent = provider.kind === 'snapshot'
-          ? (meta.title || 'Snapshot')
-          : 'Live';
-        // The rail ellipsises it; the tooltip is the whole title.
+        brandSub.textContent = 'Live';
         brandSub.title = brandSub.textContent;
-      }
-      if (provider.kind === 'snapshot' && meta.title) {
-        document.title = meta.title + ' · Test Hub';
       }
       if (footerMeta) {
         util.clear(footerMeta);
         var parts = [];
         if (meta.generator_version) { parts.push('test-hub ' + meta.generator_version); }
         if (meta.schema_version) { parts.push('schema v' + meta.schema_version); }
-        if (provider.kind === 'snapshot') {
-          parts.push(util.formatNumber(meta.run_count || 0) + ' runs in this file');
-        } else if (meta.apiBase) {
-          parts.push('API ' + meta.apiBase);
-        }
+        if (meta.apiBase) { parts.push('API ' + meta.apiBase); }
         footerMeta.textContent = parts.join(' · ');
       }
     }
@@ -245,9 +225,9 @@
     syncStatus(store.state);
     syncUpdated(store.state);
     store.start();
-    // The live provider learns the server's version a round trip after start,
-    // so the footer is drawn twice: once with what we knew, once with what the
-    // server said. A snapshot has no `serverInfo` and skips this.
+    // The provider learns the server's version a round trip after start, so
+    // the footer is drawn twice: once with what we knew, once with what the
+    // server said.
     if (provider.serverInfo && provider.serverInfo.then) {
       provider.serverInfo.then(syncMeta);
     }

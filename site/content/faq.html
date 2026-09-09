@@ -94,23 +94,16 @@ and <a href="deployment.html">Deployment</a> describes what would change. The sh
 implementation is SQLite because <code>pip install</code> and run — with no services —
 is worth more for a first release than horizontal write throughput.</p>
 
-<h2 id="offline">Does the offline report phone home?</h2>
-
-<p>No. It has no external references of any kind: the CSS, the JavaScript and the data are
-all inlined, and CI fails the build if any <code>src</code> or <code>href</code> in the
-output points off-origin. Open it on a plane.</p>
-
-<p>It is also the <em>same</em> dashboard code as the live one, behind a different data
-provider — the exporter transforms the dashboard's own <code>index.html</code> rather
-than rendering a parallel template, so the two cannot drift apart.</p>
-
 <h2 id="no-node">Why is there no Node, no bundler, no framework?</h2>
 
-<p>Four reasons, in order of how much they mattered: ES modules do not load over
-<code>file://</code>, so the offline report could not be one file; a Content-Security-Policy
-of <code>default-src 'none'</code> is only possible with no inline scripts and no remote
+<p>Three reasons, in order of how much they mattered: a Content-Security-Policy of
+<code>default-src 'none'</code> is only possible with no inline scripts and no remote
 origins; a Python package that needs <code>npm</code> to build is a packaging liability;
-and the whole application is about ten small files, which does not need a framework.</p>
+and the whole application is about fifteen small files, which does not need a framework.</p>
+
+<p>The dashboard fetches nothing from the internet either, so an air-gapped install renders
+exactly like a connected one. CI fails the build if any <code>src</code> or <code>href</code>
+in the page points off-origin.</p>
 
 <h2 id="one-worker">Why only one server worker?</h2>
 

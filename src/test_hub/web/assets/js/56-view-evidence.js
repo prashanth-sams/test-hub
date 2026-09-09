@@ -226,14 +226,6 @@
         }
 
         var found = collect(details);
-        // An offline export carries the runs but not the files they attached —
-        // `include_artifacts` is off by default in the exporter, and an artifact
-        // URL points at a server the export does not have. The empty states
-        // below have to tell those two cases apart: "this suite captured
-        // nothing" and "this file does not carry what it captured" are
-        // different facts, and only one of them is about the tests.
-        found.exported = state.providerKind === 'snapshot' &&
-          !(state.capabilities && state.capabilities.artifacts);
         subtitle.textContent = spec.describe(found, details);
         util.replace(content, el('div', { className: 'stack' },
           spec.render(found, details, repaint, local)));
@@ -257,10 +249,10 @@
    * One screenshot, with the test it came from underneath it.
    *
    * The image is loaded from the API like any other artifact. Two things can go
-   * wrong and both end in the same place: an offline export has no server to
-   * serve it, and a file that is not really an image will not decode. The error
-   * handler swaps the frame for the file itself, so a broken picture is never
-   * what the reader is left with.
+   * wrong and both end in the same place: the blob may have been pruned out from
+   * under the run, and a file that is not really an image will not decode. The
+   * error handler swaps the frame for the file itself, so a broken picture is
+   * never what the reader is left with.
    */
   function shot(entry) {
     var artifact = entry.artifact;
@@ -276,8 +268,8 @@
     }
 
     if (isVideo) {
-      // Video is deliberately not embedded: `media-src` is not in the CSP, and
-      // an offline export could not play it anyway. The link still works.
+      // Video is deliberately not embedded: `media-src` is not in the CSP, so a
+      // <video> element would be blocked. The link still works.
       fallback('Video — open to play');
     } else if (artifact.url) {
       frame.appendChild(el('img', {
@@ -327,10 +319,8 @@
     describe: function (found, details) {
       var shots = ofKind(found.files, ['screenshot', 'video']);
       if (!shots.length) {
-        return found.exported
-          ? 'This export carries the runs, not the files they attached.'
-          : 'No screenshots in the last ' + util.formatNumber(details.length) +
-            ' finished ' + util.pluralize(details.length, 'run') + '.';
+        return 'No screenshots in the last ' + util.formatNumber(details.length) +
+          ' finished ' + util.pluralize(details.length, 'run') + '.';
       }
       return util.formatNumber(shots.length) + ' ' + util.pluralize(shots.length, 'capture') +
         ' from the last ' + util.formatNumber(details.length) + ' finished ' +
@@ -346,16 +336,10 @@
           icon: 'camera',
           body: ui.emptyState({
             icon: 'camera',
-            title: found.exported
-              ? 'This export does not carry its attachments'
-              : 'Nothing was captured in these runs',
-            hint: found.exported
-              ? 'The runs are in this file; the files they attached are not. ' +
-                'Screenshots stay on the Test Hub server that wrote the export, ' +
-                'which is where this page can show them.'
-              : 'Screenshots appear here when a run attaches a file with kind ' +
-                '"screenshot" or "video". Publish them with the run and they are ' +
-                'matched to the test that produced them.'
+            title: 'Nothing was captured in these runs',
+            hint: 'Screenshots appear here when a run attaches a file with kind ' +
+              '"screenshot" or "video". Publish them with the run and they are ' +
+              'matched to the test that produced them.'
           })
         })];
       }
@@ -541,26 +525,12 @@
           icon: 'swap',
           body: ui.emptyState({
             icon: 'swap',
-            title: found.exported
-              ? 'Nothing was captured, and no file came with this export'
-              : 'No log files and no captured output',
-            hint: found.exported
-              ? 'Captured output travels inside an export; attached log files do ' +
-                'not. Neither is in these runs.'
-              : 'Attach a file with kind "log", or publish stdout, stderr and logs ' +
-                'on the attempt, and they appear here against the test that wrote them.'
+            title: 'No log files and no captured output',
+            hint: 'Attach a file with kind "log", or publish stdout, stderr and logs ' +
+              'on the attempt, and they appear here against the test that wrote them.'
           })
         }));
         return nodes;
-      }
-
-      if (!files.length && found.exported) {
-        nodes.push(ui.banner({
-          tone: 'warn',
-          title: 'Log files are not in this export',
-          text: 'The captured output below travels with the runs. Files attached ' +
-            'to a run stay on the server that wrote this export.'
-        }));
       }
 
       if (files.length) {
@@ -602,10 +572,8 @@
     describe: function (found, details) {
       var files = ofKind(found.files, ['coverage']).length;
       if (!files) {
-        return found.exported
-          ? 'This export carries the runs, not the files they attached.'
-          : 'No coverage report in the last ' + util.formatNumber(details.length) +
-            ' finished ' + util.pluralize(details.length, 'run') + '.';
+        return 'No coverage report in the last ' + util.formatNumber(details.length) +
+          ' finished ' + util.pluralize(details.length, 'run') + '.';
       }
       return util.formatNumber(files) + ' coverage ' + util.pluralize(files, 'report') +
         ' from the last ' + util.formatNumber(details.length) + ' finished ' +
@@ -620,15 +588,10 @@
           icon: 'shield',
           body: ui.emptyState({
             icon: 'shield',
-            title: found.exported
-              ? 'This export does not carry its attachments'
-              : 'No coverage report was attached',
-            hint: found.exported
-              ? 'The runs are in this file; the reports they attached stayed on the ' +
-                'Test Hub server that wrote it.'
-              : 'Publish the report your tooling already produces — coverage.xml, ' +
-                'lcov.info, an HTML bundle — as an artifact with kind "coverage", and ' +
-                'every run keeps its own copy here.'
+            title: 'No coverage report was attached',
+            hint: 'Publish the report your tooling already produces — coverage.xml, ' +
+              'lcov.info, an HTML bundle — as an artifact with kind "coverage", and ' +
+              'every run keeps its own copy here.'
           })
         })];
       }

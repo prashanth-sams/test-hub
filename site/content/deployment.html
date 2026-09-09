@@ -224,7 +224,7 @@ so fifty shards uploading the same screenshot store one copy.</p>
 <p>The real ceiling is write throughput: SQLite serializes writers, so concurrent
 publishers queue. That is correct rather than fast, and it is documented rather than
 hidden — read transactions were deliberately made not to take the write lock so that a
-long export or a dashboard poll cannot stall a publisher. When the queue becomes the
+long read or a dashboard poll cannot stall a publisher. When the queue becomes the
 problem, PostgreSQL behind <code>RunRepository</code> is the next step.</p>
 
 <h2 id="packaging-name">Changing the distribution name</h2>

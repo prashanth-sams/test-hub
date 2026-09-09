@@ -105,15 +105,11 @@ close it and start executing.
   The rule the frontend is reviewed against: **no `innerHTML` with interpolated
   data.** Text goes in with `textContent`; structure is built with
   `document.createElement`.
-- Snapshot JSON is serialised with `<`, `>` and `&` rewritten as the JSON
-  escapes `\u003c`, `\u003e` and `\u0026` before it is embedded (`embed_json` in
-  [`src/test_hub/export/snapshot.py`](src/test_hub/export/snapshot.py)), so no
-  byte sequence in test data can spell `</script` and terminate the element the
-  data lives in. The same pass escapes U+2028 and U+2029, which are legal inside
-  a JSON string and illegal inside a JavaScript one — a stack trace containing
-  either would otherwise turn the whole snapshot into a syntax error. Because
-  these are `\uXXXX` escapes rather than HTML entities, the value the browser
-  parses is byte-for-byte the value that was serialised.
+- No test data is ever embedded in the page. The dashboard is served as static
+  files and asks the API for everything, so there is no document into which a
+  test name could be interpolated at all — the class of bug where a stack trace
+  spells `</script` and terminates the element it lives in has no place to
+  happen.
 - The Content-Security-Policy in
   [`src/test_hub/config.py`](src/test_hub/config.py) (`Settings.csp`) is
   `default-src 'none'` with `script-src 'self'`, no `unsafe-inline`, no

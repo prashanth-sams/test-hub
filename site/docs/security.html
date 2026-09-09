@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Security · Test Hub</title>
-<meta name="description" content="The threat model Test Hub is designed against, what it defends, and — just as importantly — what this release does not.">
+<meta name="description" content="The threat model Test Hub is built against, where each defence lives in the code, how to verify it on your own instance, and what this release deliberately does not protect against.">
 <meta name="color-scheme" content="light dark">
 <meta name="generator" content="test-hub site/tools/build.py">
 <meta property="og:title" content="Security · Test Hub">
-<meta property="og:description" content="The threat model Test Hub is designed against, what it defends, and — just as importantly — what this release does not.">
+<meta property="og:description" content="The threat model Test Hub is built against, where each defence lives in the code, how to verify it on your own instance, and what this release deliberately does not protect against.">
 <meta property="og:type" content="article">
 <meta property="og:site_name" content="Test Hub">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
@@ -106,227 +106,604 @@
 <header class="dochero">
   <span class="eyebrow">Operating it</span>
   <h1>Security</h1>
-  <p class="lede">Test Hub ingests untrusted text from test output and renders it in a browser. Almost every security decision in the product follows from that one sentence.</p>
+  <p class="lede">Test Hub's primary input is untrusted text that it renders in a browser. Almost every decision on this page follows from that one sentence — including the last section, which is the honest list of what is missing.</p>
 </header>
-<h2 id="threat-model">The threat model</h2>
+<h2 id="threat-model">The shape of the problem</h2>
 
-<p>Test output is attacker-influenced input. A test name, an assertion message and a stack
-trace all come from code that Test Hub does not control, and they end up rendered in
-somebody's browser, stored in a database, and written into an HTML file that gets emailed
-around. The classes that matter, in the order they are likely to bite:</p>
+<p>Two facts drive everything below.</p>
 
-<div class="tablewrap">
-<table>
-  <thead><tr><th>Class</th><th>Concretely</th></tr></thead>
+<p><b>Test Hub's primary input is untrusted text that it renders in a browser.</b> A failure
+message is whatever the test printed: an assertion diff, an HTTP response body, a stack
+trace, a fragment of HTML the code under test produced, the connection string it failed to
+connect with. It arrives from CI, often from repositories nobody on the Test Hub side
+reviews, and it is stored, indexed, shown to humans, and written into exported HTML files
+that get attached to tickets.</p>
+
+<p><b>The default deployment is unauthenticated and bound to loopback, and that pairing is
+load-bearing.</b> There is no configuration in which Test Hub silently listens on a network
+with no authentication. Opening it up is a separate step that has to be taken on purpose.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Class</th><th>Concretely, in this product</th></tr></thead>
   <tbody>
-    <tr><td>Stored XSS</td><td>A test named <code>&lt;script&gt;alert(1)&lt;/script&gt;</code>, or a stack trace containing <code>&lt;/script&gt;&lt;img src=x onerror=…&gt;</code>.</td></tr>
-    <tr><td>XML entity attacks</td><td>A JUnit file with a DTD: billion laughs, or an XXE reading <code>/etc/passwd</code>.</td></tr>
-    <tr><td>Resource exhaustion</td><td>A 4&nbsp;GB report, or a 2&nbsp;KB gzip that expands to gigabytes.</td></tr>
-    <tr><td>Path traversal</td><td>An artifact named <code>../../etc/cron.d/evil</code>.</td></tr>
-    <tr><td>Credential leakage</td><td>A failing HTTP client printing the <code>Authorization</code> header it sent.</td></tr>
-    <tr><td>Unauthenticated exposure</td><td>A Test Hub bound to <code>0.0.0.0</code> by someone who did not think about it.</td></tr>
+    <tr><td>Stored XSS</td><td>A test legitimately named <code>escapes &lt;script&gt;alert(1)&lt;/script&gt; in the product title</code>, or a stack trace containing <code>&lt;/script&gt;&lt;img src=x onerror=…&gt;</code>.</td></tr>
+    <tr><td>XML entity attacks</td><td>A JUnit report with a DOCTYPE: billion laughs, or an XXE reading <code>file:///etc/passwd</code> from the server.</td></tr>
+    <tr><td>Resource exhaustion</td><td>A 4&nbsp;GB report, a single 40&nbsp;MB text node, an upload that fills the disk.</td></tr>
+    <tr><td>Path traversal</td><td>An artifact named <code>../../../../etc/cron.d/evil</code>, or <code>CON.png</code> on Windows.</td></tr>
+    <tr><td>Credential leakage</td><td>A failing HTTP client test printing the <code>Authorization</code> header it sent, or a database test printing its DSN with the password in it.</td></tr>
+    <tr><td>Unauthenticated exposure</td><td>A Test Hub on <code>0.0.0.0</code>, put there by somebody who was not thinking about it.</td></tr>
   </tbody>
-</table>
+</table></div>
+
+<p>Everything shown on this page was run against Test Hub 0.1.0. The repository's
+<code>SECURITY.md</code> is the policy — how to report something, what is in scope, what to
+expect. This page is the engineering companion.</p>
+
+<h2 id="binding">Binding, and why it refuses</h2>
+
+<p><code>Settings.check_bind_safety()</code> in <code>src/test_hub/config.py</code> is the
+single gate. <code>serve</code> calls it before the socket is opened, and the app calls it
+again in its lifespan. It refuses rather than warns:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ test-hub serve --host 0.0.0.0 --port 8199</code></pre>
 </div>
+
+<div class="codeblock" data-lang="output" data-caption="Real output, and the process never opened a socket"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">Real output, and the process never opened a socket</span></div>
+<pre><code>error: refusing to bind 0.0.0.0:8199 with no authentication. Create a token with
+`test-hub token create`, set TEST_HUB_API_TOKEN_HASHES, or pass --insecure-no-auth if
+this really is a throwaway development host.
+  host: 0.0.0.0
+  port: 8199
+
+$ echo $?
+78</code></pre>
+</div>
+
+<p>78 is <code>EX_CONFIG</code>. A supervisor can therefore tell a misconfiguration apart
+from a crash and stop restarting it — which is why the systemd unit in
+<a href="deployment.html#systemd">Deployment</a> uses <code>Restart=on-failure</code> and a
+<code>RestartSec</code> rather than <code>Restart=always</code>.</p>
+
+<p>Loopback detection is <code>ipaddress.ip_address(host).is_loopback</code> plus the
+literals <code>localhost</code> and <code>::1</code>, so the whole <code>127.0.0.0/8</code>
+range counts, not only <code>127.0.0.1</code>.</p>
+
+<p>The opt-out exists, because a throwaway development host is a real thing, but it is loud
+on every start and it says so twice — once from the CLI before the server comes up, once
+from the app itself:</p>
+
+<div class="codeblock" data-lang="output" data-caption="test-hub serve --host 0.0.0.0 --port 8298 --insecure-no-auth"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">test-hub serve --host 0.0.0.0 --port 8298 --insecure-no-auth</span></div>
+<pre><code>07:43:39 WARNING test_hub.cli.commands.serve  AUTHENTICATION IS DISABLED and Test Hub is
+    bound to 0.0.0.0:8298. Anyone who can reach this port can read and write every test result.
+  Test Hub  http://localhost:8298
+  dashboard http://localhost:8298/
+  API docs  http://localhost:8298/api/docs
+  data      /private/tmp/th-site-nn
+  auth      DISABLED on a public interface
+…
+07:43:40 WARNING test_hub.api.app             AUTHENTICATION IS DISABLED and Test Hub is
+    bound to 0.0.0.0:8298. …</code></pre>
+</div>
+
+<p>Configuring any token turns authentication on by itself
+(<code>Settings._auth_follows_exposure</code>), so the failure mode of "I set a token and
+forgot to enable auth" does not exist. <code>check_bind_safety()</code> also <em>warns</em>,
+without refusing, when <code>cors_allow_origins</code> contains <code>*</code> — any website
+a colleague visits could then read this API from their browser.</p>
+
+<div class="note note--warn"><span class="note__title">Docker publishes past your firewall</span>
+The image binds <code>0.0.0.0</code>, because a container that binds <code>127.0.0.1</code>
+is a container you cannot reach. That is safe only because of how the port is
+<em>published</em>. Written as <code>"8000:8000"</code>, Docker binds <code>0.0.0.0</code> on
+the host and inserts its own DNAT rules <em>ahead</em> of <code>ufw</code> and
+<code>firewalld</code>, so the container is reachable from the network even though the host
+firewall says otherwise. The shipped Compose file publishes
+<code>"127.0.0.1:8000:8000"</code>, and that prefix is the entire security model of the
+file.</div>
 
 <h2 id="xss">Untrusted text in a browser</h2>
 
-<p>Three independent layers, because any one of them can be got wrong.</p>
+<h3 id="escaping">Nothing is ever written as HTML</h3>
 
-<h3 id="escaping">Nothing is written as HTML</h3>
+<p>The dashboard's rule is: <b>no <code>innerHTML</code> with interpolated data.</b> Text
+goes in with <code>textContent</code>, structure is built with
+<code>document.createElement</code>. This is not left to memory —
+<code>tests/test_frontend_assets.py</code> reads every shipped JavaScript file and fails on
+any line that assigns <code>innerHTML</code> and is not a comment.</p>
 
-<p>The dashboard has no <code>innerHTML</code> assignment anywhere. Every value goes in
-through <code>textContent</code> or <code>createTextNode</code>. That is not a convention
-to be remembered — a test in the suite fails on any <code>innerHTML</code> in the
-frontend sources, and the fixtures include a report whose test names and stack traces are
-real XSS payloads, so the escaping is exercised by simply looking at the page.</p>
-
-<h3 id="csp">A Content-Security-Policy that can afford to be strict</h3>
+<p>The adapters, by contrast, carry payloads through <em>verbatim</em>. Importing
+<code>tests/fixtures/junit/html-injection.xml</code> stores test names that read:</p>
 
 <div class="codeblock" data-lang="text"><div class="codeblock__head"><span class="codeblock__lang">text</span></div>
-<pre><code>default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:;
-font-src 'self'; connect-src 'self'; form-action 'none'; frame-ancestors 'none';
-base-uri 'none'</code></pre>
+<pre><code>'escapes &lt;script&gt;alert(1)&lt;/script&gt; in the product title'
+'escapes &lt;/script&gt;&lt;img src=x onerror=alert(1)&gt; in the coupon code'
+'escapes "&gt;&lt;b&gt; in the search box'</code></pre>
 </div>
 
-<p>No <code>unsafe-inline</code>, no <code>unsafe-eval</code>, no remote origins. This is
-only possible because the dashboard ships no inline scripts, no inline styles and loads
-nothing from a CDN. Loosening the policy to make a feature work means the feature is
-wrong.</p>
+<p>That is correct, and it is worth understanding why. Those are legitimate names for a suite
+that tests output escaping, and an adapter that mangled them would make that suite
+untestable — you could never see whether your own escaping worked. Escaping belongs at the
+point of rendering, not the point of parsing.</p>
 
-<h3 id="snapshot-embedding">The offline report's data block</h3>
+<h3 id="csp">A Content-Security-Policy it can actually keep</h3>
 
-<p>This is the subtle one. The exported HTML file embeds the whole data set inside a
-<code>&lt;script&gt;</code> element, and HTML does not parse the contents of a script
-element — the only thing that can end it early is the literal string
-<code>&lt;/script</code>. So a test named <code>&lt;/script&gt;&lt;img src=x
-onerror=alert(1)&gt;</code> would break out of the data block and execute.</p>
+<p>Sent on every response, including the static dashboard and the OpenAPI docs, by raw-ASGI
+middleware in <code>src/test_hub/api/app.py</code>. Read off the wire:</p>
 
-<p>Every <code>&lt;</code>, <code>&gt;</code> and <code>&amp;</code> in the embedded JSON
-is rewritten as a <code>\uXXXX</code> escape, along with U+2028 and U+2029 — the two
-characters that are legal in JSON and illegal in a JavaScript string literal. The result
-is still valid JSON, so <code>JSON.parse</code> returns the original string exactly, but
-it contains no sequence an HTML parser can act on.</p>
+<div class="codeblock" data-lang="output" data-caption="curl -sI http://127.0.0.1:8241/"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">curl -sI http://127.0.0.1:8241/</span></div>
+<pre><code>x-content-type-options: nosniff
+x-frame-options: DENY
+referrer-policy: no-referrer
+cross-origin-opener-policy: same-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+content-security-policy: default-src 'none'; script-src 'self'; style-src 'self';
+  img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'none';
+  frame-ancestors 'none'; base-uri 'none'</code></pre>
+</div>
 
-<p>The same class of bug bit the <em>asset</em> inliner: the dashboard's own source
-contains the string <code>&lt;script&gt;alert(1)&lt;/script&gt;</code> in a comment
-explaining this escaping contract, and inlining that verbatim truncated the whole
-JavaScript bundle. The exporter now neutralizes those sequences and refuses to write a
-file that still contains one.</p>
+<p>No <code>unsafe-inline</code>, no <code>unsafe-eval</code>, no remote origin. That policy
+is only possible because the frontend ships no inline script, no inline style and loads
+nothing from a CDN — which is the security half of the no-Node decision. If you ever find
+yourself loosening the CSP to make a feature work, the feature is wrong.</p>
+
+<p>The middleware is raw ASGI rather than Starlette's <code>BaseHTTPMiddleware</code> for a
+specific reason: the latter buffers responses, which would defeat the Server-Sent Events
+endpoint entirely.</p>
+
+<h3 id="no-embedded-data">No data is embedded in the page</h3>
+
+<p>The dashboard is served as static files and asks the API for everything, so there is no
+document into which a test name is ever interpolated. That removes a whole class of bug
+rather than defending against it: the byte sequence <code>&lt;/script</code> in a stack trace
+is just text inside a JSON response, and the response is parsed by
+<code>JSON.parse</code>, never by an HTML parser.</p>
+
+<p>Test Hub used to ship an offline HTML export that embedded its entire data set inside a
+<code>&lt;script&gt;</code> element, which needed careful escaping on the way in — that export
+was removed (<a href="https://github.com/prashanth-sams/test-hub/blob/main/docs/adr/0003-drop-the-offline-export.md">ADR-0003</a>),
+and the escaping problem went with it.</p>
+
+<p>What remains is the rule inside the browser: no <code>innerHTML</code> with interpolated
+data. <code>tests/test_frontend_assets.py</code> fails the build if any dashboard file assigns
+<code>innerHTML</code>, writes an inline event handler, or reaches for <code>eval</code>. The
+fixture suite includes a test named <code>&lt;script&gt;alert(1)&lt;/script&gt;</code>, which
+renders as those characters everywhere it appears.</p>
 
 <h3 id="artifacts-serving">Artifacts are always downloads</h3>
 
-<p>An artifact is attacker-supplied bytes served from Test Hub's own origin. They are sent
-with <code>Content-Disposition: attachment</code>, the stored content type (never one
-sniffed from the bytes) and <code>X-Content-Type-Options: nosniff</code>. Serving an
-uploaded HTML file inline would hand any publisher a stored XSS on the dashboard's
-domain.</p>
+<p>An artifact is attacker-supplied content served from Test Hub's own origin. Rendering it
+inline would hand any publisher a stored XSS on the dashboard's domain. Downloads are
+therefore always an attachment, always the content type that was <em>stored</em> rather than
+one sniffed from the bytes, and always <code>nosniff</code>:</p>
+
+<div class="codeblock" data-lang="output" data-caption="GET /api/v1/artifacts/{id}"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">GET /api/v1/artifacts/{id}</span></div>
+<pre><code>HTTP/1.1 200 OK
+content-disposition: attachment; filename="____etccron.devil"
+content-type: image/png
+x-content-type-options: nosniff</code></pre>
+</div>
 
 <h2 id="xml">XML entity attacks</h2>
 
-<p>All XML is parsed with <code>defusedxml</code>: DTDs and external entities are
-<em>refused</em>, not expanded and then rejected. The difference matters — expanding first
-is the attack.</p>
+<p>All XML parsing goes through <code>defusedxml.ElementTree.iterparse</code>. DTDs, entity
+declarations and external references are refused <em>before</em> anything is expanded — the
+distinction matters, because expanding first is the attack. Two fixtures keep it that way,
+and both produce the same refusal:</p>
 
 <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
-<pre><code>$ test-hub ingest billion-laughs.xml --project p
-error: this XML declares a DTD or entities and was refused before it was expanded.</code></pre>
+<pre><code>$ curl -s -X POST $HUB/api/v1/imports -H "Authorization: Bearer $TOK" \
+    -F file=@tests/fixtures/junit/billion-laughs.xml -F project=sec</code></pre>
 </div>
 
-<p>Both a billion-laughs and an XXE fixture are in the test suite, and both assert the
-refusal rather than merely the absence of a crash.</p>
+<div class="codeblock" data-lang="output" data-caption="HTTP 422 — identical for tests/fixtures/junit/xxe.xml"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">HTTP 422 — identical for tests/fixtures/junit/xxe.xml</span></div>
+<pre><code>{"error":"adapter_error","message":"this XML declares a DTD or entities and was refused
+before it was expanded. Entity expansion is how an 'XML bomb' turns a 200-byte upload into
+gigabytes of memory, and how an XXE reads files off the server, so Test Hub never processes
+it. Re-export the report without a DOCTYPE.","detail":{"reason":"DTDForbidden"}}</code></pre>
+</div>
 
-<h2 id="limits">Size and decompression</h2>
+<p><code>xxe.xml</code> contains <code>&lt;!ENTITY xxe SYSTEM "file:///etc/passwd"&gt;</code>
+and a second entity pointing at an external host, referenced from a
+<code>&lt;failure&gt;</code> message and body. Neither is resolved: the DOCTYPE is rejected
+before the document body is read at all.</p>
 
-<p>Every limit is enforced <em>while</em> reading. Checking a <code>Content-Length</code>
-header is advisory, and reading first then measuring is exactly the denial of service the
-limit exists to prevent.</p>
+<p>The refusal is <em>categorical</em>. A report with a legitimate DOCTYPE — there is no such
+thing in practice for JUnit XML — is also refused. Refusing a DOCTYPE outright is far easier
+to reason about, and to test, than allowing one and trying to constrain what it may do.</p>
 
-<div class="tablewrap">
-<table>
-  <thead><tr><th>Limit</th><th>Default</th></tr></thead>
+<div class="note"><span class="note__title">The contributor rule</span><code>xml.etree</code>,
+<code>lxml</code> and <code>minidom</code> must not appear in an import statement anywhere
+under <code>src/</code>. There is no trusted XML input here, so there is no exception for
+"internal" files. <code>defusedxml</code> is a hard runtime dependency in
+<code>pyproject.toml</code> rather than an extra for exactly this reason. If you are writing
+an XML adapter, see <a href="adapters.html#defusedxml">Adapters</a>.</div>
+
+<h2 id="limits">Size and decompression limits</h2>
+
+<p>Every limit is enforced <em>while streaming</em>, never after buffering. Checking
+<code>Content-Length</code> is advisory — a client can lie — and reading a file first and
+measuring it afterwards is precisely the denial of service the limit exists to prevent.
+<code>read_bounded()</code> in <code>src/test_hub/service/imports.py</code> counts bytes as
+they arrive and aborts the moment the count is exceeded;
+<code>FilesystemArtifactStore.put()</code> does the same and unlinks its partial temp file on
+the way out.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Setting</th><th>Default</th><th>Guards</th></tr></thead>
   <tbody>
-    <tr><td><code>TEST_HUB_MAX_REPORT_BYTES</code></td><td>64 MiB</td></tr>
-    <tr><td><code>TEST_HUB_MAX_ARTIFACT_BYTES</code></td><td>128 MiB</td></tr>
-    <tr><td><code>TEST_HUB_MAX_DECOMPRESSED_BYTES</code></td><td>512 MiB</td></tr>
-    <tr><td><code>TEST_HUB_MAX_TEXT_FIELD_BYTES</code></td><td>256 KiB per attempt</td></tr>
+    <tr><td><code>TEST_HUB_MAX_REPORT_BYTES</code></td><td>64 MiB</td><td>The uploaded report, before any decompression.</td></tr>
+    <tr><td><code>TEST_HUB_MAX_DECOMPRESSED_BYTES</code></td><td>512 MiB</td><td>What a compressed upload may expand to.</td></tr>
+    <tr><td><code>TEST_HUB_MAX_ARTIFACT_BYTES</code></td><td>128 MiB</td><td>One attached artifact.</td></tr>
+    <tr><td><code>TEST_HUB_MAX_TEXT_FIELD_BYTES</code></td><td>256 KiB</td><td>One stack trace or log body. Longer text is truncated <em>and the attempt is flagged</em>, never silently cut.</td></tr>
+    <tr><td><code>TEST_HUB_MAX_EVENTS_PER_BATCH</code></td><td>5000</td><td>One <code>POST /runs/{id}/events</code> batch.</td></tr>
   </tbody>
-</table>
+</table></div>
+
+<div class="codeblock" data-lang="shell" data-caption="A server started with TEST_HUB_MAX_REPORT_BYTES=2048, against a 2496-byte file"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">A server started with TEST_HUB_MAX_REPORT_BYTES=2048, against a 2496-byte file</span></div>
+<pre><code>$ curl -s -X POST $HUB/api/v1/imports -F file=@tests/fixtures/junit/simple.xml -F project=p
+{"error":"payload_too_large","message":"report exceeds the 2048 byte limit
+(TEST_HUB_MAX_REPORT_BYTES); split the upload or raise the limit","detail":{"limit_bytes":2048}}</code></pre>
 </div>
 
-<p>Gzipped reports are decompressed transparently, with the expansion checked as it
-happens — a decompression bomb is refused mid-expansion and never lands in memory. A
-truncated gzip stream is reported as truncated rather than passed on as half a report.
-Archives (zip, tar) are not accepted at all: "which file in here is the report?" has no
-safe default.</p>
+<p>That is a 413, and it arrives after 2049 bytes have been read, not after 2496. The
+<code>WarningCollector</code> in <code>src/test_hub/adapters/base.py</code> applies the same
+idea to the <em>response</em>: 500 warnings maximum, then a count of what was dropped, so a
+pathological file produces a bounded reply rather than a megabyte of JSON.</p>
+
+<div class="note note--warn"><span class="note__title">Two honest gaps</span>
+First, <code>max_decompressed_bytes</code> is defined and validated, but neither built-in
+adapter decompresses anything — a <code>.gz</code> or <code>.zip</code> upload is not
+accepted at all — so today that setting is a promise to a future adapter rather than an
+active control. Do not plan around gzipped uploads working. Second, the report is read into
+memory as a bounded <code>BytesIO</code>, because auto-detection has to rewind the stream;
+with the default limit that is up to 64&nbsp;MiB per concurrent import. If you raise
+<code>TEST_HUB_MAX_REPORT_BYTES</code>, raise it knowing that.</div>
 
 <h2 id="paths">Artifact paths</h2>
 
-<p>Artifacts are stored content-addressed — <code>&lt;root&gt;/&lt;aa&gt;/&lt;bb&gt;/&lt;sha256&gt;</code>
-— so a publisher-supplied filename never reaches the filesystem at all. The name is kept
-only as a label, and even then it is stripped of path separators, <code>..</code>, NUL and
-control characters, and Windows reserved device names before it goes into a
-<code>Content-Disposition</code> header.</p>
+<p>In <code>src/test_hub/storage/artifacts.py</code>, the only value ever allowed to become a
+path is a validated digest:</p>
 
-<p>Uploads stream to a temporary file in the same directory and are moved into place
-atomically, so two concurrent uploads of the same content cannot produce a torn file.</p>
+<div class="codeblock" data-lang="python"><div class="codeblock__head"><span class="codeblock__lang">python</span></div>
+<pre><code>_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")</code></pre>
+</div>
+
+<p>Blobs live at <code>&lt;root&gt;/&lt;aa&gt;/&lt;bb&gt;/&lt;sha256&gt;</code>. A SHA-256 hex
+digest cannot contain a separator, a dot segment, a colon, a drive letter or a non-ASCII
+byte, so <b>the name a publisher supplied never touches the filesystem</b>. It is a database
+column and a <code>Content-Disposition</code> value, which makes it a display problem rather
+than a filesystem one.</p>
+
+<p>Uploads stream into <code>artifacts/.incoming/&lt;uuid&gt;.part</code>, are chmodded
+<code>0600</code>, and are moved into place with <code>Path.replace</code>, so a reader never
+sees a partial file and two concurrent uploads of the same bytes cannot tear one. If the
+digest is already on disk the temp file is simply unlinked — rewriting a good file with an
+identical one would briefly unlink it for readers for no benefit.</p>
+
+<p>The name is still cleaned, in two layers with deliberately different behaviour:</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th>Layer</th><th>Behaviour</th></tr></thead>
+  <tbody>
+    <tr><td><code>service.runs.safe_artifact_name()</code></td><td>A best-effort <em>repair</em>, on the upload path. Strips separators, NULs, control characters and quotes; replaces <code>..</code>; prefixes a Windows device name with <code>_</code>; truncates at 255.</td></tr>
+    <tr><td><code>storage.artifacts.sanitize_artifact_name()</code></td><td>A <em>refusal</em>, in the store. A separator, a <code>..</code>, a NUL or a device name is a <code>ValidationError</code>, not a rewrite.</td></tr>
+  </tbody>
+</table></div>
+
+<p>The store refuses rather than repairs because a store that silently turned
+<code>../../etc/passwd</code> into <code>passwd</code> would hand the next component a name
+its author never wrote, and make the guarantee impossible to test. The upload path repairs
+first, so the API answers 201 with a mangled label rather than 422 — losing a screenshot
+because somebody's filename was odd is the wrong trade:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ curl -sX POST "$HUB/api/v1/runs/$RUN/artifacts" \
+    -F 'file=@shot.png;filename=../../../../etc/cron.d/evil'
+"name": "____etccron.devil"
+
+$ curl -sX POST "$HUB/api/v1/runs/$RUN/artifacts" -F 'file=@shot.png;filename=CON.png'
+"name": "_CON.png"</code></pre>
+</div>
+
+<p>Ugly, and safe, and it is the label only — in both cases the bytes went to
+<code>artifacts/e9/01/e90137d3…</code>, addressed by their own digest.</p>
+
+<p>Blobs are content-addressed rather than run-scoped, so an unreferenced blob is left on
+disk when the row that pointed at it rolls back. It is deduplicated and harmless, and
+deleting it would be wrong the moment two runs share it. There is no garbage collector in
+this release — see the gaps below.</p>
 
 <h2 id="tokens">Tokens</h2>
 
-<p>Test Hub stores <strong>only hashes</strong> — salted PBKDF2-HMAC-SHA256, 120 000
-iterations, compared in constant time. A stolen database yields a list of digests, not a
-list of working tokens.</p>
+<p><code>src/test_hub/api/security.py</code>. Only hashes are stored, in the form
+<code>pbkdf2_sha256$&lt;iterations&gt;$&lt;salt-hex&gt;$&lt;hash-hex&gt;</code>: 120&nbsp;000
+iterations of PBKDF2-HMAC-SHA256 with a 16-byte salt, compared with
+<code>hmac.compare_digest</code>. A stolen database is a list of digests.</p>
 
-<p>PBKDF2 rather than a bare hash of a random token because nothing stops an operator
-setting <code>TEST_HUB_API_TOKENS=letmein</code>; the KDF makes that mistake expensive to
-exploit instead of free. A successful verification is memoized for the life of the
-process, so the cost is paid once per distinct token rather than once per request.</p>
-
-<p>The plaintext exists exactly once, in the output of <code>test-hub token create</code>.
-It is never written to disk and never accepted as a command-line argument — an argument is
-visible in <code>ps</code> to every other user on the machine, lands in shell history, and
-is echoed into the log by any CI system that traces its commands.
-<code>--token-env</code> and <code>--token-file</code> are the supported routes.</p>
-
-<p>A rejected request returns the same message whether the token was missing, malformed or
-simply wrong. Telling a caller which of those it was is free information for an
-attacker.</p>
-
-<h2 id="exposure">Network exposure</h2>
-
-<p>The default bind is <code>127.0.0.1</code>. Binding anything else <strong>requires
-authentication</strong>, and the process exits <code>78</code> before opening a socket if
-it has none:</p>
+<p>A KDF rather than a bare SHA-256 is a deliberate choice for a specific mistake. The tokens
+Test Hub generates carry 256 bits of entropy and a plain digest would be perfectly adequate
+for them — but nothing stops an operator setting
+<code>TEST_HUB_API_TOKENS=letmein</code>. PBKDF2 makes that expensive to exploit instead of
+free. To keep 120&nbsp;000 iterations off the request path, a successful verification is
+memoized for the life of the process against a SHA-256 fingerprint of the presented token, so
+the KDF runs once per distinct token rather than once per request; the rejection set is
+capped at 4096 entries so a flood of bad tokens cannot grow the process without limit.</p>
 
 <div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
-<pre><code>$ test-hub serve --host 0.0.0.0
-error: refusing to bind 0.0.0.0:8000 with no authentication. Create a token with
-`test-hub token create`, set TEST_HUB_API_TOKEN_HASHES, or pass --insecure-no-auth
-if this really is a throwaway development host.</code></pre>
+<pre><code>$ test-hub token create --label ci</code></pre>
 </div>
 
-<p>The escape hatch exists, because a throwaway development host is a real thing, but it
-must be asked for explicitly and it warns on every start and banners the dashboard. CORS
-is off entirely by default; <code>*</code> is accepted and warns loudly.</p>
+<div class="codeblock" data-lang="output" data-caption="Real output, with the token body elided"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">Real output, with the token body elided</span></div>
+<pre><code>  Token (shown once — copy it now)
+  ths_o1a4z1Gw9tA…RWDBku0
 
-<div class="note note--warn"><span class="note__title">Docker publishes past your firewall</span>
-Publishing a port as <code>"8000:8000"</code> binds <code>0.0.0.0</code> on the host, and
-Docker inserts its own DNAT rules <em>ahead</em> of ufw and firewalld — so the container
-is reachable from the network even if the host firewall says otherwise. The shipped
-<code>docker-compose.yml</code> publishes <code>"127.0.0.1:8000:8000"</code>, and that
-prefix is the entire security model of the file.</div>
+  Configure the server with the hash, not the token:
+  export TEST_HUB_API_TOKEN_HASHES="pbkdf2_sha256$120000$4f6db8b48873e1f3611aa19789ebb7ec$1f13…d214"
+
+  Publishers use the token itself:
+  export TEST_HUB_TOKEN="ths_o1a4z1Gw9tA…RWDBku0"   # label: ci
+  test-hub publish results.xml --url https://… --project p --token-env TEST_HUB_TOKEN
+
+  Test Hub keeps only the hash. Nothing can recover this token from the server.</code></pre>
+</div>
+
+<p>The <code>ths_</code> prefix costs four characters and buys recognition by a secret scanner
+and by a human reading a log.</p>
+
+<p><b>A token is never accepted as a command-line argument.</b> There is no
+<code>--token</code> flag anywhere; <code>test-hub publish</code> takes
+<code>--token-env</code> or <code>--token-file</code>. argv is world-readable in
+<code>ps</code> to every other user on the machine, it lands in shell history, and CI systems
+routinely echo the command they are about to run.</p>
+
+<p>Both header forms are the same token and the same check. <code>X-API-Key</code> exists
+because several CI systems make it awkward to set an <code>Authorization</code> header on a
+generic HTTP step:</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ curl -s -o /dev/null -w '%{http_code}\n' -X POST $HUB/api/v1/imports \
+    -H "Authorization: Bearer $TOK" -F file=@results.xml -F project=p
+201
+$ curl -s -o /dev/null -w '%{http_code}\n' -X POST $HUB/api/v1/imports \
+    -H "X-API-Key: $TOK" -F file=@results.xml -F project=p
+201
+$ curl -s -X POST $HUB/api/v1/imports -F file=@results.xml -F project=p
+{"error":"unauthorized","message":"a valid bearer token is required; send it as
+`Authorization: Bearer &lt;token&gt;` or `X-API-Key: &lt;token&gt;`"}</code></pre>
+</div>
+
+<p><code>X-API-Key</code> is not a weaker credential, but it is a more dangerous
+<em>name</em>: an intermediary is far more likely to log a header called
+<code>X-API-Key</code> verbatim than one called <code>Authorization</code>, which most proxies
+and log pipelines already know to redact. Prefer <code>Bearer</code> where you have the
+choice.</p>
+
+<p>A missing, a malformed and a wrong token all produce the same 401 and the same message.
+Which of the three it was is free information for an attacker.</p>
+
+<p>Rotation is additive. <code>TEST_HUB_API_TOKEN_HASHES</code> is a list, so add the new
+hash, roll the publishers, then remove the old one: no downtime and no window in which both
+are invalid. Both forms are accepted from the environment —</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ TEST_HUB_API_TOKEN_HASHES='pbkdf2_sha256$120000$aa$bb,pbkdf2_sha256$120000$cc$dd' \
+    python -c "from test_hub.config import Settings; s=Settings(); print(s.api_token_hashes, s.auth_enabled)"
+['pbkdf2_sha256$120000$aa$bb', 'pbkdf2_sha256$120000$cc$dd'] True</code></pre>
+</div>
+
+<p>— and a JSON array works identically. Note the second value in that output:
+<code>auth_enabled</code> turned itself on because a hash was configured.</p>
+
+<div class="note note--warn"><span class="note__title">A token cannot be revoked from inside Test Hub</span>
+There is no token store, no <code>test-hub token revoke</code> and no expiry. Revocation means
+editing <code>TEST_HUB_API_TOKEN_HASHES</code> and restarting the process. Plan your rotation
+around a restart, and keep the list short enough that you know what every entry is for.</div>
 
 <h2 id="redaction">Secret redaction</h2>
 
-<p>Test output is one of the great accidental secret stores. Both log records and stored
-failure text pass through a redactor on the way in. The defaults cover:</p>
+<p>Test output is one of the great accidental secret stores. A failing HTTP client test
+prints the header it sent; a failing database test prints the URL it dialled; a CI job that
+dumps its environment on failure prints all of it. Test Hub then stores that text, indexes
+it, shows it in a browser, and writes it into an exported file that gets attached to a
+ticket.</p>
 
-<ul>
-  <li><code>Authorization: Bearer …</code> and <code>Basic …</code></li>
-  <li>PEM private keys</li>
-  <li>Database URLs with inline passwords (<code>postgres://user:pw@host/db</code>)</li>
-  <li>AWS access keys, GitHub <code>ghp_</code> tokens, Slack <code>xox…</code> tokens</li>
-  <li>JWT payload and signature segments</li>
-  <li>Generic <code>password=</code>, <code>token=</code>, <code>api_key=</code> shapes</li>
-</ul>
+<p><code>Redactor</code> in <code>src/test_hub/logging.py</code> is applied on the way
+<b>in</b>: to log records through a filter installed on Test Hub's handler, and to the failure
+text, stdout, stderr, logs and skip reason of every attempt as it is folded into a row
+(<code>_on_test_finished</code> and <code>_failure_json</code> in
+<code>src/test_hub/storage/repositories.py</code>). Redacted-in means the secret is not in
+the database, not in the API response and not in the export — rather than merely hidden in
+one view.</p>
 
-<p>Each pattern has exactly one capturing group, and only the group is replaced — so
-<code>password=hunter2</code> becomes <code>password=***REDACTED***</code> and stays
-readable. Order matters: the scheme-specific rules run first, so
+<p>Each pattern must have exactly one capturing group, and only the group is replaced, so the
+key stays readable and the failure stays diagnosable. Publishing a report whose
+<code>&lt;failure&gt;</code> body and <code>&lt;system-out&gt;</code> contain real-looking
+credentials, then reading it straight back out of the API:</p>
+
+<div class="codeblock" data-lang="output" data-caption="attempts[0].failure.stack_trace, as stored"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">attempts[0].failure.stack_trace, as stored</span></div>
+<pre><code>Request headers: Authorization: ***REDACTED*** ***REDACTED***
+DSN: postgresql://app:***REDACTED***@db.internal:5432/app
+config: api_key=***REDACTED***</code></pre>
+</div>
+
+<div class="codeblock" data-lang="output" data-caption="attempts[0].stdout, as stored"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">attempts[0].stdout, as stored</span></div>
+<pre><code>AWS_ACCESS_KEY_ID=AKIA***REDACTED***
+password=***REDACTED***</code></pre>
+</div>
+
+<p><code>DEFAULT_REDACTION_PATTERNS</code> in <code>src/test_hub/config.py</code> covers
+<code>Bearer</code> and <code>Basic</code> credentials, PEM private-key blocks, database URLs
+with an inline password (<code>postgres</code>, <code>postgresql</code>, <code>mysql</code>,
+<code>mongodb</code>, <code>redis</code>, <code>amqp</code>), AWS access key ids, GitHub
+<code>ghp_</code> tokens, Slack <code>xox*</code> tokens, JWTs, and a generic
+<code>key=value</code> rule for <code>api_key</code>, <code>apikey</code>,
+<code>access_key</code>, <code>token</code>, <code>secret</code>, <code>password</code>,
+<code>passwd</code>, <code>pwd</code>, <code>authorization</code>, <code>auth_token</code>,
+<code>private_key</code> and <code>client_secret</code>.</p>
+
+<p>Order matters, and the first line above shows why it also over-fires slightly. The
+scheme-specific rules run before the generic ones so that
 <code>Authorization: Bearer &lt;token&gt;</code> loses the token rather than the word
-"Bearer".</p>
+"Bearer" — but the generic <code>authorization:</code> rule then runs anyway and takes the
+word "Bearer" too. The result is more aggressive than the source comment predicts, and no
+less safe.</p>
 
-<div class="note note--info"><span class="note__title">A second line of defence, not a guarantee</span>
-Redaction is pattern matching over arbitrary text. It will not catch a secret in a shape
-nobody anticipated. Add your own with <code>TEST_HUB_REDACTION_PATTERNS</code> — and note
-that setting it <em>replaces</em> the defaults, so include the ones you still want. The
-first line of defence is not printing secrets in test output.</div>
+<h3 id="adding-your-own">Adding your own patterns</h3>
+
+<p>Every organisation has one secret shape the defaults have never seen.
+<code>TEST_HUB_REDACTION_PATTERNS</code> <b>replaces</b> the defaults rather than extending
+them, so include the ones you still want.</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ TEST_HUB_REDACTION_PATTERNS='(?i)\bacme_([A-Za-z0-9]+)' test-hub serve</code></pre>
+</div>
+
+<div class="note note--warn"><span class="note__title">The trap: a comma inside a pattern</span>
+List-valued settings accept both <code>a,b,c</code> and a JSON array. The comma-separated
+form splits on <em>every</em> comma — including the one in a <code>{8,64}</code> quantifier —
+and the halves do not compile:
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ TEST_HUB_REDACTION_PATTERNS='(?i)tok_([A-Za-z0-9]{8,64})' \
+    python -c "from test_hub.config import Settings; Settings()"
+ValidationError: 1 validation error for Settings
+redaction_patterns
+  Value error, invalid redaction pattern '(?i)tok_([A-Za-z0-9]{8':
+  missing ), unterminated subpattern at position 8</code></pre>
+</div>
+Use the JSON-array form for any pattern containing a comma:
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code>$ TEST_HUB_REDACTION_PATTERNS='["(?i)tok_([A-Za-z0-9]{8,64})"]' python -c "
+from test_hub.config import Settings; from test_hub.logging import Redactor
+print(Redactor(Settings().redaction_patterns).redact('tok_ABCDEFGHIJKL rest'))"
+tok_***REDACTED*** rest</code></pre>
+</div>
+The failure is loud — the process refuses to start, which is the right way round — but the
+message names the regex rather than the comma, so it is worth knowing in advance. A pattern
+with no capturing group is silently ignored by <code>Redactor</code> rather than applied, so
+make sure yours has one, and test it against a real failing test before you trust it.</div>
+
+<p><code>TEST_HUB_REDACTION_ENABLED=false</code> turns the whole thing off. There is one
+legitimate reason to do that — you have an external scrubber in front of the ingest path —
+and several bad ones.</p>
+
+<div class="note note--danger"><span class="note__title">The honest limitation</span>
+Redaction is regular expressions over arbitrary text. It is a strong second line of defence
+and it is not a guarantee. A base64 blob with no surrounding keyword, a secret split across
+two lines, a bespoke token format — these get through. Do not treat Test Hub as a place
+secrets cannot reach. Treat it as a system that reduces the damage when they do, and fix the
+leak at the test.</div>
 
 <h2 id="not-protected">What this release does not protect against</h2>
 
-<p>This section is the most useful one on the page. All of these are known gaps, not
-oversights.</p>
+<p>This is the most useful section on the page. None of the following is a vulnerability; all
+of it is missing, on purpose, in 0.1.0, and a report about any of it will be closed with a
+pointer back here.</p>
 
-<div class="tablewrap">
-<table>
+<h3 id="no-authorization">There is no authorization, only authentication</h3>
+
+<p>A token is a token. Every valid token can read everything and write everything: every
+project, every team, every run. A token you gave to a contractor's pipeline to publish one
+project's results can read the whole workspace and can post results attributed to any project
+it likes. There is no per-project scope, no read-only token, no service account and no
+ownership check anywhere in the codebase. <code>AuthorizationError</code> (403) exists in the
+error taxonomy in <code>src/test_hub/errors.py</code> and is never raised from anywhere in
+<code>src/</code>. <b>If some results must not be visible to some publishers, run a second
+Test Hub.</b></p>
+
+<p>Related, and worth stating separately: publisher identity is not verified either. A run's
+<code>project_key</code>, <code>team</code>, <code>branch</code>, <code>commit</code> and
+<code>pipeline_url</code> are whatever the publisher typed. Nothing checks that the token used
+belongs to that project, that the branch exists, or that the CI job is real. Anyone with a
+token can publish a green run for <code>payments-api</code> that never ran.</p>
+
+<h3 id="one-workspace">There is one workspace, and it is not a tenancy boundary</h3>
+
+<p>Every row carries <code>workspace_id</code> from the first migration — so the column never
+has to be added to a populated events table later — but the open-source edition creates
+exactly one workspace, derives its id from the slug, and offers no way to create or select
+another. <code>require_read</code> and <code>require_write</code> do not consider the
+workspace at all. Treat the schema column as future-proofing, not as isolation.</p>
+
+<h3 id="no-audit-log">There is no audit log</h3>
+
+<p>Nothing records which token wrote which run, when, or from where. The events table records
+<code>source</code> — a publisher-supplied string that anyone can set to anything — and
+<code>received_at</code>. Uvicorn's access log is off by default (it duplicates Test Hub's own
+logging and is noisy in a terminal that is also showing test output), and it would not carry
+an identity anyway. If you need to know who did what, put a reverse proxy in front and keep
+<em>its</em> log; that is also the only place you will get a client IP.</p>
+
+<h3 id="no-rate-limiting">There is no rate limiting</h3>
+
+<p>No per-token quota, no per-IP throttle, no concurrency cap on imports. A publisher stuck in
+a retry loop is limited only by the size caps above and by SQLite's single-writer ceiling —
+which under load means everyone else's imports queue behind it. If the port is reachable by
+anything you do not control, put a rate limit in the proxy.</p>
+
+<h3 id="other-gaps">And the rest, plainly</h3>
+
+<div class="tablewrap"><table>
   <thead><tr><th>Gap</th><th>What it means for you</th></tr></thead>
   <tbody>
-    <tr><td><strong>No per-user authorization</strong></td><td>A token is a token. Any valid token can write to any project, and there is no notion of a user, a role or an owner. Do not hand a token to someone you would not give write access to everything.</td></tr>
-    <tr><td><strong>One shared workspace</strong></td><td>Every row carries a <code>workspace_id</code> from the first migration, but the open-source edition creates only <code>default</code>. This is not a tenancy boundary you can rely on yet.</td></tr>
-    <tr><td><strong>No audit log</strong></td><td>The event log records what happened to the data, not who did it. There is no record of which token published what.</td></tr>
-    <tr><td><strong>No rate limiting</strong></td><td>A publisher with a valid token can fill the disk. Put a reverse proxy in front of an instance exposed to anything wider than a trusted network.</td></tr>
-    <tr><td><strong>No encryption at rest</strong></td><td>The SQLite file and the artifact tree are plain files. Use filesystem or volume encryption if the results are sensitive.</td></tr>
-    <tr><td><strong>No TLS of its own</strong></td><td>Test Hub speaks plain HTTP. Terminate TLS in front of it — a bearer token sent over plain HTTP across a network is a token you have given away.</td></tr>
-    <tr><td><strong>Reads are open by default</strong></td><td>Even with authentication on, reads are unauthenticated unless you set <code>TEST_HUB_REQUIRE_AUTH_FOR_READS</code>. The default assumes "anyone in the team may look, only CI may write".</td></tr>
+    <tr><td>No retention, expiry or deletion</td><td>No endpoint deletes a run, a project or an artifact; nothing ages data out; there is no artifact garbage collector, so a blob whose rows rolled back stays on disk forever. Storage grows monotonically. Plan a volume, or plan to <code>rm</code> the data directory.</td></tr>
+    <tr><td>Nothing is encrypted at rest</td><td>The SQLite file and the artifact tree are plain files. <code>ensure_directories()</code> chmods the data directory <code>0700</code> and blobs <code>0600</code> where the platform supports it, which stops another <em>unprivileged</em> user on the same host and nothing more. Use an encrypted volume if the disk matters.</td></tr>
+    <tr><td>Test Hub speaks plain HTTP</td><td>There is no TLS listener and no plan for one. Terminate TLS in front of it. A bearer token sent over plain HTTP across a network is a token you have given away.</td></tr>
+    <tr><td>Reads are open by default</td><td>Even with authentication on, <code>require_read</code> lets reads through unless you set <code>TEST_HUB_REQUIRE_AUTH_FOR_READS=true</code>. The default assumes "anyone in the team may look, only CI may write". Decide whether that is true for you.</td></tr>
+    <tr><td><code>--insecure-no-auth</code> on a public interface</td><td>A deployment decision, not a vulnerability. It warns on every start and banners the dashboard. If you use it anyway, anyone who can reach the port can read and write every test result.</td></tr>
+    <tr><td>Write access to the data dir or the environment</td><td>Anyone who has it already owns the process. Redaction patterns, token hashes and the CSP all come from configuration; a person who can change that can turn any of them off.</td></tr>
   </tbody>
-</table>
+</table></div>
+
+<h2 id="verifying">Verifying a deployment</h2>
+
+<p>Five commands, run from a machine that is <em>not</em> the server. If the first one returns
+201, stop and re-read <a href="#binding">Binding</a>.</p>
+
+<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
+<pre><code># 1. Auth is on and writes are closed.
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://test-hub.internal/api/v1/runs \
+  -H 'content-type: application/json' -d '{"project_key":"probe"}'      # expect 401
+
+# 2. TLS terminates in front, and the security headers survived the proxy.
+curl -sI https://test-hub.internal/ | grep -Ei 'content-security-policy|x-frame|nosniff'
+
+# 3. Entity expansion is refused.
+printf '&lt;?xml version="1.0"?&gt;&lt;!DOCTYPE t [&lt;!ENTITY x SYSTEM "file:///etc/passwd"&gt;]&gt;&lt;testsuites/&gt;' \
+  &gt; /tmp/xxe.xml
+curl -s -X POST https://test-hub.internal/api/v1/imports -H "Authorization: Bearer $TOK" \
+  -F file=@/tmp/xxe.xml -F project=probe                               # expect DTDForbidden
+
+# 4. Reads are as open, or as closed, as you intended.
+curl -s -o /dev/null -w '%{http_code}\n' https://test-hub.internal/api/v1/runs
+
+# 5. Your own secret shapes are redacted before storage. Publish a report whose failure
+#    text carries a dummy credential in your format, then read it back:
+curl -s "https://test-hub.internal/api/v1/runs/$RUN" | grep -c 'REDACTED'</code></pre>
 </div>
+
+<p>Step 2 is worth repeating after every proxy change. Do not add security headers at the
+proxy: Test Hub sends its own on every response, and a second, weaker set from the proxy is
+how a restrictive CSP quietly becomes a permissive one.</p>
 
 <h2 id="reporting">Reporting a vulnerability</h2>
 
-<p>Please do not open a public issue. Use GitHub Security Advisories on the repository.
-Reports are acknowledged within 72 hours. <code>SECURITY.md</code> in the repository has
-the supported versions and the disclosure process.</p>
+<p>Privately, through GitHub Security Advisories on
+<a href="https://github.com/prashanth-sams/test-hub">the repository</a> — not a public issue,
+not a pull request, not a discussion thread. That form is private between you and the
+maintainers, gives somewhere to work on a fix before it is visible, and can issue a CVE and
+credit you when it is published.</p>
+
+<p>Include the version, how it is deployed, and what an attacker can concretely do. Test Hub's
+blast radius depends heavily on who can reach the port, so "any CI job that can POST a report
+can read every other team's results" is a very different report from "a user who can already
+edit the config can crash the server". A crafted report file is the ideal reproducer, since
+that is the main untrusted input — cut it down and strip anything of yours out of it.</p>
+
+<p>The commitments — 72 hours to acknowledge, 7 days to an initial assessment, 30 days
+targeted for a high-severity fix, coordinated disclosure, and a safe-harbour statement — are
+in <code>SECURITY.md</code> in the repository, which is the authoritative version of this
+section.</p>
 <nav class="pagenav" aria-label="Pagination">
 <a class="pagenav__prev" href="../docs/metrics.html"><span>&larr;&nbsp;Previous</span><b>Metrics</b></a>
 <a class="pagenav__next" href="../docs/deployment.html"><span>Next&nbsp;&rarr;</span><b>Deployment</b></a>
@@ -335,19 +712,16 @@ the supported versions and the disclosure process.</p>
 <aside class="toc" aria-label="On this page">
   <div class="toc__title">On this page</div>
   <ul>
-<li class="lvl-2"><a href="#threat-model">The threat model</a></li>
+<li class="lvl-2"><a href="#threat-model">The shape of the problem</a></li>
+<li class="lvl-2"><a href="#binding">Binding, and why it refuses</a></li>
 <li class="lvl-2"><a href="#xss">Untrusted text in a browser</a></li>
-<li class="lvl-3"><a href="#escaping">Nothing is written as HTML</a></li>
-<li class="lvl-3"><a href="#csp">A Content-Security-Policy that can afford to be strict</a></li>
-<li class="lvl-3"><a href="#snapshot-embedding">The offline report's data block</a></li>
-<li class="lvl-3"><a href="#artifacts-serving">Artifacts are always downloads</a></li>
 <li class="lvl-2"><a href="#xml">XML entity attacks</a></li>
-<li class="lvl-2"><a href="#limits">Size and decompression</a></li>
+<li class="lvl-2"><a href="#limits">Size and decompression limits</a></li>
 <li class="lvl-2"><a href="#paths">Artifact paths</a></li>
 <li class="lvl-2"><a href="#tokens">Tokens</a></li>
-<li class="lvl-2"><a href="#exposure">Network exposure</a></li>
 <li class="lvl-2"><a href="#redaction">Secret redaction</a></li>
 <li class="lvl-2"><a href="#not-protected">What this release does not protect against</a></li>
+<li class="lvl-2"><a href="#verifying">Verifying a deployment</a></li>
 <li class="lvl-2"><a href="#reporting">Reporting a vulnerability</a></li>
   </ul>
 </aside>

@@ -34,7 +34,7 @@ publish to it, and `curl` is a first-class client.
 | Flaky detection | Within a run (failed then passed on retry) and across runs (disagreeing with its own history). Both formulas are written down in [docs/metrics.md](docs/metrics.md) and implemented exactly once. |
 | Executive and engineering altitudes | A portfolio overview that is cheap enough to poll, kept deliberately separate from the run-level drill-down that is allowed to be large — with an analytics page between them that groups failures by the exception that raised them, ranks suites, owners and slow tests, and gives every test a verdict. |
 | Secure by default | Loopback-only binding, a refusal to serve an unauthenticated public interface, hashed API tokens, XML parsed with entities disabled, size limits, content-addressed artifacts, a restrictive CSP, and configurable secret redaction over everything it stores. |
-| No Node, no CDN | The frontend is hand-written CSS and JavaScript shipped inside the wheel. It loads nothing from the internet, which is what lets the offline export be a single file and the CSP be `default-src 'none'`. |
+| No Node, no CDN | The frontend is hand-written CSS and JavaScript shipped inside the wheel. It loads nothing from the internet, so an air-gapped install renders like a connected one and the CSP can be `default-src 'none'`. |
 | Retention you control | Clear runs past a cutoff — `12h`, `90d`, `6m`, an absolute date — along with everything under them and the artifact blobs left unreferenced. From the dashboard's Settings page, which previews exactly what would go before anything does, or with `test-hub prune`. A per-project floor keeps a dormant project from vanishing, and deleting needs an administrator token that is deliberately separate from the one CI publishes with. |
 | Runs anywhere | `pip install test-hub`, SQLite, one process. A Dockerfile and a Compose file with a persistent volume are included for when you want it to be somebody else's laptop. |
 
@@ -133,15 +133,6 @@ The token is read from the environment, never from a command-line argument — a
 argument is visible in `ps` to every user on the machine and lands in shell
 history and CI logs.
 
-### Send one HTML file to somebody who has no server
-
-```shell
-$ test-hub export --input ./results --output test-hub-report.html --project payments-api
-```
-
-One file. Open it on a plane. It carries its own CSS, its own JavaScript and its
-own data, and loads nothing from the network.
-
 ## Publishing without Python
 
 Test Hub's API is the product; the Python SDK is a convenience. This is a
@@ -175,21 +166,6 @@ curl -X POST "$HUB/api/v1/runs/$RUN/finish" -H 'content-type: application/json' 
 Every one of those calls is safe to retry. See [docs/api.md](docs/api.md) for the
 full reference, and [docs/ci/github-actions.md](docs/ci/github-actions.md) and
 [docs/ci/jenkins.md](docs/ci/jenkins.md) for worked pipeline examples.
-
-## The two modes
-
-|  | Snapshot | Live |
-|---|---|---|
-| Command | `test-hub export` | `test-hub serve` |
-| Output | one self-contained `.html` | a service on a port |
-| Needs a server to read | no | yes |
-| Works offline | yes | the dashboard is local |
-| Updates while you watch | no | yes, over SSE |
-| Data provider | `SnapshotDataProvider` | `LiveDataProvider` |
-| Dashboard code | **identical** | **identical** |
-
-That last row is the architecture. One dashboard, two data providers — see
-[ADR-0001](docs/adr/0001-architecture.md).
 
 ## How the numbers are calculated
 
@@ -248,8 +224,8 @@ assume that:
   reaches the filesystem at all.
 - A restrictive `Content-Security-Policy`, and no inline scripts or styles for it
   to have to allow.
-- Snapshot JSON is embedded so that a test named `</script><img src=x
-  onerror=alert(1)>` renders as text — verified by test.
+- Every value reaches the page as a text node, so a test named `</script><img
+  src=x onerror=alert(1)>` renders as text — verified by test.
 - Configurable secret redaction over logs and stored failure output.
 
 Full detail and the threat model are in [SECURITY.md](SECURITY.md) and
@@ -262,6 +238,7 @@ Full detail and the threat model are in [SECURITY.md](SECURITY.md) and
 | [Architecture](docs/architecture.md) | How it fits together, and why |
 | [ADR-0001](docs/adr/0001-architecture.md) | The decisions, the alternatives, and the known limits |
 | [ADR-0002](docs/adr/0002-data-retention.md) | Retention: what a prune deletes, and what protects it |
+| [ADR-0003](docs/adr/0003-drop-the-offline-export.md) | Why the offline HTML export was removed |
 | [Canonical schemas](docs/schemas/README.md) | The versioned wire contract |
 | [Event contract](docs/events.md) | The CloudEvents envelope and all eight event types |
 | [Metrics](docs/metrics.md) | Every formula, exactly |

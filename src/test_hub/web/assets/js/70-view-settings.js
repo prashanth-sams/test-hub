@@ -328,16 +328,6 @@
     }
 
     function unavailableCard() {
-      if (settings && settings.snapshot) {
-        return ui.card({
-          title: 'Retention',
-          body: ui.emptyState({
-            title: 'This is an offline export',
-            hint: 'There is no server here and nothing to delete. Open the live dashboard ' +
-              'to manage retention.'
-          })
-        });
-      }
       return ui.card({
         title: 'Retention',
         body: ui.emptyState({
@@ -411,7 +401,7 @@
       util.clear(body);
       body.appendChild(ui.loadingBlock('Loading settings', 'text', 3));
       if (!provider.getRetention) {
-        settings = { admin: false, snapshot: provider.kind === 'snapshot' };
+        settings = { admin: false };
         render();
         return;
       }

@@ -2,8 +2,8 @@
  *
  * Views never call `fetch`, never call the provider and never keep their own
  * copy of anything (ADR-0001 D1). They read `store.state` and re-render when
- * the store says a section changed. That is what lets the same view code sit on
- * top of a frozen snapshot and a live stream without a single conditional.
+ * the store says a section changed — so a view is a pure function of state, and
+ * the transport underneath it is somebody else's problem.
  *
  * The URL is the source of truth for filters. `#/runs?team=payments&page=2` is
  * not a side effect of the filter bar — it *is* the filter bar's state, which
@@ -233,9 +233,9 @@
       var keys = Object.keys(state.filters);
       for (var i = 0; i < keys.length; i++) { filters[keys[i]] = state.filters[keys[i]]; }
       // The run list is paged, not windowed: `GET /runs` has no window
-      // parameter, so passing one through would silently narrow the snapshot
-      // and be ignored by the API, and the two modes would disagree about what
-      // the same URL means. The overview owns `window_days`; this view does not.
+      // parameter, so passing one through would be silently ignored and the URL
+      // would claim a narrowing that never happened. The overview owns
+      // `window_days`; this view does not.
       delete filters.window_days;
       filters.limit = limit;
       filters.offset = (page - 1) * limit;
@@ -294,8 +294,7 @@
     //: How many finished runs the detail pages read in full. Five is the
     //: number at which "what keeps breaking" stops being one run's luck, and
     //: it is also the point past which a live server is being asked for real
-    //: work to draw one page. The snapshot provider answers all five from
-    //: memory; the API answers them in parallel.
+    //: work to draw one page. The API answers them in parallel.
     var ANALYTICS_RUNS = 5;
 
     /**

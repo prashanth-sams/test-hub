@@ -1,6 +1,6 @@
 """Application context — the one place where the layers are wired together.
 
-Everything above this module (API, CLI, exporter) takes an :class:`AppContext`
+Everything above this module (API, CLI) takes an :class:`AppContext`
 and asks it for a unit of work. Nothing above this module knows that the store
 is SQLite, that the bus is in-process, or where the data directory is. That is
 what makes ADR-0001 D4's promise — swap the implementation, keep the callers —

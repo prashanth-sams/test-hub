@@ -98,23 +98,6 @@ $ test-hub serve         # http://127.0.0.1:8000</code></pre>
     <a class="card" href="docs/getting-started.html"><span class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4.5 16.5c-1.5 1.3-2 5-2 5s3.7-.5 5-2c.7-.8.7-2.1-.1-2.9a2 2 0 0 0-2.9 0z"/><path d="M12 15 9 12a11 11 0 0 1 2-6c2.2-3 5.5-3.5 8-3.5 0 2.5-.5 5.8-3.5 8a11 11 0 0 1-6 2z"/><path d="M9 12H5s.4-2.5 2-3.5c1.7-1 3.5-.5 3.5-.5M12 15v4s2.5-.4 3.5-2c1-1.7.5-3.5.5-3.5"/></svg></span><h3>Getting started</h3><p>Install it, seed it with sample data, and have a dashboard open in about a minute.</p></a><a class="card" href="docs/rest-api.html"><span class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg></span><h3>REST API</h3><p>Every endpoint, with a <code>curl</code> for each. The API is the product; the SDK is a convenience.</p></a><a class="card" href="docs/adapters.html"><span class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 2v6M15 2v6M7 8h10v3a5 5 0 0 1-5 5 5 5 0 0 1-5-5z"/><path d="M12 16v6"/></svg></span><h3>Adapters</h3><p>JUnit XML and Test Hub JSON ship in the box. New formats are entry-point plugins.</p></a><a class="card" href="docs/metrics.html"><span class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span><h3>Metrics</h3><p>Pass rate, failure rate, duration and flakiness — the exact formulas, and what they exclude.</p></a><a class="card" href="docs/security.html"><span class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></span><h3>Security</h3><p>Loopback by default, hashed tokens, entity-free XML parsing, and a CSP of <code>default-src 'none'</code>.</p></a><a class="card" href="docs/deployment.html"><span class="card__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg></span><h3>Deployment</h3><p>Docker, Compose, a reverse proxy on a sub-path, backups, and what to check before exposing it.</p></a>
   </section>
 
-  <section class="modes">
-    <h2>Two ways to read your results</h2>
-    <p>Both are the same dashboard. The only thing that differs is where the data comes from, and
-    that difference lives in exactly one interface.</p>
-    <div class="tablewrap"><table>
-      <thead><tr><th>&nbsp;</th><th>Snapshot</th><th>Live</th></tr></thead>
-      <tbody>
-        <tr><th scope="row">Command</th><td><code>test-hub export</code></td><td><code>test-hub serve</code></td></tr>
-        <tr><th scope="row">Output</th><td>one self-contained <code>.html</code></td><td>a service on a port</td></tr>
-        <tr><th scope="row">Needs a server to read</th><td>no</td><td>yes</td></tr>
-        <tr><th scope="row">Updates while you watch</th><td>no</td><td>yes, over SSE</td></tr>
-        <tr><th scope="row">Data provider</th><td><code>SnapshotDataProvider</code></td><td><code>LiveDataProvider</code></td></tr>
-        <tr><th scope="row">Dashboard code</th><td><b>identical</b></td><td><b>identical</b></td></tr>
-      </tbody>
-    </table></div>
-  </section>
-
   <section class="closing">
     <h2>Start where you are</h2>
     <div class="closing__grid">

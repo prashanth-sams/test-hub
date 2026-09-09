@@ -1,9 +1,11 @@
-/* Test Hub — the data provider seam (ADR-0001 D1).
+/* Test Hub — the data provider seam (ADR-0001 D1, narrowed by ADR-0003).
  *
  * The dashboard is written once and never learns where its data came from. It
- * asks a provider; a provider answers. Everything that differs between "a
- * frozen JSON blob inlined into one HTML file" and "a REST API with a live
- * event stream" is confined to the two implementations in 11-* and 12-*.
+ * asks a provider; a provider answers. There is one implementation today — the
+ * live REST + SSE client in 12-* — and the seam stays because it is what keeps
+ * `fetch` out of every view: a view that cannot reach the network cannot grow a
+ * request in the middle of a render, and the arithmetic below has one home
+ * rather than being redone per page.
  *
  * The interface, in full:
  *
@@ -14,19 +16,19 @@
  *   getFacets()            -> Promise<{teams: [], components: [], ...}>
  *   subscribe(handler)     -> unsubscribe function
  *   capabilities           -> {live, artifacts, paging}
- *   status                 -> 'connecting'|'live'|'reconnecting'|'offline'|'static'
+ *   status                 -> 'connecting'|'live'|'reconnecting'|'offline'
  *
  * `subscribe` delivers plain messages, never raw transport objects:
  *
  *   {type: 'status',  status: <status>, detail?: string}
  *   {type: 'change',  runIds: string[], reason: 'events'|'resync', at: ISO}
  *
- * This file also owns the arithmetic that both providers need. The snapshot
- * provider has no server to ask, so when a filter is applied it must recompute
- * counts, trends and project health in the browser — and those numbers have to
- * agree, to the decimal, with test_hub.domain.metrics. Every formula below is a
- * transcription of that module and the docstrings say which one, so a change
- * there is a grep away from a change here.
+ * This file also owns the arithmetic the provider needs. The server computes
+ * every number it is asked for, but a filter the API cannot express is applied
+ * in the browser, and the counts that come back then have to be recomputed —
+ * and they have to agree, to the decimal, with test_hub.domain.metrics. Every
+ * formula below is a transcription of that module and the docstrings say which
+ * one, so a change there is a grep away from a change here.
  */
 (function (window) {
   'use strict';
@@ -34,7 +36,7 @@
   var TestHub = window.TestHub = window.TestHub || {};
   var util = TestHub.util;
 
-  var STATUSES = ['connecting', 'live', 'reconnecting', 'offline', 'static'];
+  var STATUSES = ['connecting', 'live', 'reconnecting', 'offline'];
 
   //: Filter keys that map straight onto API query parameters.
   var FACET_KEYS = ['project', 'team', 'component', 'test_type', 'environment', 'branch'];
@@ -177,37 +179,6 @@
 
   /* ------------------------------------------------------------- summaries */
 
-  /** Flatten a RunDetail into the RunSummary shape the list views expect. */
-  function summarize(detail) {
-    var run = detail && detail.run ? detail.run : detail;
-    if (!run) { return null; }
-    var context = run.context || {};
-    return {
-      id: run.id,
-      project_key: run.project_key,
-      name: run.name,
-      team: run.team,
-      component: run.component,
-      test_type: run.test_type,
-      trigger: run.trigger,
-      status: run.status,
-      environment: context.environment,
-      branch: context.branch,
-      commit_sha: context.commit_sha,
-      framework: context.framework,
-      language: context.language,
-      pipeline_url: context.pipeline_url,
-      started_at: run.started_at,
-      finished_at: run.finished_at,
-      duration_ms: run.duration_ms,
-      counts: normalizeCounts(run.counts),
-      tags: run.tags || [],
-      is_live: run.is_live === undefined
-        ? (run.status === 'queued' || run.status === 'running')
-        : !!run.is_live
-    };
-  }
-
   function normalizeSummary(raw) {
     if (!raw) { return null; }
     var summary = {};
@@ -296,8 +267,7 @@
    *
    * `pass_rate` aggregates every run in scope; `pass_rate_delta` is the change
    * from the previous run to the latest one — a concrete, explainable number,
-   * unlike "vs the window", which has no second window to compare against
-   * inside a self-contained snapshot.
+   * unlike "vs the window", which has no second window to compare against.
    */
   function buildProjectHealth(summaries, projects, tests) {
     var byProject = {};
@@ -356,39 +326,13 @@
     return util.sortBy(rows, function (row) { return row.last_run_at; }, 'desc');
   }
 
-  /** Distinct facet values, derived from whatever runs are in scope. */
-  function facetsFromSummaries(summaries) {
-    var facets = {
-      projects: [], teams: [], components: [], test_types: [],
-      environments: [], branches: [], statuses: [], triggers: []
-    };
-    var i;
-    for (i = 0; i < summaries.length; i++) {
-      var summary = summaries[i];
-      facets.projects.push(summary.project_key);
-      facets.teams.push(summary.team);
-      facets.components.push(summary.component);
-      facets.test_types.push(summary.test_type);
-      facets.environments.push(summary.environment);
-      facets.branches.push(summary.branch);
-      facets.statuses.push(summary.status);
-      facets.triggers.push(summary.trigger);
-    }
-    var keys = Object.keys(facets);
-    for (i = 0; i < keys.length; i++) {
-      facets[keys[i]] = util.unique(facets[keys[i]]).sort(function (a, b) {
-        return util.compare(a, b);
-      });
-    }
-    return facets;
-  }
-
   /* ----------------------------------------------------------------- base */
 
   /**
    * Shared plumbing: the message bus, the status field and the one place a
-   * status transition is announced. Both providers build on this so that the
-   * UI's status pill has identical semantics in live and static mode.
+   * status transition is announced. It stays separate from the implementation
+   * so the connection pill's semantics live in one file rather than in the
+   * transport that happens to be reporting them.
    */
   function createBase(kind, capabilities, status) {
     var bus = util.emitter();
@@ -426,11 +370,9 @@
     cleanFilters: cleanFilters,
     hasFacetFilter: hasFacetFilter,
     matchesFilters: matchesFilters,
-    summarize: summarize,
     normalizeSummary: normalizeSummary,
     buildTrend: buildTrend,
     buildProjectHealth: buildProjectHealth,
-    facetsFromSummaries: facetsFromSummaries,
     dayKey: dayKey
   };
 })(window);

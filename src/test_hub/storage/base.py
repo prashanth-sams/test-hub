@@ -50,8 +50,8 @@ class RunFilter:
     """The facets every run listing supports.
 
     One object rather than a dozen keyword arguments, because exactly the same
-    filter is applied by the REST layer, the exporter and the demo seeder, and a
-    new facet should be one field in one place.
+    filter is applied by the REST layer and the demo seeder, and a new facet
+    should be one field in one place.
     """
 
     workspace_id: uuid.UUID | None = None

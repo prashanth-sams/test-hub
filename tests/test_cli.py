@@ -47,7 +47,7 @@ def test_version(runner: CliRunner, cli_env: dict[str, str]) -> None:
 def test_help_lists_every_command(runner: CliRunner, cli_env: dict[str, str]) -> None:
     result = run(runner, cli_env, "--help")
     assert result.exit_code == 0
-    for command in ("serve", "ingest", "publish", "export", "demo", "prune", "formats", "token"):
+    for command in ("serve", "ingest", "publish", "demo", "prune", "formats", "token"):
         assert command in result.stdout
 
 
@@ -139,76 +139,6 @@ def test_demo_is_deterministic(runner: CliRunner, tmp_path: Path) -> None:
         )
         outputs.append([line for line in result.stdout.splitlines() if "projects," in line])
     assert outputs[0] == outputs[1]
-
-
-def test_export_writes_one_self_contained_file(
-    runner: CliRunner, cli_env: dict[str, str], tmp_path: Path
-) -> None:
-    run(runner, cli_env, "ingest", str(junit("simple.xml")), "--project", "p")
-    output = tmp_path / "report.html"
-    result = run(runner, cli_env, "export", "--output", str(output), "--days", "3650")
-    assert result.exit_code == 0
-    assert output.is_file()
-
-    html = output.read_text(encoding="utf-8")
-    assert 'src="assets/' not in html
-    assert "<style>" in html
-    assert "self-contained" in result.stdout
-
-
-def test_export_from_a_directory_of_reports(
-    runner: CliRunner, cli_env: dict[str, str], tmp_path: Path
-) -> None:
-    """The documented `--input ./results` flow, which never touches the real store."""
-    results = tmp_path / "results"
-    results.mkdir()
-    for name in ("simple.xml", "nested-suites.xml"):
-        (results / name).write_bytes(junit(name).read_bytes())
-
-    output = tmp_path / "from-files.html"
-    result = run(
-        runner,
-        cli_env,
-        "export",
-        "--input",
-        str(results),
-        "--output",
-        str(output),
-        "--project",
-        "payments-api",
-        "--days",
-        "3650",
-    )
-    assert result.exit_code == 0
-    assert output.is_file()
-    assert output.stat().st_size > 50_000
-
-
-def test_export_from_input_requires_a_project(
-    runner: CliRunner, cli_env: dict[str, str], tmp_path: Path
-) -> None:
-    results = tmp_path / "results"
-    results.mkdir()
-    (results / "simple.xml").write_bytes(junit("simple.xml").read_bytes())
-    result = runner.invoke(
-        cli_app,
-        ["export", "--input", str(results), "--output", str(tmp_path / "x.html")],
-        env=cli_env,
-    )
-    assert result.exit_code != 0
-
-
-def test_export_from_an_empty_directory_says_so(
-    runner: CliRunner, cli_env: dict[str, str], tmp_path: Path
-) -> None:
-    empty = tmp_path / "empty"
-    empty.mkdir()
-    result = runner.invoke(
-        cli_app,
-        ["export", "--input", str(empty), "--output", str(tmp_path / "x.html"), "-p", "p"],
-        env=cli_env,
-    )
-    assert result.exit_code != 0
 
 
 def test_token_create_prints_a_token_and_its_hash(

@@ -65,14 +65,6 @@
       }
 
       var nodes = [crumbs(detail), header(detail), statsRow(detail)];
-      if (detail.partial) {
-        nodes.push(ui.banner({
-          tone: 'warn',
-          title: 'Partial history',
-          text: 'This snapshot does not include an indexed history for this test, so only the ' +
-            'run it was found in is shown.'
-        }));
-      }
       nodes.push(latestCard(detail));
       nodes.push(historyCard(detail));
 

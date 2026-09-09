@@ -120,6 +120,26 @@ one of those is listed under **Changed** or **Removed** with the migration.
   before; the artifact sweep does, and without the bump it could unlink bytes an
   in-flight import was about to claim.
 
+### Removed
+
+- **The offline HTML export, and everything under it.** `test-hub export`,
+  `test_hub.export`, `domain.models.Snapshot`, `SnapshotDataProvider` and the
+  `static` connection status are gone. `test-hub serve` is now the only way to
+  open the dashboard. The reasoning is in
+  [ADR-0003](docs/adr/0003-drop-the-offline-export.md): a Test Hub report is a
+  view onto a store that keeps changing, and a frozen file had to apologise for
+  not being that on every page — most visibly on Screenshots, API Logs and Test
+  Coverage, which are pages about files an export could not carry.
+
+  **If you relied on it**: there is no replacement command. Sharing a result now
+  means sharing a URL, so the server has to be reachable by whoever reads it. An
+  HTML file you exported before this release is a self-contained document and
+  keeps working exactly as it did.
+
+  `SCHEMA_VERSION` does **not** move. `Snapshot` was written by the exporter and
+  read by the browser; no publisher sent one and no endpoint returned one, so
+  nothing on the wire changes shape.
+
 ### Changed
 
 - New migration `0002_retention_indexes` adds `ix_idempotency_keys_run_id`. That

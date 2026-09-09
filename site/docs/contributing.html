@@ -144,7 +144,6 @@ runtime. Check it works:</p>
     <tr><td><code>service/</code></td><td>Orchestration: imports, live runs, the event bus, the application context.</td></tr>
     <tr><td><code>api/</code></td><td>FastAPI app, routes, security, public request and response models.</td></tr>
     <tr><td><code>cli/</code></td><td>Typer commands. Thin wrappers with no business logic.</td></tr>
-    <tr><td><code>export/</code></td><td>The standalone HTML snapshot writer.</td></tr>
     <tr><td><code>sdk/</code></td><td>The Python publishing client.</td></tr>
     <tr><td><code>web/</code></td><td>The dashboard, shipped inside the wheel.</td></tr>
   </tbody>
@@ -157,7 +156,6 @@ runtime. Check it works:</p>
 <pre><code>cli ──▶ api ──▶ service ──▶ storage ──▶ (sqlite / filesystem)
  │       │         │
  │       │         └──▶ domain ◀── adapters
- ├──▶ export ──────────▶ domain
  └──▶ sdk ─(http)─▶ api</code></pre>
 </div>
 
@@ -188,10 +186,9 @@ around.</p>
 
 <p>There is a fifth gate that catches the failures which embarrass a release: CI builds
 the wheel, installs it into a clean virtualenv in a directory with no checkout, and runs
-<code>test-hub demo</code> and <code>test-hub export</code> from there. A data file left
-out of the wheel, an entry point that does not resolve, or an exporter emitting a file
-that references assets only present in the source tree — all of those pass every other
-check and fail that one.</p>
+<code>test-hub demo</code> and <code>test-hub serve</code> from there. A data file left
+out of the wheel, an entry point that does not resolve, or a dashboard asset present only
+in the source tree — all of those pass every other check and fail that one.</p>
 
 <h2 id="tests">Writing tests</h2>
 

@@ -2,7 +2,7 @@
 
 These do not open a browser — they assert the invariants the dashboard is built
 on, so that a change which quietly breaks one fails in CI rather than in
-somebody's offline report. The browser-level checks (rendering, contrast,
+somebody's dashboard. The browser-level checks (rendering, contrast,
 keyboard order, the 375px layout) are documented in ``docs/architecture.md``
 and run with Playwright against a live server; these are the cheap guards that
 run everywhere.
@@ -43,7 +43,7 @@ def test_every_manifest_asset_is_packaged() -> None:
 
 
 def test_index_loads_exactly_the_manifest_scripts_in_order() -> None:
-    """The server and the offline exporter must agree on the load order."""
+    """index.html and the manifest are two lists that must not drift apart."""
     referenced = re.findall(r'<script src="([^"]+)"></script>', INDEX_MARKUP)
     assert referenced == MANIFEST["js"]
 
@@ -53,16 +53,12 @@ def test_index_loads_exactly_the_manifest_stylesheets() -> None:
     assert referenced == MANIFEST["css"]
 
 
-def test_the_exporter_markers_are_present() -> None:
-    for marker in MANIFEST["markers"].values():
-        assert marker in INDEX, f"{marker} is missing — the exporter would fail"
-
-
 # -------------------------------------------------------------- no remote deps
 
 
 def test_nothing_is_loaded_from_the_network() -> None:
-    """No CDN, no webfonts. It is what makes the offline export possible."""
+    """No CDN, no webfonts. A Test Hub behind a firewall, or on a machine with no
+    route to the internet, has to render exactly like one that is online."""
     for match in re.finditer(r'(?:src|href)\s*=\s*"([^"]+)"', INDEX_MARKUP):
         url = match.group(1)
         assert not url.startswith(("http://", "https://", "//")), url
@@ -77,7 +73,8 @@ def test_no_webfonts_or_remote_imports_in_css() -> None:
 
 
 def test_scripts_are_classic_not_modules() -> None:
-    """ES modules do not load over file://, and the offline report is a file:// page."""
+    """One namespace, no module graph, no bundler: the dashboard is served as the
+    files that are in the repository, and the load order is the manifest."""
     assert 'type="module"' not in INDEX_MARKUP
     source = js_source()
     assert not re.search(r"^\s*import\s+.*\bfrom\b", source, re.M)
@@ -213,42 +210,38 @@ def test_reduced_motion_is_respected() -> None:
 # ------------------------------------------------------------------ providers
 
 
-def test_both_providers_exist_and_share_one_interface() -> None:
-    """ADR-0001 D1: one dashboard, two data providers, no second renderer."""
-    names = {path.name for path in JS_FILES}
-    assert {"11-snapshot-provider.js", "12-live-provider.js"} <= names
+def test_the_provider_seam_is_intact() -> None:
+    """ADR-0001 D1, narrowed by ADR-0003: one dashboard, one provider, and the
+    seam still separating them.
 
+    The seam outlived the second implementation on purpose — it is what keeps
+    `fetch` out of the views and the metric arithmetic in one file."""
     interface = (WEB / "assets/js/10-provider.js").read_text(encoding="utf-8")
-    snapshot = (WEB / "assets/js/11-snapshot-provider.js").read_text(encoding="utf-8")
     live = (WEB / "assets/js/12-live-provider.js").read_text(encoding="utf-8")
 
-    # The data methods are implemented per provider…
     for method in ("getOverview", "listRuns", "getRun", "getTest"):
         assert method in interface, f"{method} missing from the provider interface"
-        assert method in snapshot, f"{method} missing from the snapshot provider"
         assert method in live, f"{method} missing from the live provider"
 
-    # …while `subscribe` and the status field come from one shared base, so the
-    # dashboard's connection pill means the same thing in both modes.
+    # `subscribe` and the status field come from a shared base rather than from
+    # the transport, so the connection pill has one definition.
     assert "function createBase(" in interface
     assert "subscribe:" in interface
-    for source, name in ((snapshot, "snapshot"), (live, "live")):
-        assert "createBase(" in source, f"the {name} provider does not use the shared base"
+    assert "createBase(" in live, "the provider does not use the shared base"
 
 
-def test_only_the_live_provider_touches_the_network() -> None:
-    """The snapshot provider must work with no server; that is its entire job."""
-    snapshot = (WEB / "assets/js/11-snapshot-provider.js").read_text(encoding="utf-8")
-    assert "fetch(" not in snapshot
-    assert "EventSource" not in snapshot
-
+def test_only_the_provider_touches_the_network() -> None:
+    """Everything that talks to the server is in one file, and it is not a view."""
     live = (WEB / "assets/js/12-live-provider.js").read_text(encoding="utf-8")
     assert "EventSource" in live
     assert "Last-Event-ID" in live or "lastEventId" in live
 
+    interface = (WEB / "assets/js/10-provider.js").read_text(encoding="utf-8")
+    assert "fetch(" not in interface, "the seam itself must not know a transport"
+
 
 def test_views_do_not_call_fetch_directly() -> None:
-    """Views render from a plain object graph so both providers can feed them."""
+    """Views render from a plain object graph, never from a response."""
     for path in JS_FILES:
         if not re.match(r"\d+-view-", path.name) and "components" not in path.name:
             continue
@@ -614,14 +607,6 @@ def test_the_view_never_calls_fetch_itself() -> None:
     assert "XMLHttpRequest" not in source
     for call in ("provider.getRetention", "provider.previewPrune", "provider.runPrune"):
         assert call in source
-
-
-def test_a_snapshot_says_it_cannot_prune() -> None:
-    """A frozen file has no server to ask; the view must render its explanation
-    rather than a form that cannot work."""
-    snapshot = (WEB / "assets" / "js" / "11-snapshot-provider.js").read_text(encoding="utf-8")
-    assert "getRetention" in snapshot
-    assert "admin: false" in snapshot
 
 
 def test_the_danger_button_is_styled_after_the_base_button() -> None:

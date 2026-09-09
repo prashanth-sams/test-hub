@@ -3,7 +3,7 @@
 ADR-0001 D3 draws a hard line between the wire contract
 (:mod:`test_hub.domain.models`, Pydantic) and the rows on disk (this module).
 The repositories translate; no ORM object is ever serialized, returned from an
-API handler or embedded in a snapshot. That is what lets the table layout change
+API handler. That is what lets the table layout change
 — a new index, a split table, PostgreSQL — without a schema-version bump.
 
 Three decisions in here are worth knowing before you touch anything:
