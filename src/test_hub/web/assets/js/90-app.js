@@ -53,6 +53,15 @@
     var footerMeta = document.getElementById('th-footer-meta');
     var navLinks = document.querySelectorAll('[data-route]');
 
+    /* The rail's icons come from the one icon set rather than from inline SVG
+     * in index.html, so there is a single copy of each path to fix. */
+    for (var n = 0; n < navLinks.length; n++) {
+      var iconName = navLinks[n].getAttribute('data-icon');
+      if (iconName) {
+        navLinks[n].insertBefore(ui.icon(iconName, 16), navLinks[n].firstChild);
+      }
+    }
+
     var current = { name: null, view: null };
 
     /* ---------------------------------------------------------- settings */
@@ -143,6 +152,8 @@
         brandSub.textContent = provider.kind === 'snapshot'
           ? (meta.title || 'Snapshot')
           : 'Live';
+        // The rail ellipsises it; the tooltip is the whole title.
+        brandSub.title = brandSub.textContent;
       }
       if (provider.kind === 'snapshot' && meta.title) {
         document.title = meta.title + ' · Test Hub';

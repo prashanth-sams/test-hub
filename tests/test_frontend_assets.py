@@ -236,6 +236,42 @@ def test_views_do_not_call_fetch_directly() -> None:
         assert "EventSource" not in source, f"{path.name} bypasses the provider seam"
 
 
+# ------------------------------------------------------------------------ nav
+
+
+def test_the_primary_nav_lives_in_the_left_rail() -> None:
+    """The routes moved out of the header into a rail, so the header no longer
+    has to fit brand, tabs and status in one row."""
+    rail = re.search(r'<aside class="sidebar">(.*?)</aside>', INDEX_MARKUP, re.S)
+    assert rail, "no sidebar in the shell"
+    assert '<nav class="nav"' in rail.group(1), "the nav is not in the rail"
+    assert 'class="brand"' in rail.group(1), "the brand is not in the rail"
+
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert ".shell__body" in css, "the content column has no styles"
+    assert re.search(r"^\.nav \{[^}]*flex-direction: column", css, re.M), "the rail's nav is not vertical"
+
+
+def test_the_rail_becomes_a_bar_on_a_phone() -> None:
+    """216px of permanent column is a quarter of a phone's width, spent on two
+    links."""
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    block = css[css.index("@media (max-width: 860px)") :]
+    block = block[: block.index("@media (max-width: 640px)")]
+    assert ".sidebar" in block, "the rail is still a column on a phone"
+
+
+def test_the_nav_icons_come_from_the_icon_set() -> None:
+    """Inline SVG in the markup is a second copy of path data to keep in step;
+    `data-icon` is resolved against the one set in 40-components.js."""
+    assert "<svg" not in INDEX_MARKUP, "the markup draws its own icons"
+    names = re.findall(r'data-icon="([^"]+)"', INDEX_MARKUP)
+    assert names, "the rail's links carry no icons"
+    icons = components_source()
+    for name in names:
+        assert re.search(rf"^\s+{name}: \[", icons, re.M), f"no {name} icon in the set"
+
+
 # ------------------------------------------------------------------- settings
 
 

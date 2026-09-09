@@ -53,66 +53,80 @@
 <a class="sr-only skiplink" href="#th-view">Skip to content</a>
 
 <div class="shell">
-  <header class="topbar">
-    <div class="container topbar__inner">
-      <a class="brand" href="#/overview">
-        <span class="brand__mark" aria-hidden="true">TH</span>
-        <span>Test Hub</span>
-        <span class="brand__sub" id="th-brand-sub"></span>
-      </a>
+  <!-- The primary navigation is a left rail rather than a row of tabs in the
+       header. Two things sit better here than they did up there: the brand,
+       which was competing with the nav for the same corner, and the route list
+       itself, which can grow downwards without pushing the connection pill off
+       the end of a narrow header. Below 860px the rail turns back into a
+       horizontal bar (see the responsive block in app.css) — a phone has no
+       width to spare for a permanent column.
 
-      <nav class="nav" aria-label="Primary">
-        <a class="nav__link" data-route="overview" href="#/overview">Overview</a>
-        <a class="nav__link" data-route="runs" href="#/runs">Runs</a>
-      </nav>
+       The icons are attached in 90-app.js from `data-icon`, not written out
+       here: the path data lives once, in the icon set in 40-components.js. -->
+  <aside class="sidebar">
+    <a class="brand" href="#/overview">
+      <span class="brand__mark" aria-hidden="true">TH</span>
+      <span>Test Hub</span>
+      <span class="brand__sub" id="th-brand-sub"></span>
+    </a>
 
-      <div class="topbar__meta">
-        <span class="updated" id="th-updated"></span>
+    <nav class="nav" aria-label="Primary">
+      <a class="nav__link" data-route="overview" data-icon="grid" href="#/overview">Overview</a>
+      <a class="nav__link" data-route="runs" data-icon="list" href="#/runs">Runs</a>
+    </nav>
+  </aside>
 
-        <span class="conn" id="th-conn" data-status="connecting" role="status" aria-live="polite">
-          <span class="conn__dot" aria-hidden="true"></span>
-          <span id="th-conn-label">Connecting</span>
-        </span>
+  <div class="shell__body">
+    <header class="topbar">
+      <div class="container topbar__inner">
+        <div class="topbar__meta">
+          <span class="updated" id="th-updated"></span>
 
-        <!-- The settings menu mounts here. Its trigger is built in JS rather
-             than written out below, because the panel it controls has to be
-             built there anyway and a half-static, half-dynamic control is the
-             kind that drifts. The theme itself is already resolved before this
-             point by the bootstrap in assets/js/00-util.js. -->
-        <div id="th-settings"></div>
+          <span class="conn" id="th-conn" data-status="connecting" role="status" aria-live="polite">
+            <span class="conn__dot" aria-hidden="true"></span>
+            <span id="th-conn-label">Connecting</span>
+          </span>
+
+          <!-- The settings menu mounts here. Its trigger is built in JS rather
+               than written out below, because the panel it controls has to be
+               built there anyway and a half-static, half-dynamic control is the
+               kind that drifts. The theme itself is already resolved before this
+               point by the bootstrap in assets/js/00-util.js. -->
+          <div id="th-settings"></div>
+        </div>
       </div>
-    </div>
-  </header>
+    </header>
 
-  <main class="main">
-    <div class="container">
-      <div id="th-banner"></div>
-      <div id="th-view" tabindex="-1">
-        <noscript>
-          <div class="banner banner--warn">
-            <div>
-              <div class="banner__title">Test Hub needs JavaScript</div>
-              <div>This dashboard renders entirely in the browser — including the offline
-                export, which has no server to render it instead.</div>
+    <main class="main">
+      <div class="container">
+        <div id="th-banner"></div>
+        <div id="th-view" tabindex="-1">
+          <noscript>
+            <div class="banner banner--warn">
+              <div>
+                <div class="banner__title">Test Hub needs JavaScript</div>
+                <div>This dashboard renders entirely in the browser — including the offline
+                  export, which has no server to render it instead.</div>
+              </div>
             </div>
-          </div>
-        </noscript>
-        <div class="card">
-          <div class="card__body">
-            <div class="skeleton skeleton--text skeleton--title"></div>
-            <div class="skeleton skeleton--chart"></div>
+          </noscript>
+          <div class="card">
+            <div class="card__body">
+              <div class="skeleton skeleton--text skeleton--title"></div>
+              <div class="skeleton skeleton--chart"></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </main>
+    </main>
 
-  <footer class="footer">
-    <div class="container footer__inner">
-      <span id="th-footer-meta"></span>
-      <span>Test Hub — universal test observability.</span>
-    </div>
-  </footer>
+    <footer class="footer">
+      <div class="container footer__inner">
+        <span id="th-footer-meta"></span>
+        <span>Test Hub — universal test observability.</span>
+      </div>
+    </footer>
+  </div>
 </div>
 </body>
 </html>

@@ -106,6 +106,7 @@
   --sp-6: 32px;
   --sp-7: 48px;
   --shell-max: 1440px;
+  --rail-w: 216px;
   --header-h: 60px;
   --ease: cubic-bezier(0.2, 0, 0.15, 1);
 }
@@ -269,7 +270,29 @@ table.sr-only,
 /* Shell                                                                   */
 /* ====================================================================== */
 
-.shell { min-height: 100vh; display: flex; flex-direction: column; }
+.shell { min-height: 100vh; display: flex; }
+
+/* The rail is `sticky` rather than `fixed` so it stays in normal flow: the
+ * content column is a sibling, not a margin-offset overlay, and there is no
+ * width to keep in sync in two places. It scrolls internally on a short
+ * viewport rather than clipping the last route. */
+.sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  flex: none;
+  width: var(--rail-w);
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-4) var(--sp-3);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+}
+
+.shell__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 
 .container {
   width: 100%;
@@ -290,14 +313,16 @@ table.sr-only,
 .topbar__inner {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--sp-4);
   min-height: var(--header-h);
 }
 
 .brand {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
   font-weight: 650;
   font-size: 15px;
   letter-spacing: -0.02em;
@@ -314,30 +339,40 @@ table.sr-only,
   font-size: 12px; font-weight: 700;
   flex: none;
 }
+/* In the rail the subtitle drops onto its own line: an export's title is
+ * arbitrary text and the column is 216px, so beside the wordmark it would be
+ * cut off. It is still one line, still ellipsised, but it gets the full width
+ * and aligns under the wordmark rather than under the mark. */
+.brand { flex-wrap: wrap; }
 .brand__sub {
+  width: 100%;
+  min-width: 0;
   font-weight: 450;
   font-size: 12px;
   color: var(--text-subtle);
-  padding-left: var(--sp-2);
-  border-left: 1px solid var(--border);
-  margin-left: var(--sp-1);
+  padding-left: calc(22px + var(--sp-2));
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.brand__sub:empty { display: none; }
 
-.nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.nav { display: flex; flex-direction: column; gap: 2px; overflow-x: auto; scrollbar-width: none; }
 .nav::-webkit-scrollbar { display: none; }
 .nav__link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--sp-2);
-  padding: 6px 12px;
+  padding: 8px 10px;
   border-radius: var(--r-sm);
   color: var(--text-muted);
   font-weight: 500;
   white-space: nowrap;
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
+.nav__link svg { flex: none; opacity: 0.8; }
 .nav__link:hover { background: var(--surface-3); color: var(--text); text-decoration: none; }
 .nav__link[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); }
+.nav__link[aria-current="page"] svg { opacity: 1; }
 
 .topbar__meta {
   margin-left: auto;
@@ -1224,9 +1259,30 @@ th[aria-sort] .table__sort { color: var(--text); }
   .container { padding: 0 var(--sp-4); }
   .grid--2 { grid-template-columns: minmax(0, 1fr); }
   .topbar__inner { flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); padding: var(--sp-2) 0; }
-  .nav { order: 3; width: 100%; padding-bottom: 2px; }
   .topbar__meta { margin-left: auto; }
   .brand__sub { display: none; }
+
+  /* Under 860px the rail is a header again: a permanent column would cost a
+   * quarter of the viewport to show two links. */
+  .shell { display: block; }
+  .sidebar {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-4);
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .nav { flex-direction: row; overflow-x: auto; }
+  .nav__link { padding: 6px 12px; }
+  /* Two stacked bands on a phone: the rail's row and the status row. The
+   * second one carries three controls, so it does not need a full header's
+   * height as well. */
+  .topbar__inner { min-height: 44px; }
   .headline { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -1309,6 +1365,6 @@ th[aria-sort] .table__sort { color: var(--text); }
 }
 
 @media print {
-  .topbar, .filters, .pager { display: none; }
+  .topbar, .sidebar, .filters, .pager { display: none; }
   .card { box-shadow: none; }
 }

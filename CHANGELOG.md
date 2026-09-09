@@ -46,6 +46,10 @@ one of those is listed under **Changed** or **Removed** with the migration.
   dashboard never draws a control that would 403.
 - **Hours are a retention unit.** `--older-than 12h`, for clearing up after a bad
   import. `UNIT_DAYS` became `UNIT_HOURS`.
+- **A left navigation rail.** Overview and Runs moved out of the header into a
+  216px column that also carries the brand, each route with an icon from the
+  dashboard's own icon set. Below 860px the rail folds back into a horizontal
+  bar, so a phone still spends its width on content.
 - **A settings menu in the dashboard header**, replacing the light/dark toggle in
   the header. Theme is a single "Dark mode" switch that reads the theme actually
   on screen, so a reader who has never chosen sees their operating system
