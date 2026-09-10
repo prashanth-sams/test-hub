@@ -541,7 +541,7 @@ def test_a_month_is_thirty_days_and_says_so() -> None:
 
 
 def test_hours_are_a_unit() -> None:
-    """"Clear the last hour" is a real thing to want after a bad import, and a
+    """ "Clear the last hour" is a real thing to want after a bad import, and a
     fractional day is not something anyone should have to write."""
     assert parse_duration("1h") == timedelta(hours=1)
     assert parse_duration("36h") == timedelta(hours=36)

@@ -263,7 +263,9 @@ def test_the_primary_nav_lives_in_the_left_rail() -> None:
 
     css = CSS_FILES[0].read_text(encoding="utf-8")
     assert ".shell__body" in css, "the content column has no styles"
-    assert re.search(r"^\.nav \{[^}]*flex-direction: column", css, re.M), "the rail's nav is not vertical"
+    assert re.search(r"^\.nav \{[^}]*flex-direction: column", css, re.M), (
+        "the rail's nav is not vertical"
+    )
 
 
 def test_the_rail_becomes_a_bar_on_a_phone() -> None:
@@ -443,7 +445,7 @@ def test_the_switch_stops_listening_when_it_is_dropped() -> None:
     """It subscribes to the theme; a mount that cannot unsubscribe leaks one
     listener per mount."""
     source = components_source()
-    block = source[source.index("function themeSwitch"):]
+    block = source[source.index("function themeSwitch") :]
     assert "stopListening()" in block[: block.index("function menuSection")]
 
 
