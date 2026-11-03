@@ -1,5 +1,10 @@
 # Test Hub, working on http://127.0.0.1:8000 after `docker compose up -d`.
 #
+# This keeps results in SQLite on the test-hub-data volume, which needs nothing
+# else running. For PostgreSQL — the better choice once many CI jobs publish at
+# the same time — layer docker-compose.postgres.yml on top; instructions are at
+# the top of that file.
+#
 # No `version:` key — Compose v2 ignores it and warns about it.
 
 services:

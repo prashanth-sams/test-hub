@@ -1,0 +1,95 @@
+# Test Hub on PostgreSQL instead of SQLite. An override for docker-compose.yml,
+# not a replacement — layer it on top:
+#
+#   echo "TEST_HUB_POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> .env
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+#
+# To make PostgreSQL the default in this directory, so a plain `docker compose
+# up -d` (and `logs`, `exec`, `down`…) includes it, add to the same .env:
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.postgres.yml
+#
+# Why: SQLite admits one writer at a time, so CI jobs publishing at once queue
+# behind each other. PostgreSQL only serializes writes to the *same* run.
+#
+# The image is the same one either way; it ships the PostgreSQL driver. Only the
+# database moves: artifacts (screenshots, logs, raw reports) still live on the
+# test-hub-data volume, so back up both volumes, not one.
+#
+# Check what the server is actually using with:
+#
+#   docker compose exec test-hub test-hub db check
+#
+# Switching an existing SQLite install over starts with an empty PostgreSQL
+# database; the runs already in SQLite are not copied across.
+
+services:
+  postgres:
+    # Pinned to a major version: a new major needs pg_upgrade, which a routine
+    # `docker compose pull` must never trigger by accident.
+    image: postgres:17-alpine
+    container_name: test-hub-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: test_hub
+      POSTGRES_USER: test_hub
+      # Required, and with no default on purpose: a database with a well-known
+      # password is one that anything else on the Docker network can read.
+      POSTGRES_PASSWORD: ${TEST_HUB_POSTGRES_PASSWORD:?set TEST_HUB_POSTGRES_PASSWORD in .env first (see the top of docker-compose.postgres.yml)}
+
+    # No `ports:`. Test Hub reaches it over the compose network by name, and
+    # nothing outside this host needs to. For psql from the host, add
+    #   ports: ["127.0.0.1:5432:5432"]
+    # — the 127.0.0.1 matters for the same reason it does in docker-compose.yml.
+
+    volumes:
+      - test-hub-postgres:/var/lib/postgresql/data
+
+    healthcheck:
+      # "Accepting connections", which is what Test Hub's depends_on waits for —
+      # a container that is merely running is still initialising its data
+      # directory on first start.
+      test: ["CMD-SHELL", "pg_isready -U test_hub -d test_hub"]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 10
+
+    # Parallel queries share memory through /dev/shm, and Docker's default of
+    # 64 MB fails them with "could not resize shared memory segment".
+    shm_size: 256mb
+
+    # Writes only to its data volume and its socket directory.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+      - /var/run/postgresql:size=8m
+    security_opt:
+      - no-new-privileges:true
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  test-hub:
+    environment:
+      # Which database to use. No password in it: libpq reads PGPASSWORD, so
+      # the password needs no URL-encoding whatever characters it contains, and
+      # the URL Test Hub prints in its banner and logs carries no secret at all.
+      TEST_HUB_DATABASE_URL: "postgresql://test_hub@postgres:5432/test_hub"
+      PGPASSWORD: ${TEST_HUB_POSTGRES_PASSWORD:?set TEST_HUB_POSTGRES_PASSWORD in .env first (see the top of docker-compose.postgres.yml)}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+        # Restarting the database restarts Test Hub with it, so it reconnects
+        # with a clean pool rather than serving errors until the next request
+        # drains the broken connections.
+        restart: true
+
+volumes:
+  test-hub-postgres:
+    name: test-hub-postgres
