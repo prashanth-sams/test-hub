@@ -185,8 +185,8 @@ warning on every start. There is no silent path to an open instance.</p>
 <h2 id="where-data">Where does the data live, and how big does it get?</h2>
 
 <p>Under <code>TEST_HUB_DATA_DIR</code> — a platform data directory by default, listed in
-<a href="configuration.html">Configuration</a>. One SQLite file plus a
-content-addressed <code>artifacts/</code> tree.</p>
+<a href="configuration.html">Configuration</a>. One SQLite file — or a PostgreSQL database,
+if you <a href="#postgres">chose one</a> — plus a content-addressed <code>artifacts/</code> tree.</p>
 
 <p>Size is driven almost entirely by captured output, not by test counts: a run of a few
 thousand tests with no logs is small, and one test with a 200 KiB stack trace is not.
@@ -196,11 +196,17 @@ SHA-256, so fifty shards uploading the same screenshot store one copy.</p>
 
 <h2 id="postgres">Can I use PostgreSQL?</h2>
 
-<p>Not in this release. Storage sits behind <code>RunRepository</code>,
-<code>EventRepository</code> and <code>ArtifactStore</code> precisely so that it can,
-and <a href="deployment.html">Deployment</a> describes what would change. The shipped
-implementation is SQLite because <code>pip install</code> and run — with no services —
-is worth more for a first release than horizontal write throughput.</p>
+<p>Yes. Set <code>TEST_HUB_DATABASE_URL=postgresql://user:password@host:5432/dbname</code>
+— after <code>pip install "test-hub[postgres]"</code>, or with the Docker image, which already
+has the driver — and Test Hub uses PostgreSQL instead of SQLite. Nothing else changes, and
+<a href="deployment.html#database">Choosing a database</a> has the Compose override and the
+details.</p>
+
+<p>SQLite remains the default, and for one Test Hub it is also the faster of the two:
+imports are bound by the process's CPU, and SQLite answers in-process. Choose PostgreSQL for
+what a database server gives you — managed backups, replication, a database other tools can
+query — and as the groundwork for running more than one Test Hub process, which is where
+its concurrent writers would pay.</p>
 
 <h2 id="no-node">Why is there no Node, no bundler, no framework?</h2>
 

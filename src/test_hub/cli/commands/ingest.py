@@ -17,6 +17,7 @@ from test_hub.cli.options import (
     BranchOption,
     CommitOption,
     ComponentOption,
+    DatabaseUrlOption,
     DataDirOption,
     EnvironmentOption,
     FormatOption,
@@ -25,6 +26,7 @@ from test_hub.cli.options import (
     TestTypeOption,
     TriggerOption,
     settings_from_cli,
+    storage_location,
 )
 from test_hub.cli.render import render_import_result
 from test_hub.domain.models import RunContext, TestType, TriggerType
@@ -55,13 +57,14 @@ def ingest(
     ] = None,
     format: FormatOption = None,
     data_dir: DataDirOption = None,
+    database_url: DatabaseUrlOption = None,
     json_output: Annotated[bool, typer.Option("--json", help="Print the result as JSON.")] = False,
 ) -> None:
     """Import a report file into the local store."""
     from test_hub.service.imports import ImportRequest, ImportService
     from test_hub.service.runtime import create_context
 
-    settings = settings_from_cli(data_dir=data_dir)
+    settings = settings_from_cli(data_dir=data_dir, database_url=database_url)
     context = create_context(settings)
     try:
         service = ImportService(context)
@@ -92,4 +95,4 @@ def ingest(
     finally:
         context.close()
 
-    render_import_result(result, json_output=json_output, destination=str(settings.data_dir))
+    render_import_result(result, json_output=json_output, destination=storage_location(settings))

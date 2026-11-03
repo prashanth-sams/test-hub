@@ -336,7 +336,8 @@ AWS_ACCESS_KEY_ID=AKIA***REDACTED***
 
 The defaults in `DEFAULT_REDACTION_PATTERNS` cover `Bearer` and `Basic`
 credentials, PEM private-key blocks, database URLs with an inline password
-(`postgres`, `postgresql`, `mysql`, `mongodb`, `redis`, `amqp`), AWS access key
+(`postgres`, `postgresql`, `mysql`, `mongodb`, `redis`, `amqp`, with or without a
+SQLAlchemy driver suffix such as `postgresql+psycopg://`), AWS access key
 ids, GitHub `ghp_` tokens, Slack `xox*` tokens, JWTs, and a generic `key=value`
 rule for `api_key`, `apikey`, `access_key`, `token`, `secret`, `password`,
 `passwd`, `pwd`, `authorization`, `auth_token`, `private_key` and

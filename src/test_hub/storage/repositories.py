@@ -99,6 +99,7 @@ from test_hub.domain.status import (
 from test_hub.errors import ValidationError
 from test_hub.logging import get_redactor
 from test_hub.storage.base import RunFilter, WriteResult
+from test_hub.storage.locks import WriteLocks
 from test_hub.storage.models import (
     ArtifactRow,
     AttemptRow,
@@ -342,22 +343,53 @@ def artifact_to_model(row: ArtifactRow) -> Artifact:
     )
 
 
+def _escape_like(term: str) -> str:
+    """Escape LIKE's wildcards so ``%`` and ``_`` in a value match themselves."""
+    return term.replace(_LIKE_ESCAPE, _LIKE_ESCAPE * 2).replace("%", r"\%").replace("_", r"\_")
+
+
 def _like(term: str) -> str:
     """Escape a user search term so ``%`` in a branch name is not a wildcard."""
-    escaped = term.replace(_LIKE_ESCAPE, _LIKE_ESCAPE * 2).replace("%", r"\%").replace("_", r"\_")
-    return f"%{escaped}%"
+    return f"%{_escape_like(term)}%"
 
 
-def _sort_columns() -> list[Any]:
+def _sort_columns(dialect: str) -> list[Any]:
     """Newest first: ``started_at`` descending, nulls last, then ``created_at``.
 
-    No ``NULLS LAST`` clause and no ``CASE`` wrapper: SQLite sorts NULL below
-    every value, so a plain ``DESC`` already puts the runs that never started at
-    the bottom — and unlike a ``CASE`` expression it can be answered by walking
-    ``ix_runs_workspace_id_started_at`` backwards instead of building a
-    temporary b-tree for every page of the run list.
+    On SQLite, no ``NULLS LAST`` clause and no ``CASE`` wrapper: SQLite sorts
+    NULL below every value, so a plain ``DESC`` already puts the runs that never
+    started at the bottom — and unlike a ``CASE`` expression it can be answered
+    by walking ``ix_runs_workspace_id_started_at`` backwards instead of building
+    a temporary b-tree for every page of the run list.
+
+    PostgreSQL sorts NULL *above* every value in a descending sort, so the same
+    plain ``DESC`` would put every queued run at the top of every page. It has
+    to be said out loud there.
     """
-    return [RunRow.started_at.desc(), RunRow.created_at.desc()]
+    if dialect == "sqlite":
+        return [RunRow.started_at.desc(), RunRow.created_at.desc()]
+    return [RunRow.started_at.desc().nulls_last(), RunRow.created_at.desc()]
+
+
+def _insert_if_absent(session: Session, table: Any, values: dict[str, Any]) -> None:
+    """``INSERT … ON CONFLICT DO NOTHING`` in whichever dialect ``session`` speaks.
+
+    For the rows every writer may try to create at once — the workspace, a
+    project the first time two of its pipelines report together. On SQLite the
+    write lock means nothing can race the select-then-insert in front of this,
+    so it never conflicts. On PostgreSQL a concurrent first insert can, and
+    ``DO NOTHING`` turns the loser's unique violation (and its aborted
+    transaction) into a no-op; the caller then reads back whichever row won.
+    """
+    dialect = session.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        session.execute(pg_insert(table).values(**values).on_conflict_do_nothing())
+    else:
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        session.execute(sqlite_insert(table).values(**values).on_conflict_do_nothing())
 
 
 # ------------------------------------------------------------- repository
@@ -369,23 +401,34 @@ class SqlRunRepository:
     def __init__(self, session: Session, settings: Settings) -> None:
         self._session = session
         self._settings = settings
+        self._dialect = session.get_bind().dialect.name
 
     # ----------------------------------------------------------- tenancy
 
+    def _workspace_by_slug(self, slug: str) -> WorkspaceRow | None:
+        return self._session.execute(
+            select(WorkspaceRow).where(WorkspaceRow.slug == slug)
+        ).scalar_one_or_none()
+
     def ensure_workspace(self, slug: str, name: str) -> Workspace:
         clean_slug = coerce_slug(slug) or "default"
-        row = self._session.execute(
-            select(WorkspaceRow).where(WorkspaceRow.slug == clean_slug)
-        ).scalar_one_or_none()
+        row = self._workspace_by_slug(clean_slug)
         if row is None:
-            row = WorkspaceRow(
-                id=derive_workspace_id(clean_slug),
-                slug=clean_slug,
-                name=short_text(name) or clean_slug,
-                created_at=utcnow(),
+            # Every API process and every CLI command calls this on start, so on
+            # PostgreSQL two of them creating a fresh database is a real race.
+            _insert_if_absent(
+                self._session,
+                WorkspaceRow.__table__,
+                {
+                    "id": derive_workspace_id(clean_slug),
+                    "slug": clean_slug,
+                    "name": short_text(name) or clean_slug,
+                    "created_at": utcnow(),
+                },
             )
-            self._session.add(row)
-            self._session.flush()
+            row = self._workspace_by_slug(clean_slug)
+            if row is None:
+                raise RuntimeError(f"workspace {clean_slug!r} could not be created or found")
         return Workspace(id=row.id, slug=row.slug, name=row.name, created_at=row.created_at)
 
     def get_workspace(self, workspace_id: uuid.UUID) -> Workspace | None:
@@ -402,44 +445,56 @@ class SqlRunRepository:
         description someone typed in.
         """
         clean_key = coerce_slug(key) or UNKNOWN_PROJECT
-        row = self._session.execute(
-            select(ProjectRow).where(
-                ProjectRow.workspace_id == workspace_id, ProjectRow.key == clean_key
-            )
-        ).scalar_one_or_none()
+        row = self._project_by_key(workspace_id, clean_key)
         now = utcnow()
         if row is None:
-            row = ProjectRow(
-                id=uuid.uuid4(),
-                workspace_id=workspace_id,
-                key=clean_key,
-                name=short_text(str(fields.get("name") or "")) or clean_key,
-                description=short_text(fields.get("description")),
-                default_team=coerce_slug(fields.get("default_team")),
-                repository_url=_http_url(fields.get("repository_url")),
-                tags=coerce_slugs(fields.get("tags")),
-                created_at=now,
-                updated_at=now,
+            # The first two pipelines of a new project usually report together.
+            # On PostgreSQL both get here; one insert wins, the other becomes a
+            # no-op and falls through to filling in blanks on the winner's row,
+            # exactly as if it had arrived second.
+            _insert_if_absent(
+                self._session,
+                ProjectRow.__table__,
+                {
+                    "id": uuid.uuid4(),
+                    "workspace_id": workspace_id,
+                    "key": clean_key,
+                    "name": short_text(str(fields.get("name") or "")) or clean_key,
+                    "description": short_text(fields.get("description")),
+                    "default_team": coerce_slug(fields.get("default_team")),
+                    "repository_url": _http_url(fields.get("repository_url")),
+                    "tags": coerce_slugs(fields.get("tags")),
+                    "created_at": now,
+                    "updated_at": now,
+                },
             )
-            self._session.add(row)
-            self._session.flush()
-        else:
-            changed = False
-            if not row.description and fields.get("description"):
-                row.description = short_text(fields["description"])
-                changed = True
-            if not row.default_team and fields.get("default_team"):
-                row.default_team = coerce_slug(fields["default_team"])
-                changed = True
-            if not row.repository_url and fields.get("repository_url"):
-                row.repository_url = _http_url(fields["repository_url"])
-                changed = True
-            if not row.tags and fields.get("tags"):
-                row.tags = coerce_slugs(fields["tags"])
-                changed = True
-            if changed:
-                row.updated_at = now
+            row = self._project_by_key(workspace_id, clean_key)
+            if row is None:
+                raise RuntimeError(f"project {clean_key!r} could not be created or found")
+
+        # A row this call just inserted already holds every field, so this only
+        # ever changes a row that somebody else created first.
+        changed = False
+        if not row.description and fields.get("description"):
+            row.description = short_text(fields["description"])
+            changed = True
+        if not row.default_team and fields.get("default_team"):
+            row.default_team = coerce_slug(fields["default_team"])
+            changed = True
+        if not row.repository_url and fields.get("repository_url"):
+            row.repository_url = _http_url(fields["repository_url"])
+            changed = True
+        if not row.tags and fields.get("tags"):
+            row.tags = coerce_slugs(fields["tags"])
+            changed = True
+        if changed:
+            row.updated_at = now
         return self._project_to_model(row)
+
+    def _project_by_key(self, workspace_id: uuid.UUID, key: str) -> ProjectRow | None:
+        return self._session.execute(
+            select(ProjectRow).where(ProjectRow.workspace_id == workspace_id, ProjectRow.key == key)
+        ).scalar_one_or_none()
 
     @staticmethod
     def _project_to_model(row: ProjectRow) -> Project:
@@ -587,22 +642,33 @@ class SqlRunRepository:
         if run_filter.tags:
             # `tags` is a JSON array of slugs. Slugs cannot contain a quote, so
             # matching the quoted token cannot straddle two elements: `"ui"`
-            # does not occur inside `["uikit"]`.
+            # does not occur inside `["uikit"]`. Escaped, because `_` is a legal
+            # slug character and an unescaped one is a LIKE wildcard.
+            #
+            # ILIKE, here and in the search below, because SQLite's LIKE ignores
+            # ASCII case and PostgreSQL's does not; ILIKE is what keeps one
+            # query meaning the same thing on both. (SQLAlchemy renders it as
+            # `lower(x) LIKE lower(y)` on SQLite, which is the same comparison.)
             conditions.append(
                 sa.or_(
-                    *[sa.cast(RunRow.tags, sa.Text).like(f'%"{tag}"%') for tag in run_filter.tags]
+                    *[
+                        sa.cast(RunRow.tags, sa.Text).ilike(
+                            f'%"{_escape_like(tag)}"%', escape=_LIKE_ESCAPE
+                        )
+                        for tag in run_filter.tags
+                    ]
                 )
             )
         if run_filter.search:
             term = _like(run_filter.search)
             conditions.append(
                 sa.or_(
-                    RunRow.name.like(term, escape=_LIKE_ESCAPE),
-                    RunRow.project_key.like(term, escape=_LIKE_ESCAPE),
-                    RunRow.branch.like(term, escape=_LIKE_ESCAPE),
-                    RunRow.commit_sha.like(term, escape=_LIKE_ESCAPE),
-                    RunRow.commit_message.like(term, escape=_LIKE_ESCAPE),
-                    RunRow.pipeline_id.like(term, escape=_LIKE_ESCAPE),
+                    RunRow.name.ilike(term, escape=_LIKE_ESCAPE),
+                    RunRow.project_key.ilike(term, escape=_LIKE_ESCAPE),
+                    RunRow.branch.ilike(term, escape=_LIKE_ESCAPE),
+                    RunRow.commit_sha.ilike(term, escape=_LIKE_ESCAPE),
+                    RunRow.commit_message.ilike(term, escape=_LIKE_ESCAPE),
+                    RunRow.pipeline_id.ilike(term, escape=_LIKE_ESCAPE),
                 )
             )
         if run_filter.since is not None:
@@ -631,7 +697,7 @@ class SqlRunRepository:
     def list_runs(self, run_filter: RunFilter) -> list[RunSummary]:
         stmt = (
             self._filtered(run_filter)
-            .order_by(*_sort_columns())
+            .order_by(*_sort_columns(self._dialect))
             .limit(max(0, run_filter.limit))
             .offset(max(0, run_filter.offset))
         )
@@ -739,7 +805,7 @@ class SqlRunRepository:
             select(TestCaseRow, RunRow)
             .join(RunRow, RunRow.id == TestCaseRow.run_id)
             .where(TestCaseRow.test_id == test_id, RunRow.workspace_id == workspace_id)
-            .order_by(*_sort_columns())
+            .order_by(*_sort_columns(self._dialect))
             .limit(max(1, history))
         ).all()
         if not rows:
@@ -912,7 +978,7 @@ class SqlRunRepository:
                     self._at_or_after(now - timedelta(days=self._settings.history_window_days)),
                 )
                 .group_by(RunRow.project_key)
-            ).all()  # type: ignore[arg-type]
+            ).all()
         )
         live_by_project: dict[str, int] = defaultdict(int)
         for summary in live:
@@ -1100,12 +1166,26 @@ class SqlEventRepository:
     does **not** commit: an import stores the raw report as an artifact and
     annotates the run after the events land, and all of that has to succeed or
     fail together. Whoever opened the unit of work commits it.
+
+    The fold reads before it writes, so it needs writers to one run not to
+    interleave. SQLite guarantees that for the whole database; on PostgreSQL the
+    two entry points below take a per-run advisory lock first
+    (:class:`~test_hub.storage.locks.WriteLocks`), which guarantees it per run
+    and lets different runs be written in parallel.
     """
 
-    def __init__(self, session: Session, settings: Settings, runs: SqlRunRepository) -> None:
+    def __init__(
+        self,
+        session: Session,
+        settings: Settings,
+        runs: SqlRunRepository,
+        *,
+        locks: WriteLocks | None = None,
+    ) -> None:
         self._session = session
         self._settings = settings
         self._runs = runs
+        self._locks = locks if locks is not None else WriteLocks(session)
 
     # ------------------------------------------------------------ public
 
@@ -1122,6 +1202,16 @@ class SqlEventRepository:
             )
         run_id = next(iter(run_ids))
 
+        # Key before run, always in that order. A retried import carries the
+        # same key with a fresh run id, so the run lock alone would let both
+        # copies past `_replay` at once on PostgreSQL. (Live publishing that
+        # needed `next_sequence` first already holds the run lock by now; the
+        # reverse order is only reachable by one key used for two different
+        # kinds of request at once, and PostgreSQL breaks that deadlock itself.)
+        if idempotency_key:
+            self._locks.idempotency_key(idempotency_key[:512])
+        self._locks.run(run_id)
+
         if idempotency_key:
             replay = self._replay(idempotency_key, len(events))
             if replay is not None:
@@ -1133,29 +1223,37 @@ class SqlEventRepository:
 
         state = _BatchState(run_id=run_id)
         received = utcnow()
-        for event in ordered:
-            key = (event.source, event.id)
-            if key in already or key in seen:
-                state.ignored += 1
-                continue
-            seen.add(key)
-            self._session.add(
-                EventRow(
-                    id=uuid.uuid4(),
-                    workspace_id=event.workspaceid,
-                    run_id=event.runid,
-                    source=event.source,
-                    event_id=event.id,
-                    type=str(event.type),
-                    time=event.time,
-                    sequence=event.sequence,
-                    data=event.data,
-                    received_at=received,
+        # No autoflush while folding. Every row this batch creates is found
+        # again through `state`, never through a query, so nothing here needs
+        # the pending rows in the database early — and with autoflush on, each
+        # lookup pushed the previous event's rows out one INSERT at a time: a
+        # 50-test import cost ~270 statements instead of ~25. They now go in
+        # batches at the flush in `_refold`. The few places that genuinely need
+        # earlier rows to be visible flush explicitly.
+        with self._session.no_autoflush:
+            for event in ordered:
+                key = (event.source, event.id)
+                if key in already or key in seen:
+                    state.ignored += 1
+                    continue
+                seen.add(key)
+                self._session.add(
+                    EventRow(
+                        id=uuid.uuid4(),
+                        workspace_id=event.workspaceid,
+                        run_id=event.runid,
+                        source=event.source,
+                        event_id=event.id,
+                        type=str(event.type),
+                        time=event.time,
+                        sequence=event.sequence,
+                        data=event.data,
+                        received_at=received,
+                    )
                 )
-            )
-            self._dispatch(event, state)
-            state.applied += 1
-            state.emitted.append(event)
+                self._dispatch(event, state)
+                state.applied += 1
+                state.emitted.append(event)
 
         run = state.run or self._session.get(RunRow, run_id)
         if run is not None:
@@ -1222,6 +1320,10 @@ class SqlEventRepository:
         return out
 
     def next_sequence(self, run_id: uuid.UUID) -> int:
+        # Locked here and not only in `apply_events`: the number handed out
+        # must still be the high-water mark when the batch using it lands, or two
+        # live publishers would both be given the same block.
+        self._locks.run(run_id)
         highest = self._session.execute(
             select(sa.func.max(EventRow.sequence)).where(EventRow.run_id == run_id)
         ).scalar_one_or_none()
@@ -1268,6 +1370,10 @@ class SqlEventRepository:
         surrounding transaction opened with ``BEGIN IMMEDIATE`` and therefore
         holds the write lock, so nothing can insert between this read and our
         write. A unique-violation rollback here would poison the whole batch.
+
+        On PostgreSQL the same holds per run: ``apply_events`` took this run's
+        advisory lock before calling this, so any other batch for the run either
+        committed before the read (and is seen) or is waiting behind us.
         """
         found: set[tuple[str, uuid.UUID]] = set()
         ids = [event.id for event in events]
@@ -1300,16 +1406,18 @@ class SqlEventRepository:
         if self._session.get(WorkspaceRow, workspace_id) is not None:
             return
         # An event for a workspace nobody created is not a reason to lose a test
-        # run. Materialise it rather than failing the foreign key.
-        self._session.add(
-            WorkspaceRow(
-                id=workspace_id,
-                slug=f"workspace-{workspace_id.hex[:12]}",
-                name=f"Workspace {workspace_id.hex[:8]}",
-                created_at=utcnow(),
-            )
+        # run. Materialise it rather than failing the foreign key — race-safely,
+        # because two runs' first batches can both arrive here on PostgreSQL.
+        _insert_if_absent(
+            self._session,
+            WorkspaceRow.__table__,
+            {
+                "id": workspace_id,
+                "slug": f"workspace-{workspace_id.hex[:12]}",
+                "name": f"Workspace {workspace_id.hex[:8]}",
+                "created_at": utcnow(),
+            },
         )
-        self._session.flush()
 
     def _ensure_run(
         self, event: DomainEvent, state: _BatchState, *, project_key: str | None = None
@@ -1437,7 +1545,10 @@ class SqlEventRepository:
 
     def _suite(self, run: RunRow, suite_id: uuid.UUID, state: _BatchState) -> SuiteRow | None:
         cached = state.suites.get(suite_id)
-        if cached is not None:
+        if cached is not None or state.created_run:
+            # A run this batch created has no older rows to find: suites, tests
+            # and attempts all carry a foreign key to it, and it did not exist
+            # until this transaction. Everything it has is in `state`.
             return cached
         row = self._session.execute(
             select(SuiteRow).where(SuiteRow.run_id == run.id, SuiteRow.suite_id == suite_id)
@@ -1541,7 +1652,7 @@ class SqlEventRepository:
             )
 
         row = state.cases.get(test_id)
-        if row is None:
+        if row is None and not state.created_run:
             row = self._session.execute(
                 select(TestCaseRow).where(
                     TestCaseRow.run_id == run.id, TestCaseRow.test_id == test_id
@@ -1589,7 +1700,7 @@ class SqlEventRepository:
         self, run: RunRow, state: _BatchState, test_id: uuid.UUID, number: int
     ) -> AttemptRow | None:
         cached = state.attempts.get((test_id, number))
-        if cached is not None:
+        if cached is not None or state.created_run:
             return cached
         row = self._session.execute(
             select(AttemptRow).where(
@@ -1712,6 +1823,10 @@ class SqlEventRepository:
     def _on_artifact_published(self, event: DomainEvent, state: _BatchState) -> None:
         data = ArtifactPublishedData.model_validate(event.data)
         run = self._ensure_run(event, state)
+        # The one lookup that may need a row pending in this very batch — the
+        # same artifact announced twice — so it flushes instead of relying on
+        # autoflush, which apply_events turns off. Artifact events are rare.
+        self._session.flush()
         row = self._session.get(ArtifactRow, data.artifact_id)
         if row is None:
             row = ArtifactRow(

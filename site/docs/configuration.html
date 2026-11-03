@@ -276,10 +276,19 @@ there is no Compose in that path — only your shell.</p>
     is resolved to an absolute one, so <code>~/th</code> and a relative path both work. Created on
     first use with mode <code>0700</code> where the filesystem supports it.</td></tr>
     <tr><td><code>database_url</code></td><td><code>TEST_HUB_DATABASE_URL</code></td><td>unset</td>
-    <td>A SQLAlchemy URL. Unset means
-    <code>sqlite+pysqlite:///&lt;data_dir&gt;/test-hub.db</code>. The storage interfaces are
-    backend-agnostic, but only SQLite is shipped and tested — treat anything else as unsupported
-    rather than as a supported option you happen not to have tried.</td></tr>
+    <td>Which database to use. Unset means SQLite,
+    <code>sqlite+pysqlite:///&lt;data_dir&gt;/test-hub.db</code>.
+    <code>postgresql://user:password@host:5432/dbname</code> (or <code>postgres://</code>) selects
+    PostgreSQL, which needs <code>pip install "test-hub[postgres]"</code>; the Docker image already
+    has it. SQLite and PostgreSQL are the two shipped and tested backends, and anything else is
+    refused at startup. See <a href="deployment.html#database">Choosing a database</a>.</td></tr>
+    <tr><td><code>database_pool_size</code></td><td><code>TEST_HUB_DATABASE_POOL_SIZE</code></td>
+    <td><code>10</code></td><td>PostgreSQL: connections each Test Hub process keeps open.
+    Ignored for SQLite.</td></tr>
+    <tr><td><code>database_max_overflow</code></td><td><code>TEST_HUB_DATABASE_MAX_OVERFLOW</code></td>
+    <td><code>20</code></td><td>PostgreSQL: extra connections opened under a burst of
+    publishers, on top of the pool. Pool plus overflow is the most one process holds — check it
+    against the server's <code>max_connections</code>.</td></tr>
     <tr><td><code>artifacts_dir</code></td><td><code>TEST_HUB_ARTIFACTS_DIR</code></td><td>unset</td>
     <td>Where content-addressed artifact files land. Unset means
     <code>&lt;data_dir&gt;/artifacts</code>. Point it at a bigger disk when raw report retention

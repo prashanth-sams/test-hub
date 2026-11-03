@@ -21,6 +21,31 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Added
 
+- **PostgreSQL, as a choice beside SQLite.** SQLite is still the default and
+  still needs nothing installed. Set `TEST_HUB_DATABASE_URL=postgresql://…`
+  (after `pip install "test-hub[postgres]"`; the Docker image already has the
+  driver) and Test Hub uses PostgreSQL instead. SQLite's database-wide write
+  lock goes — only writes to the *same* run take turns — though one Test Hub
+  process imports no faster for it: its CPU is the limit on either backend, and
+  SQLite answers in-process ([measured](docs/scaling.md#sqlite-or-postgresql)).
+  Choose it for a database server's operations, and as the database half of
+  running more than one Test Hub process later. A per-run
+  advisory lock keeps the fold exactly as correct as SQLite's write lock did;
+  the whole test suite runs against PostgreSQL with `TEST_HUB_TEST_DATABASE_URL`
+  set. Design and trade-offs are in
+  [ADR-0004](docs/adr/0004-postgresql.md); setup is in
+  [deployment.md](docs/deployment.md#choosing-a-database).
+- **`docker-compose.postgres.yml`.** Layer it on `docker-compose.yml` to run
+  Test Hub with a PostgreSQL container: required password, no published port,
+  health-checked, and a Test Hub that waits for it and restarts with it.
+- **`test-hub db check` and `test-hub db upgrade`.** Which database is in use
+  (password masked), whether it answers, and whether its schema is at head —
+  exit `0` ready, `1` migrations pending, `78` unreachable; and migrating as a
+  step of its own. `--database-url` chooses the database for `serve`, `ingest`,
+  `demo`, `prune` and `db`, and refuses a URL with a password in it.
+- `TEST_HUB_DATABASE_POOL_SIZE` and `TEST_HUB_DATABASE_MAX_OVERFLOW` size the
+  PostgreSQL connection pool.
+
 - **A type scale, one step larger.** Every font size in the dashboard is now one
   of eight named `--fs-*` tokens rather than a literal, and the whole scale moved
   up a step: body text is 15px, tables and buttons 14px, and nothing that is not
@@ -102,6 +127,14 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Fixed
 
+- **`serve --reload` ignored `--data-dir`.** The reloader starts the app in a
+  fresh process that only sees the environment; the flag (and the new
+  `--database-url`) is now passed through it.
+- **A tag filter treated `_` as a wildcard**, so `nightly_build` also matched
+  `nightly-build`. It is escaped now.
+- **The database URL was logged unmasked** at debug level, and the redaction
+  patterns missed driver-qualified URLs (`postgresql+psycopg://user:pw@…`); both
+  are masked now.
 - **The dashboard was served without `Cache-Control`.** `StaticFiles` sends an
   `ETag` and a `Last-Modified` but no freshness directive, which browsers are free
   to cache heuristically — so an upgraded Test Hub could keep running the previous
@@ -142,6 +175,24 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Changed
 
+- **An import costs a handful of SQL statements, not five per test.** The fold
+  looked every test and attempt up with its own query — even in a run the same
+  batch had just created, which cannot have any — and each lookup flushed the
+  previous test's rows as single INSERTs. A 50-test import went from ~270
+  statements to ~20: about 3× faster on SQLite and 5× on PostgreSQL, and a burst
+  of concurrent imports finishes in roughly half the time on either. Two tests
+  count the statements so the old shape cannot come back unnoticed.
+- New migration `0003_postgresql_bigint` widens every publisher-supplied integer
+  (sequences, durations, sizes, attempt numbers) to `BIGINT` on PostgreSQL. It
+  changes nothing on SQLite, whose `INTEGER` is already 64-bit.
+- NUL characters are dropped from captured stdout, stderr, logs and failure text
+  before they are stored, on both backends: PostgreSQL rejects them in text, and
+  no reader of a log is helped by one. Every other control character is kept.
+- Run search and tag filters ignore case on both backends
+  (`ILIKE`) — what SQLite's `LIKE` already did; PostgreSQL's `LIKE` would not.
+- The Docker image installs the `postgres` extra, so the same image runs either
+  database.
+- `prune --vacuum` on PostgreSQL runs `VACUUM (ANALYZE)` on Test Hub's own tables.
 - New migration `0002_retention_indexes` adds `ix_idempotency_keys_run_id`. That
   table had no index but its primary key, so deleting by run scanned it whole.
 - ADR-0002 D8 is amended. It originally ruled out a REST endpoint for pruning

@@ -1,6 +1,7 @@
-"""The SQLite engine, configured the way SQLite actually has to be configured.
+"""The database engine — SQLite by default, PostgreSQL when the URL says so.
 
-A default ``create_engine("sqlite:///...")`` gives you a database that loses
+Most of this module is about SQLite, because SQLite is the one that needs
+configuring. A default ``create_engine("sqlite:///...")`` gives you a database that loses
 writes under concurrency, ignores foreign keys, deadlocks two publishers against
 each other, and cannot be touched from a second thread. None of that is
 SQLAlchemy's fault and all of it is fixable; this module is the fix, in one
@@ -43,6 +44,16 @@ What is set up here, and why:
 In-memory URLs (``:memory:``, ``file::memory:?cache=shared``) get a
 ``StaticPool``, because every new connection to ``:memory:`` is a *different*
 empty database and the schema would vanish between two sessions.
+
+PostgreSQL (``TEST_HUB_DATABASE_URL=postgresql://…``) needs none of the above:
+it enforces foreign keys, has real MVCC so readers never queue behind writers,
+and lets writers run concurrently. What it gets instead is an ordinary
+connection pool (``database_pool_size`` + ``database_max_overflow``), a
+``pool_pre_ping`` so a server restart costs one reconnect rather than a burst
+of failed requests, and per-run advisory locks in the write path
+(:mod:`test_hub.storage.locks`) that keep the fold correct when two publishers
+write the same run. Migrations take an advisory lock too, so two containers
+starting at once cannot both try to create the schema.
 """
 
 from __future__ import annotations
@@ -53,16 +64,34 @@ from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 from typing import Any
 
+import sqlalchemy as sa
 from sqlalchemy import Connection, Engine, create_engine, event
-from sqlalchemy.engine.url import make_url
+from sqlalchemy import exc as sa_exc
+from sqlalchemy.engine.url import URL, make_url
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from test_hub.config import Settings
+from test_hub.config import SUPPORTED_DATABASES, Settings
+from test_hub.errors import ConfigurationError
 from test_hub.logging import get_logger
+from test_hub.storage.locks import advisory_lock_id
 from test_hub.storage.models import Base
 
-__all__ = ["READ_ONLY_OPTION", "Database", "create_database", "migrations_path"]
+__all__ = [
+    "READ_ONLY_OPTION",
+    "Database",
+    "create_database",
+    "describe_database_url",
+    "migrations_path",
+]
+
+#: Every migrator takes this lock first, so concurrent ``upgrade()`` calls queue.
+_MIGRATION_LOCK = advisory_lock_id("migrations", "alembic")
+
+#: How long a PostgreSQL connection attempt may take before it is an error.
+#: libpq's own default is to wait forever, which turns a firewalled host into a
+#: hung ``test-hub serve`` with no message at all.
+_CONNECT_TIMEOUT_SECONDS = 10
 
 #: Execution-option key marking a connection whose transactions may begin
 #: deferred. Read :func:`Database.new_session` before using it directly.
@@ -87,6 +116,32 @@ def _is_memory_url(url: str) -> bool:
     return ":memory:" in lowered or "mode=memory" in lowered
 
 
+def describe_database_url(url: str) -> str:
+    """The URL with its password masked — safe for banners, logs and errors."""
+    try:
+        return make_url(url).render_as_string(hide_password=True)
+    except sa_exc.ArgumentError:
+        return "<unparseable database URL>"
+
+
+def _parse_supported(url: str) -> URL:
+    """Parse ``url`` and refuse anything Test Hub does not support, by name."""
+    try:
+        parsed = make_url(url)
+    except sa_exc.ArgumentError as exc:
+        raise ConfigurationError(
+            "TEST_HUB_DATABASE_URL is not a database URL. Expected something like "
+            "postgresql://user:password@host:5432/test_hub, or leave it unset for SQLite.",
+        ) from exc
+    backend = parsed.get_backend_name()
+    if backend not in SUPPORTED_DATABASES:
+        raise ConfigurationError(
+            f"Test Hub runs on SQLite or PostgreSQL, and this URL names {backend!r}.",
+            detail={"database": describe_database_url(url)},
+        )
+    return parsed
+
+
 class Database:
     """Owns the engine and hands out sessions. One per process, normally.
 
@@ -105,7 +160,8 @@ class Database:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._url = settings.resolved_database_url
-        self._is_memory = _is_memory_url(self._url)
+        self._backend = _parse_supported(self._url).get_backend_name()
+        self._is_memory = self._backend == "sqlite" and _is_memory_url(self._url)
         self.engine = self._create_engine()
         # A shallow copy sharing the same pool — no extra connections — whose
         # transactions the `begin` listener starts deferred.
@@ -124,7 +180,7 @@ class Database:
         connect_args: dict[str, Any] = {}
         engine_kwargs: dict[str, Any] = {"future": True, "echo": False}
 
-        if url.get_backend_name() == "sqlite":
+        if self._backend == "sqlite":
             # The API serves requests from a thread pool and the CLI hands
             # sessions between threads; pysqlite's same-thread assertion is a
             # 2006-era guard that WAL plus our own transaction discipline make
@@ -135,9 +191,39 @@ class Database:
                 # Every fresh connection to :memory: is a fresh empty database.
                 # One connection, shared, is the only way the schema survives.
                 engine_kwargs["poolclass"] = StaticPool
+        else:
+            engine_kwargs.update(
+                pool_size=self._settings.database_pool_size,
+                max_overflow=self._settings.database_max_overflow,
+                # A connection the server dropped — a restart, a failover, an idle
+                # timeout in a proxy — is replaced on checkout instead of failing
+                # whichever request happened to draw it.
+                pool_pre_ping=True,
+            )
+            # Defaults only: anything the URL sets (`?connect_timeout=30`) wins.
+            if "connect_timeout" not in url.query:
+                connect_args["connect_timeout"] = _CONNECT_TIMEOUT_SECONDS
+            if "application_name" not in url.query:
+                # What a DBA sees in pg_stat_activity next to each connection.
+                connect_args["application_name"] = "test-hub"
 
-        engine = create_engine(self._url, connect_args=connect_args, **engine_kwargs)
-        if url.get_backend_name() == "sqlite":
+        try:
+            engine = create_engine(self._url, connect_args=connect_args, **engine_kwargs)
+        except ImportError as exc:
+            # create_engine imports the driver eagerly, so this is where a
+            # missing psycopg surfaces — as a traceback about a module, unless
+            # it is translated into what to install.
+            raise ConfigurationError(
+                f"{self.backend_label} needs a database driver that is not installed. "
+                "Install it with: pip install 'test-hub[postgres]'",
+                detail={"database": self.display_url, "missing": str(exc)},
+            ) from exc
+        except sa_exc.NoSuchModuleError as exc:
+            raise ConfigurationError(
+                f"SQLAlchemy does not know the driver in this URL: {exc}",
+                detail={"database": self.display_url},
+            ) from exc
+        if self._backend == "sqlite":
             self._install_sqlite_listeners(engine)
         return engine
 
@@ -222,6 +308,16 @@ class Database:
 
         config = self.alembic_config()
         with self.engine.begin() as connection:
+            if self._backend == "postgresql":
+                # SQLite's BEGIN IMMEDIATE already makes a second migrator wait.
+                # PostgreSQL would let two starting containers both see an empty
+                # schema and both try to create it; the loser would crash-loop.
+                # Queued instead, the second one finds the schema at head and
+                # does nothing.
+                connection.execute(
+                    sa.text("SELECT pg_advisory_xact_lock(CAST(:key AS BIGINT))"),
+                    {"key": _MIGRATION_LOCK},
+                )
             config.attributes["connection"] = connection
             command.upgrade(config, "head")
 
@@ -232,6 +328,51 @@ class Database:
         with self.engine.connect() as connection:
             context = MigrationContext.configure(connection)
             return context.get_current_revision()
+
+    def head_revision(self) -> str | None:
+        """The newest migration this installation of Test Hub ships."""
+        from alembic.script import ScriptDirectory
+
+        head: str | None = ScriptDirectory.from_config(self.alembic_config()).get_current_head()
+        return head
+
+    def ping(self) -> None:
+        """Prove the database answers, or raise a :class:`ConfigurationError` saying why.
+
+        Called before the first migration so that a wrong host, a wrong password
+        or a server that is still starting is reported as one line naming the
+        database, rather than as a driver traceback from deep inside Alembic.
+        Uses the read-only engine so that on SQLite it never takes the write lock.
+        """
+        try:
+            with self._read_engine.connect() as connection:
+                connection.exec_driver_sql("SELECT 1")
+        except (sa_exc.OperationalError, sa_exc.InterfaceError) as exc:
+            reason = str(exc.orig if exc.orig is not None else exc).strip()
+            raise ConfigurationError(
+                f"cannot reach the {self.backend_label} database at {self.display_url}: "
+                f"{reason.splitlines()[0] if reason else 'no reason given'}",
+                detail={"database": self.display_url},
+            ) from exc
+
+    def server_version(self) -> str:
+        """``PostgreSQL 16.4`` or ``SQLite 3.45.1``, for ``test-hub db check``."""
+        if self._backend == "sqlite":
+            return f"SQLite {sqlite3.sqlite_version}"
+        with self._read_engine.connect() as connection:
+            info = connection.dialect.server_version_info or ()
+        return f"{self.backend_label} {'.'.join(str(part) for part in info)}".strip()
+
+    def drop_schema(self) -> None:
+        """Drop every table Test Hub created — and nothing else.
+
+        Destroys all stored results. It exists for ``test-hub demo --reset``
+        against PostgreSQL, where "delete the database file" has no equivalent
+        and dropping the whole database would take anything else in it along.
+        """
+        with self.engine.begin() as connection:
+            Base.metadata.drop_all(connection)
+            connection.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
 
     def alembic_config(self) -> Any:
         """An Alembic ``Config`` pointing at the packaged migrations.
@@ -291,6 +432,21 @@ class Database:
     def url(self) -> str:
         return self._url
 
+    @property
+    def backend(self) -> str:
+        """``sqlite`` or ``postgresql``."""
+        return self._backend
+
+    @property
+    def backend_label(self) -> str:
+        """The backend's proper name, for messages a person reads."""
+        return {"sqlite": "SQLite", "postgresql": "PostgreSQL"}.get(self._backend, self._backend)
+
+    @property
+    def display_url(self) -> str:
+        """The URL with its password masked. Never log :attr:`url` itself."""
+        return describe_database_url(self._url)
+
     def dispose(self) -> None:
         """Close every pooled connection. Safe to call more than once."""
         self.engine.dispose()
@@ -298,8 +454,8 @@ class Database:
 
 def create_database(settings: Settings) -> Database:
     """Build the :class:`Database` for these settings, creating its directory."""
-    if not _is_memory_url(settings.resolved_database_url):
-        url = make_url(settings.resolved_database_url)
-        if url.get_backend_name() == "sqlite" and url.database:
-            Path(url.database).expanduser().parent.mkdir(parents=True, exist_ok=True)
+    raw = settings.resolved_database_url
+    url = _parse_supported(raw)
+    if url.get_backend_name() == "sqlite" and not _is_memory_url(raw) and url.database:
+        Path(url.database).expanduser().parent.mkdir(parents=True, exist_ok=True)
     return Database(settings)

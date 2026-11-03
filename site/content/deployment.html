@@ -1,9 +1,10 @@
-<!--META {"title": "Deployment", "eyebrow": "Operating it", "description": "Running Test Hub for a team: Docker, systemd, reverse proxies, backups and upgrades.", "lede": "One process, one SQLite file and a directory of artifacts. That is the whole deployment — which makes the interesting parts the ones around it: the reverse proxy, the backups, and the two traps that are specific to this application."} -->
+<!--META {"title": "Deployment", "eyebrow": "Operating it", "description": "Running Test Hub for a team: Docker, choosing SQLite or PostgreSQL, systemd, reverse proxies, backups and upgrades.", "lede": "One process, one database — a SQLite file by default, or PostgreSQL — and a directory of artifacts. That is the whole deployment — which makes the interesting parts the ones around it: the reverse proxy, the backups, and the two traps that are specific to this application."} -->
 
 <h2 id="what-you-run">What you are actually running</h2>
 
 <p>A single Python process serving both the API and the dashboard on one port, writing to
-a directory. No database server, no cache, no queue, no separate web server.</p>
+a directory. No database server unless you <a href="#database">choose PostgreSQL</a>, no cache,
+no queue, no separate web server.</p>
 
 <div class="codeblock" data-lang="text">
 <pre><code>/var/lib/test-hub/
@@ -111,12 +112,76 @@ which re-escapes on output — you should see four <code>$$</code>-separated fie
 <code>TEST_HUB_API_TOKEN_HASHES</code>, and change the port to <code>"8000:8000"</code>
 only once something in front of it terminates TLS.</p>
 
-<div class="note note--info"><span class="note__title">Not executed here</span>
-No Docker daemon was available when this documentation was written, so the image and the
-Compose file are described from their contents rather than from a recorded run. The parts
-that <em>were</em> executed — the wheel build, a clean-virtualenv install, the healthcheck
-command, and the bind refusal with its exit code — are the parts the container depends
-on.</div>
+<div class="note note--info"><span class="note__title">Run, not just read</span>
+The image and both Compose setups — SQLite on its own, and PostgreSQL with the override
+below — have been built and brought up healthy, including forty concurrent imports against
+the PostgreSQL stack and a database restart that Test Hub recovered from by itself.</div>
+
+<h2 id="database">Choosing a database</h2>
+
+<p>SQLite is the default and needs nothing: a file in the data directory. For one Test Hub
+it is also the faster of the two, because imports are bound by the process's CPU and SQLite
+answers in-process. PostgreSQL drops SQLite's one-writer-at-a-time lock — only writes to the
+<em>same</em> run take turns — and brings a database server's operations: <code>pg_dump</code>
+backups, replication, a database other tools can query. Nothing else changes — the API, the
+CLI, the dashboard and the adapters are identical — and the schema is created on first start
+either way.</p>
+
+<div class="tablewrap"><table>
+  <thead><tr><th></th><th>SQLite (default)</th><th>PostgreSQL</th></tr></thead>
+  <tbody>
+    <tr><td>Set up</td><td>Nothing</td><td>A server and <code>TEST_HUB_DATABASE_URL</code></td></tr>
+    <tr><td>Concurrent publishers</td><td>One write at a time, database-wide</td>
+    <td>Parallel across runs; one run's writes take turns</td></tr>
+    <tr><td>Readers vs writers</td><td>Never block each other (WAL)</td>
+    <td>Never block each other (MVCC)</td></tr>
+    <tr><td>Backups</td><td>SQLite's <code>.backup</code>, plus artifacts</td>
+    <td><code>pg_dump</code>, plus artifacts</td></tr>
+    <tr><td>Imports, one process</td><td>Faster — in-process</td>
+    <td>Slower — a round trip per statement, and the CPU is the limit either way</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="database-docker">With Docker</h3>
+
+<p>The image already contains the PostgreSQL driver. Layer the override file on the
+Compose file; it adds a PostgreSQL container that publishes no port and points Test Hub
+at it. The password is required, and reaches Test Hub as <code>PGPASSWORD</code> rather
+than inside the URL, so it never shows up in the banner or the logs.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ echo "TEST_HUB_POSTGRES_PASSWORD=$(openssl rand -hex 24)" &gt;&gt; .env
+$ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+$ docker compose -f docker-compose.yml -f docker-compose.postgres.yml exec test-hub test-hub db check
+  database  postgresql+psycopg://test_hub@postgres:5432/test_hub
+  server    PostgreSQL 17.11
+  schema    0003_postgresql_bigint (up to date)
+  ready</code></pre>
+</div>
+
+<p>Add <code>COMPOSE_FILE=docker-compose.yml:docker-compose.postgres.yml</code> to the same
+<code>.env</code> to make it the default for that directory.</p>
+
+<h3 id="database-pip">Without Docker</h3>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ pip install "test-hub[postgres]"
+$ export TEST_HUB_DATABASE_URL='postgresql://test_hub:PASSWORD@db.internal:5432/test_hub'
+$ test-hub db check
+$ test-hub serve</code></pre>
+</div>
+
+<p>Test Hub needs one database and a role that owns it, and creates its own tables.
+<code>postgres://</code> and <code>postgresql://</code> both work. The password can be in
+the URL (percent-encoded) or left out of it for <code>PGPASSWORD</code> or
+<code>~/.pgpass</code> to supply; <code>--database-url</code> refuses one, for the same
+reason tokens are never arguments.</p>
+
+<div class="note note--warn"><span class="note__title">What PostgreSQL does not change</span>
+Artifacts still live on the filesystem under <code>TEST_HUB_DATA_DIR</code>, so the data
+volume and its backup are still required. It is still one Test Hub process: the
+live-update bus is in-process. And switching an existing install starts with an empty
+database — runs already in SQLite are not copied across.</div>
 
 <h2 id="systemd">systemd</h2>
 
@@ -199,6 +264,14 @@ $ tar czf /backups/artifacts-$(date +%F).tgz -C /var/lib/test-hub artifacts</cod
 of <code>artifacts/</code> is efficient. <code>.incoming/</code> holds partial uploads and
 never needs backing up.</p>
 
+<p>On PostgreSQL, <code>pg_dump</code> takes a consistent snapshot of a live database, so the
+three-file trap does not exist — but the artifacts are still files and still need the tarball:</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>$ docker compose -f docker-compose.yml -f docker-compose.postgres.yml exec -T postgres \
+    pg_dump -U test_hub -Fc test_hub &gt; test-hub-$(date +%F).dump</code></pre>
+</div>
+
 <h2 id="upgrades">Upgrades</h2>
 
 <div class="codeblock" data-lang="shell">
@@ -209,6 +282,11 @@ $ systemctl restart test-hub</code></pre>
 <p>Migrations run automatically on start — a user who upgrades should not have to know
 that Alembic exists. Back up first anyway; migrations are reversible in the test suite,
 not in your incident.</p>
+
+<p><code>test-hub db check</code> shows which database is in use and its schema revision,
+and exits <code>1</code> when migrations are pending; <code>test-hub db upgrade</code> applies
+them as a deliberate step. On PostgreSQL, migrations take an advisory lock, so two
+instances starting at once do not race to create the schema.</p>
 
 <p>Every migration has a working <code>downgrade</code>, and CI asserts that the migrated
 schema matches the ORM exactly, so a model added without a migration fails there rather
@@ -224,8 +302,10 @@ so fifty shards uploading the same screenshot store one copy.</p>
 <p>The real ceiling is write throughput: SQLite serializes writers, so concurrent
 publishers queue. That is correct rather than fast, and it is documented rather than
 hidden — read transactions were deliberately made not to take the write lock so that a
-long read or a dashboard poll cannot stall a publisher. When the queue becomes the
-problem, PostgreSQL behind <code>RunRepository</code> is the next step.</p>
+long read or a dashboard poll cannot stall a publisher. <a href="#database">PostgreSQL</a>
+removes that lock, but measured, one process imports no faster on it: the process's own CPU
+is the limit behind the lock, on either backend. Going past it means more than one process,
+which also needs the live-update bus to be shared.</p>
 
 <h2 id="packaging-name">Changing the distribution name</h2>
 

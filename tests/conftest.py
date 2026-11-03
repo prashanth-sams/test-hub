@@ -4,12 +4,24 @@ Every fixture that touches state builds it in a temporary directory and tears it
 down afterwards, so the suite never reads or writes the developer's real Test Hub
 data directory. That is not paranoia: the default data directory is a real place
 with real results in it, and a test that truncates it would be a very bad day.
+
+**Running on PostgreSQL.** Set ``TEST_HUB_TEST_DATABASE_URL`` to a database the
+suite may create schemas in, and every test built on the ``settings`` fixture —
+the storage, service, API, concurrency and retention tests — runs against
+PostgreSQL instead of SQLite, each in a throwaway schema of its own::
+
+    TEST_HUB_TEST_DATABASE_URL=postgresql://test_hub:test_hub@localhost/test_hub pytest
+
+Tests marked ``postgres`` exercise behaviour only PostgreSQL has, and are skipped
+when the variable is unset.
 """
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -34,6 +46,50 @@ from test_hub.domain.status import TestStatus
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+#: The PostgreSQL server the suite may use, or None to stay on SQLite.
+POSTGRES_TEST_URL = os.environ.get("TEST_HUB_TEST_DATABASE_URL", "").strip() or None
+
+
+def pytest_collection_modifyitems(config: Any, items: list[Any]) -> None:
+    """Skip PostgreSQL-only tests, visibly, when no server was configured."""
+    if POSTGRES_TEST_URL:
+        return
+    skip = pytest.mark.skip(reason="set TEST_HUB_TEST_DATABASE_URL to run PostgreSQL tests")
+    for item in items:
+        if "postgres" in item.keywords:
+            item.add_marker(skip)
+
+
+@contextmanager
+def postgres_schema(base_url: str) -> Iterator[str]:
+    """A fresh, empty schema on ``base_url``, and a URL whose search_path is it.
+
+    A schema rather than a database because ``CREATE DATABASE`` costs a second
+    or so and needs a privilege the test role may not have; a schema per test
+    keeps the tests exactly as isolated as a temporary SQLite file does.
+    """
+    import sqlalchemy as sa
+    from sqlalchemy.engine import make_url
+    from sqlalchemy.pool import NullPool
+
+    from test_hub.config import normalize_database_url
+
+    schema = f"th_test_{uuid.uuid4().hex[:12]}"
+    url = make_url(normalize_database_url(base_url))
+    admin = sa.create_engine(url, poolclass=NullPool)
+    with admin.begin() as connection:
+        connection.exec_driver_sql(f'CREATE SCHEMA "{schema}"')
+    scoped = url.update_query_dict({"options": f"-csearch_path={schema}"})
+    try:
+        yield scoped.render_as_string(hide_password=False)
+    finally:
+        with admin.begin() as connection:
+            # Bounded, so a connection some test leaked mid-transaction fails
+            # this teardown loudly instead of hanging the suite.
+            connection.exec_driver_sql("SET LOCAL lock_timeout = '15s'")
+            connection.exec_driver_sql(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+        admin.dispose()
+
 
 @pytest.fixture(autouse=True)
 def _isolate_settings() -> Iterator[None]:
@@ -44,10 +100,30 @@ def _isolate_settings() -> Iterator[None]:
 
 
 @pytest.fixture
-def settings(tmp_path: Path) -> Settings:
-    """Settings pointed at a throwaway directory."""
+def database_url() -> Iterator[str | None]:
+    """``None`` (SQLite in the data directory), or a throwaway PostgreSQL schema."""
+    if POSTGRES_TEST_URL is None:
+        yield None
+        return
+    with postgres_schema(POSTGRES_TEST_URL) as url:
+        yield url
+
+
+@pytest.fixture
+def postgres_url() -> Iterator[str]:
+    """A throwaway PostgreSQL schema, for tests of PostgreSQL-only behaviour."""
+    if POSTGRES_TEST_URL is None:  # pragma: no cover - the marker skips first
+        pytest.skip("set TEST_HUB_TEST_DATABASE_URL to run PostgreSQL tests")
+    with postgres_schema(POSTGRES_TEST_URL) as url:
+        yield url
+
+
+@pytest.fixture
+def settings(tmp_path: Path, database_url: str | None) -> Settings:
+    """Settings pointed at a throwaway directory (and database)."""
     return Settings(
         data_dir=tmp_path / "data",
+        database_url=database_url,
         host="127.0.0.1",
         auth_enabled=False,
         store_raw_reports=False,

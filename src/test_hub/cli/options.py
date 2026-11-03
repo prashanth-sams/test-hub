@@ -24,6 +24,7 @@ __all__ = [
     "CommitOption",
     "ComponentOption",
     "DataDirOption",
+    "DatabaseUrlOption",
     "EnvironmentOption",
     "FormatOption",
     "ProjectOption",
@@ -32,6 +33,7 @@ __all__ = [
     "TriggerOption",
     "read_token",
     "settings_from_cli",
+    "storage_location",
 ]
 
 ProjectOption = Annotated[
@@ -68,6 +70,21 @@ DataDirOption = Annotated[
         envvar="TEST_HUB_DATA_DIR",
     ),
 ]
+#: No ``envvar=`` on purpose. TEST_HUB_DATABASE_URL is read by Settings, where it
+#: may carry a password; routing it through this option would put it under the
+#: command-line password check below, which exists for the command line only.
+DatabaseUrlOption = Annotated[
+    str | None,
+    typer.Option(
+        "--database-url",
+        help=(
+            "Database to use: postgresql://user@host:5432/dbname, or a sqlite:/// path. "
+            "Defaults to TEST_HUB_DATABASE_URL, else SQLite in the data directory. "
+            "No passwords here — put those in TEST_HUB_DATABASE_URL or PGPASSWORD."
+        ),
+        show_default=False,
+    ),
+]
 
 
 def read_token(token_env: str | None, token_file: Path | None) -> str | None:
@@ -95,11 +112,44 @@ def read_token(token_env: str | None, token_file: Path | None) -> str | None:
     return None
 
 
+def _refuse_inline_password(url: str) -> None:
+    """A database password on the command line is a token on the command line.
+
+    Same reasoning as :func:`read_token`: ``ps`` shows it to every user on the
+    machine, shell history keeps it, and CI logs echo it. The environment and
+    libpq's own password sources are where it belongs.
+    """
+    from urllib.parse import urlsplit
+
+    try:
+        password = urlsplit(url).password
+    except ValueError:
+        password = None
+    if password:
+        raise ConfigurationError(
+            "--database-url must not contain a password: a command line is visible to every "
+            "user on this machine and is kept in shell history. Set the whole URL in "
+            "TEST_HUB_DATABASE_URL instead, or leave the password out of the URL and provide "
+            "it with PGPASSWORD or a ~/.pgpass entry."
+        )
+
+
 def settings_from_cli(**overrides: Any) -> Settings:
     """Build settings with CLI flags layered on top of the environment."""
     supplied = {key: value for key, value in overrides.items() if value is not None}
+    if "database_url" in supplied:
+        _refuse_inline_password(str(supplied["database_url"]))
     if not supplied:
         return get_settings()
     base = get_settings().model_dump()
     base.update(supplied)
     return Settings(**base)
+
+
+def storage_location(settings: Settings) -> str:
+    """Where results went, for a ``stored in …`` line: a directory, or a masked URL."""
+    if settings.database_backend == "sqlite":
+        return str(settings.data_dir)
+    from test_hub.storage.db import describe_database_url
+
+    return describe_database_url(settings.resolved_database_url)

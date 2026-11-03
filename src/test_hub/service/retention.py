@@ -538,6 +538,16 @@ class RetentionService:
     def _delete(self, session: Any, run_ids: Sequence[uuid.UUID]) -> None:
         """Remove one batch. Order matters; see :data:`UNLINKED_TABLES`."""
         options = {"synchronize_session": False}
+        if session.get_bind().dialect.name == "postgresql":
+            # SQLite's write lock means no import can touch these runs while the
+            # batch is deleted. PostgreSQL needs telling: lock the run rows first,
+            # so an import still writing one of them finishes before its events
+            # are swept — instead of committing new events after the sweep, for a
+            # run that is then deleted, leaving them orphaned for good.
+            for chunk in _chunks(run_ids):
+                session.execute(
+                    sa.select(RunRow.id).where(RunRow.id.in_(chunk)).with_for_update()
+                ).all()
         for row in (ArtifactRow, EventRow, IdempotencyKeyRow):
             for chunk in _chunks(run_ids):
                 session.execute(
@@ -545,7 +555,8 @@ class RetentionService:
                 )
         # Last, and the only one that cascades: suites, test_cases and attempts
         # go with it because they are the three tables that do have the foreign
-        # key, and `PRAGMA foreign_keys=ON` is set on every connection.
+        # key, and `PRAGMA foreign_keys=ON` is set on every SQLite connection
+        # (PostgreSQL always enforces them).
         for chunk in _chunks(run_ids):
             session.execute(
                 sa.delete(RunRow).where(RunRow.id.in_(chunk)), execution_options=options
@@ -564,8 +575,34 @@ class RetentionService:
         Run on a raw DBAPI connection because ``VACUUM`` cannot execute inside a
         transaction, and every SQLAlchemy connection here opens one
         (``BEGIN IMMEDIATE``) before the first statement.
+
+        On PostgreSQL this is ``VACUUM (ANALYZE)`` over Test Hub's own tables, in
+        autocommit (it refuses a transaction block there too). That makes the
+        space reusable at once and refreshes the planner's statistics after a
+        large delete, without the exclusive lock: it does not hand pages back to
+        the operating system — autovacuum and the DBA's ``VACUUM FULL`` own
+        that decision on a shared server.
         """
-        raw = self._context.database.engine.raw_connection()
+        database = self._context.database
+        if database.backend == "postgresql":
+            # Exactly the tables a prune deletes from — never the whole database,
+            # which on a shared server would also vacuum other people's tables.
+            pruned = (
+                ArtifactRow,
+                EventRow,
+                IdempotencyKeyRow,
+                RunRow,
+                SuiteRow,
+                TestCaseRow,
+                AttemptRow,
+            )
+            tables = ", ".join(row.__tablename__ for row in pruned)
+            with database.engine.connect() as connection:
+                autocommit = connection.execution_options(isolation_level="AUTOCOMMIT")
+                autocommit.exec_driver_sql(f"VACUUM (ANALYZE) {tables}")
+            return
+
+        raw = database.engine.raw_connection()
         try:
             cursor = raw.cursor()
             try:

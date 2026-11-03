@@ -1,6 +1,7 @@
 # Scaling
 
-Test Hub 0.1 is one Python process, one SQLite file and a directory of blobs. It
+Test Hub 0.1 is one Python process, one SQLite file — or a PostgreSQL database —
+and a directory of blobs. It
 installs with `pip` and needs no services, which is the point — and it has a
 ceiling, which ADR-0001 D4 documents rather than hides. This page measures that
 ceiling, says where it actually is, and describes what replaces each piece when
@@ -10,6 +11,10 @@ The short version: on a laptop, imports plateau at roughly **30 reports (1 500
 test results) per second** and stop getting faster no matter how many clients you
 add, while latency grows without bound. The read path is no longer limited by
 SQLite at all — it is limited by one Python process.
+
+The measurements below are SQLite's, the default. PostgreSQL can now take its
+place; what that changes, and what it does not, is
+[measured below](#sqlite-or-postgresql).
 
 ## The measurements
 
@@ -62,7 +67,9 @@ Correct, not fast.
 The practical read: **a single Test Hub comfortably absorbs a few thousand test
 results a second in bursts**, which is a lot of CI. What it will not do is stay
 responsive when fifty pipelines finish at the same instant — they will all
-succeed, and the last one will wait seconds.
+succeed, and the last one will wait seconds. PostgreSQL removes the lock behind
+that queue, but not the ceiling behind the lock — see
+[SQLite or PostgreSQL](#sqlite-or-postgresql).
 
 ### Reads are no longer SQLite-bound
 
@@ -103,6 +110,46 @@ grows with your data.
 If your dashboard feels slow before your imports do, this is why, and the fix is
 not PostgreSQL.
 
+## SQLite or PostgreSQL
+
+<a id="sqlite-or-postgresql"></a>
+
+Measured after PostgreSQL support landed, on different hardware from the tables
+above, so compare the rows with each other and not with those tables.
+
+**Hardware and versions.** A 4-core cloud VM, Python 3.13, SQLite 3.53.1,
+PostgreSQL 16.15 on the same VM. `test-hub serve` with
+`TEST_HUB_STORE_RAW_REPORTS=false`; 40 clients `POST /api/v1/imports` a 50-test
+JUnit report at the same instant, after a warm-up of 8; median of 3 rounds.
+
+| | 40 concurrent imports | p50 latency |
+|---|---:|---:|
+| SQLite | 1.6 s | 0.8 s |
+| PostgreSQL, sharing all 4 cores | 3.5 s | 2.7 s |
+| PostgreSQL on 2 cores of its own, Test Hub and clients on the other 2 | 2.7 s | 2.1 s |
+
+One import at a time, in process: SQLite 17 ms, PostgreSQL 28 ms — the same
+~20 statements each.
+
+**SQLite is faster for one Test Hub process, and that is structural.** An import
+is CPU-bound in the Python process: before the fold stopped issuing a statement
+per test, one import spent 118 ms of its 136 ms on PostgreSQL in Test Hub's own
+CPU, not waiting on the server. SQLite executes in-process; PostgreSQL adds a
+socket round trip and driver work to every statement. Removing the write lock
+lets PostgreSQL writers overlap, but they overlap on one interpreter, which runs
+Python one thread at a time — so the lock was never the binding limit for a
+single process. The process is.
+
+**What PostgreSQL is for, then.** A database server's operations: `pg_dump` and
+point-in-time recovery, replication, a database other tools and people can
+query, storage that is not a file on the API host's disk. And it is the database
+half of running more than one Test Hub process — which is where its concurrent
+writers would pay — once [the bus](#the-bus) below is shared too.
+
+For scale, the same change that made this comparison fair — an import costing
+~20 statements instead of ~270 — also halved both rows: before it, the burst took
+3.3 s on SQLite and 8.2 s on PostgreSQL.
+
 ## The bus
 
 <a id="the-bus"></a>
@@ -139,43 +186,58 @@ the following more than a comment.
 
 ### PostgreSQL behind `RunRepository` and `EventRepository`
 
-**When.** Sustained concurrent publishing, more than one API process, or a data
-set where `overview` is slow because of row counts rather than serialization.
+**Status: shipped.** Set `TEST_HUB_DATABASE_URL=postgresql://…`
+([deployment.md](deployment.md#choosing-a-database)); SQLite stays the default.
+[ADR-0004](adr/0004-postgresql.md) records the decisions below.
 
-**What does not change.** The wire contract (`test_hub.domain.models`, Pydantic,
+**When.** You want the database on a server — its backups, replication and
+tooling — or are laying the ground for more than one Test Hub process. Not for
+import speed within one process: [SQLite or PostgreSQL](#sqlite-or-postgresql)
+measures why.
+
+**What did not change.** The wire contract (`test_hub.domain.models`, Pydantic,
 `schema_version 1`), the event contract, every route, the CLI, the dashboard, the
 exporter, and both adapters. Nothing serializes an ORM object — ADR-0001 D3 —
-so the database's shape can move without the API's shape moving.
+so the database's shape moved without the API's shape moving.
 
-**What changes.**
+**What changed** — including where it departs from the plan this section used to
+hold, and why.
 
-- `Database` grows a non-SQLite branch. Most of it is already conditional on
-  `url.get_backend_name() == "sqlite"`; the PRAGMAs and the `BEGIN IMMEDIATE`
-  listener are the SQLite-only parts and would simply not install.
-  `TEST_HUB_DATABASE_URL` already exists and is already threaded through
-  `resolved_database_url`.
-- The `BEGIN IMMEDIATE` discipline is replaced by real MVCC. Readers stop
-  queueing behind writers by construction, and the read-only unit of work becomes
-  a `SET TRANSACTION READ ONLY` (or nothing at all).
-- The Alembic migrations need a second dialect. `0001_initial` is the only one
-  today, so this is the cheapest moment in the project's life to do it. Watch for
-  the JSON columns (`JSON` → `JSONB`), the UUID columns (SQLite stores them as
-  text), and the `datetime` columns — SQLite has no native type and the
-  repository already normalizes to UTC on the way in and out.
-- `_existing_keys()` currently relies on holding the write lock: it SELECTs which
-  `(source, event_id)` pairs already exist and then inserts the rest, which is
-  safe only because nothing can interleave. On PostgreSQL that becomes
-  `INSERT … ON CONFLICT (source, event_id) DO NOTHING RETURNING id`, which is
-  both correct under MVCC and faster.
-- Idempotency keys get an expiry of their own. Retention deletes them with their
-  run ([ADR-0002](adr/0002-data-retention.md)), which bounds them, but a key is
-  only useful for the minutes a publisher might retry in and is currently kept for
-  as long as the run is.
+- `Database` has a PostgreSQL branch: a connection pool with `pool_pre_ping`
+  instead of the PRAGMAs and the `BEGIN IMMEDIATE` listener, which still install
+  for SQLite only.
+- `BEGIN IMMEDIATE` is replaced by MVCC plus a **per-run advisory lock**
+  (`src/test_hub/storage/locks.py`). The fold reads before it writes, so two
+  batches for the *same* run still must not interleave — without the lock the
+  second recount overwrites the first, which `tests/test_concurrency.py` catches.
+  Batches for *different* runs no longer wait for each other at all. An
+  idempotency key gets a lock of its own, so a retried import racing its original
+  is answered from it instead of failing on the primary key.
+- `_existing_keys()` kept its `SELECT`. It needed "nothing inserts this run's
+  events between my read and my write", which the run lock provides.
+  `INSERT … ON CONFLICT DO NOTHING` went where the race really is cross-run:
+  creating the workspace, and a project whose first pipelines report together.
+- JSON stays `JSON`, not `JSONB`. `JSONB` rejects `\u0000` in a string, and the
+  event log stores publishers' payloads — captured stdout included — verbatim.
+  No query uses a JSON operator, so nothing is lost.
+- Timestamps stay fixed-width UTC strings on both backends: one code path, and
+  ordering and comparison identical by construction.
+- One migration, `0003_postgresql_bigint`, widens the eight publisher-supplied
+  integers to `BIGINT`. `INTEGER` is 64-bit on SQLite and 32-bit on PostgreSQL;
+  the migration is a no-op on SQLite.
+- The read-only unit of work needed nothing: under MVCC readers never block a
+  writer anyway.
+- Still open from the plan: an expiry for idempotency keys. Retention deletes them
+  with their run ([ADR-0002](adr/0002-data-retention.md)), which bounds them, but a
+  key is only useful for the minutes a publisher might retry in.
 
-**What you get.** Concurrent writers actually concurrent, connection pooling
-across processes, and partial indexes and materialized views for the overview.
-**What you pay.** `pip install test-hub && test-hub serve` stops being the whole
-setup story, which is why it is not the default.
+**What you get.** Writers to different runs actually concurrent, and a database
+other tools can query — but one process does not import faster for it, as
+[measured](#sqlite-or-postgresql). **What you still pay.** It is still one Test Hub process:
+the live-update bus is in-process, so PostgreSQL does not make a second API
+worker safe — [the bus](#the-bus) is the next ceiling, and behind it the CPU of
+that one process. And `pip install test-hub && test-hub serve` stops being the
+whole setup story, which is why it is not the default.
 
 ### S3 (or any object store) behind `ArtifactStore`
 

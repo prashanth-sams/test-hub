@@ -155,6 +155,26 @@ them locally with `-m "not slow"` when you are iterating.
 The suite needs no services and no network. If a test you are writing wants
 either, it is a sign the thing under test has a dependency it should not have.
 
+### Testing on PostgreSQL
+
+The same suite runs against PostgreSQL when `TEST_HUB_TEST_DATABASE_URL` points
+at a database the test role can create schemas in. Every test built on the
+`settings` fixture — storage, services, the API, concurrency, retention — then
+gets a throwaway schema of its own instead of a temporary SQLite file:
+
+```bash
+docker run -d --name th-pg -p 127.0.0.1:5432:5432 \
+    -e POSTGRES_USER=test_hub -e POSTGRES_PASSWORD=test_hub -e POSTGRES_DB=test_hub \
+    postgres:17-alpine
+TEST_HUB_TEST_DATABASE_URL=postgresql://test_hub:test_hub@127.0.0.1:5432/test_hub pytest
+```
+
+Tests marked `postgres` cover behaviour only PostgreSQL has — writers that run in
+parallel, the per-run lock that replaces SQLite's write lock — and are skipped,
+visibly, without the variable. Anything you change in `storage/` or in a query
+should pass both ways; `tests/test_storage_portability.py` is where the
+behaviours the two backends disagree on by default are pinned.
+
 ### What a good test looks like here
 
 - **Adapters**: a fixture file in `tests/fixtures/` and an assertion on the

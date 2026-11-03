@@ -9,6 +9,14 @@ The one rule worth knowing: **binding to a non-loopback interface requires
 authentication**. Either configure tokens or pass ``--insecure-no-auth``, which
 logs a warning on every start and puts a banner in the dashboard. There is no
 silent path to an open, unauthenticated Test Hub on a network.
+
+The database is chosen the same way. Leave ``TEST_HUB_DATABASE_URL`` unset and
+Test Hub keeps a SQLite file in the data directory, which needs nothing
+installed. Point it at ``postgresql://user:password@host:5432/dbname`` and it uses
+PostgreSQL instead: SQLite lets one writer in at a time, PostgreSQL only
+serializes writers that touch the same run. That buys a database server's
+operations and the groundwork for more than one process — not a faster single
+process, which is CPU-bound either way (``docs/scaling.md``).
 """
 
 from __future__ import annotations
@@ -28,7 +36,21 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from test_hub.errors import ConfigurationError
 
-__all__ = ["CsvList", "Settings", "default_data_dir", "get_settings", "reset_settings_cache"]
+__all__ = [
+    "SUPPORTED_DATABASES",
+    "CsvList",
+    "Settings",
+    "backend_of",
+    "default_data_dir",
+    "get_settings",
+    "normalize_database_url",
+    "reset_settings_cache",
+]
+
+#: The database backends Test Hub is built and tested against. Anything else is
+#: refused at startup rather than half-working: the write path's concurrency
+#: guarantees are implemented per backend (see ``test_hub.storage.locks``).
+SUPPORTED_DATABASES: tuple[str, ...] = ("sqlite", "postgresql")
 
 #: A list that may be written as ``a,b,c`` in the environment.
 #:
@@ -54,7 +76,11 @@ DEFAULT_REDACTION_PATTERNS: tuple[str, ...] = (
     r"(?i)\bbearer\s+([A-Za-z0-9._\-]{8,})",
     r"(?i)\bbasic\s+([A-Za-z0-9+/=]{8,})",
     r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----([\s\S]+?)-----END",
-    r"(?i)\b(?:postgres|postgresql|mysql|mongodb|redis|amqp)://[^:/\s]+:([^@\s]+)@",
+    # The optional `+driver` is what SQLAlchemy URLs carry
+    # (`postgresql+psycopg://`). Without it the pattern missed exactly the form
+    # Test Hub itself logs and the form a stack trace from an app using
+    # SQLAlchemy prints.
+    r"(?i)\b(?:postgres|postgresql|mysql|mongodb|redis|amqp)(?:\+[a-z0-9_]+)?://[^:/\s]+:([^@\s]+)@",
     r"(?i)\bAKIA([0-9A-Z]{16})",
     r"(?i)\bghp_([A-Za-z0-9]{20,})",
     r"(?i)\bxox[baprs]-([A-Za-z0-9-]{10,})",
@@ -99,6 +125,35 @@ def _is_loopback(host: str) -> bool:
         return False
 
 
+#: The PostgreSQL driver the ``postgres`` extra installs. A URL that does not
+#: name a driver gets this one, so ``postgresql://`` — the form every hosting
+#: provider hands out — works as-is instead of failing on a psycopg2 import.
+_POSTGRES_DRIVER = "postgresql+psycopg"
+
+
+def normalize_database_url(url: str) -> str:
+    """Turn the URL a person writes into the URL SQLAlchemy needs.
+
+    ``postgres://`` (Heroku and friends) and a bare ``postgresql://`` both gain
+    the psycopg 3 driver. A URL that already names a driver is left alone, so
+    someone who has psycopg2 installed on purpose keeps it. Plain string work,
+    deliberately: this runs while the CLI parses its flags, and importing
+    SQLAlchemy there would make ``test-hub --help`` pay for it.
+    """
+    scheme, separator, rest = url.strip().partition("://")
+    if not separator:
+        return url.strip()
+    if scheme.lower() in ("postgres", "postgresql"):
+        return f"{_POSTGRES_DRIVER}://{rest}"
+    return f"{scheme}://{rest}"
+
+
+def backend_of(url: str) -> str:
+    """The backend a URL names, without its driver: ``sqlite``, ``postgresql``…"""
+    scheme = normalize_database_url(url).partition("://")[0].lower()
+    return scheme.split("+", 1)[0]
+
+
 class Settings(BaseSettings):
     """Every knob, in one place."""
 
@@ -119,8 +174,18 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default_factory=default_data_dir)
     database_url: str | None = Field(
         default=None,
-        description="SQLAlchemy URL. Defaults to SQLite inside data_dir. "
-        "The interfaces support other backends; only SQLite is shipped.",
+        description="Which database to use. Unset means a SQLite file inside data_dir. "
+        "postgresql://user:password@host:5432/dbname selects PostgreSQL, which needs "
+        "`pip install 'test-hub[postgres]'` (the Docker image already has it).",
+    )
+    database_pool_size: Annotated[int, Field(ge=1)] = Field(
+        default=10,
+        description="PostgreSQL: connections kept open to the server. Ignored for SQLite.",
+    )
+    database_max_overflow: Annotated[int, Field(ge=0)] = Field(
+        default=20,
+        description="PostgreSQL: extra connections opened under a burst of publishers, "
+        "on top of database_pool_size. Ignored for SQLite.",
     )
     artifacts_dir: Path | None = Field(default=None, description="Defaults to data_dir/artifacts.")
     sqlite_busy_timeout_ms: int = Field(
@@ -316,9 +381,14 @@ class Settings(BaseSettings):
 
     @property
     def resolved_database_url(self) -> str:
-        if self.database_url:
-            return self.database_url
+        if self.database_url and self.database_url.strip():
+            return normalize_database_url(self.database_url)
         return f"sqlite+pysqlite:///{self.data_dir / 'test-hub.db'}"
+
+    @property
+    def database_backend(self) -> str:
+        """``sqlite`` or ``postgresql`` — which database these settings choose."""
+        return backend_of(self.resolved_database_url)
 
     @property
     def resolved_artifacts_dir(self) -> Path:

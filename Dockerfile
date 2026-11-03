@@ -13,6 +13,13 @@
 #   docker run --rm -p 127.0.0.1:8000:8000 -v test-hub-data:/data \
 #       -e TEST_HUB_INSECURE_NO_AUTH=true test-hub
 #
+# One image, either database. With nothing set it keeps SQLite on the /data
+# volume. Give it TEST_HUB_DATABASE_URL=postgresql://user@host:5432/dbname (and
+# the password in PGPASSWORD) and it uses PostgreSQL instead — the driver is
+# installed below. docker-compose.postgres.yml does exactly that, with a
+# PostgreSQL container beside it. /data is still needed either way: artifacts
+# live there.
+#
 # ---------------------------------------------------------------------------
 # READ THIS BEFORE YOU RUN IT
 # ---------------------------------------------------------------------------
@@ -89,7 +96,13 @@ ENV PYTHONUNBUFFERED=1 \
     TEST_HUB_PORT=8000
 
 COPY --from=build /dist /tmp/dist
-RUN pip install --no-cache-dir /tmp/dist/*.whl && rm -rf /tmp/dist
+# With the `postgres` extra, so the same image can be pointed at either
+# database. It is the psycopg binary wheel, which bundles libpq: no apt-get, no
+# compiler, and nothing extra in the image that a SQLite deployment would run.
+RUN set -eu; \
+    wheel="$(ls /tmp/dist/*.whl)"; \
+    pip install --no-cache-dir "${wheel}[postgres]"; \
+    rm -rf /tmp/dist
 
 # uid 10001 is a fixed, high, non-system id: fixed so a bind-mounted host
 # directory can be chowned to a number that does not change between rebuilds,

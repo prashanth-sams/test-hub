@@ -65,6 +65,11 @@ def test_a_read_only_scope_does_not_block_a_writer(context: Any) -> None:
 
 def test_a_writing_scope_does_block_a_writer(context: Any) -> None:
     """The counterpart, so the test above is measuring something real."""
+    if context.database.backend != "sqlite":
+        # SQLite's write lock is database-wide; that is what this measures.
+        # PostgreSQL deliberately has no such lock — test_postgres.py asserts the
+        # opposite there, plus the per-run lock that replaces it.
+        pytest.skip("measures SQLite's database-wide write lock")
     context.settings.sqlite_busy_timeout_ms = 300
     seed(context)
 

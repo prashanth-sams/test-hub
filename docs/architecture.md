@@ -228,11 +228,12 @@ dashboard ever hears about them.
 
 `storage/base.py` declares four protocols — `RunRepository`, `EventRepository`,
 `ArtifactStore`, `EventBus` — plus `UnitOfWork` to group them into a transaction.
-The shipped implementations are SQLite and a local filesystem.
+The shipped implementations are SQLite or PostgreSQL, chosen by
+`TEST_HUB_DATABASE_URL`, and a local filesystem.
 
 | Protocol | Today | Where it would go next |
 |---|---|---|
-| `RunRepository` / `EventRepository` | SQLite, WAL, `BEGIN IMMEDIATE` | PostgreSQL |
+| `RunRepository` / `EventRepository` | SQLite (WAL, `BEGIN IMMEDIATE`), or PostgreSQL (MVCC, per-run advisory locks — [ADR-0004](adr/0004-postgresql.md)) | partitioning, materialized views for the overview |
 | `ArtifactStore` | content-addressed filesystem tree | S3-compatible object storage, same SHA-256 key |
 | `EventBus` | in-process ring buffer | Redis Streams or NATS |
 
