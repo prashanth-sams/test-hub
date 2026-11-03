@@ -38,14 +38,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # setuptools-scm is not in use, but a shallow clone also hides the tag
           # from anything that wants to describe it. Cheap insurance.
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -78,7 +78,7 @@ jobs:
             echo "::error::no distribution in dist/ is named for version $code"; ls -l dist/; exit 1; }
 
       - name: Upload distributions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -109,7 +109,7 @@ jobs:
 
     steps:
       - name: Download distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist
@@ -151,7 +151,7 @@ jobs:
   #     id-token: write
   #     contents: read
   #   steps:
-  #     - uses: actions/download-artifact@v4
+  #     - uses: actions/download-artifact@v8
   #       with:
   #         name: dist
   #         path: dist
