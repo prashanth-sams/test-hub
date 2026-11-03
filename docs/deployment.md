@@ -13,6 +13,9 @@ Three decisions, in this order:
    refuses to start otherwise — see [security.md](security.md#binding).
 3. **What terminates TLS?** Test Hub speaks plain HTTP and always will. A bearer
    token on plain HTTP across a network is a token you have given away.
+4. **Which database?** SQLite, the default, needs nothing installed. PostgreSQL
+   is the better choice once many CI jobs publish at the same time — see
+   [Choosing a database](#choosing-a-database).
 
 ## Docker
 
@@ -200,6 +203,108 @@ workers means two buses and half the dashboards missing half the events. There i
 no `--workers` flag on `test-hub serve` for this reason.
 [scaling.md](scaling.md#the-bus) explains what to replace when that bites.
 
+## Choosing a database
+
+<a id="choosing-a-database"></a>
+
+| | SQLite (default) | PostgreSQL |
+|---|---|---|
+| Set up | Nothing. A file in the data directory. | A server, and `TEST_HUB_DATABASE_URL`. |
+| Concurrent publishers | One write at a time, database-wide. The rest queue (`TEST_HUB_SQLITE_BUSY_TIMEOUT_MS`). | Writes to different runs run in parallel; only writes to the **same** run take turns. |
+| Readers vs writers | Never block each other (WAL). | Never block each other (MVCC). |
+| Backups | Copy three files the right way — [Backups](#backups). | `pg_dump`, plus the artifacts directory. |
+| Choose it when | A team, a handful of pipelines, a laptop. | CI traffic where jobs finish together and imports start to queue. |
+
+**SQLite** needs no configuration at all: leave `TEST_HUB_DATABASE_URL` unset.
+
+**PostgreSQL** is selected by pointing `TEST_HUB_DATABASE_URL` at a server.
+Nothing else changes — the API, the CLI, the dashboard and every adapter are the
+same — and the schema is created on first start, exactly as it is for SQLite.
+
+### With Docker
+
+The image already contains the PostgreSQL driver. `docker-compose.postgres.yml`
+adds a PostgreSQL container and points Test Hub at it:
+
+```shell
+$ echo "TEST_HUB_POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> .env
+$ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+$ docker compose -f docker-compose.yml -f docker-compose.postgres.yml exec test-hub test-hub db check
+  database  postgresql+psycopg://test_hub@postgres:5432/test_hub
+  server    PostgreSQL 17.11
+  schema    0003_postgresql_bigint (up to date)
+  ready
+```
+
+Add `COMPOSE_FILE=docker-compose.yml:docker-compose.postgres.yml` to the same
+`.env` to make it the default, so plain `docker compose up -d`, `logs` and `exec`
+include it. The password is required and has no default; it reaches Test Hub as
+`PGPASSWORD`, never inside the URL, so it needs no URL-encoding and never appears
+in the banner or the logs. The PostgreSQL container publishes no port — only Test
+Hub can reach it.
+
+To use a PostgreSQL server you already run, skip the override file and set the
+URL on the `test-hub` service in `docker-compose.yml` instead:
+
+```yaml
+environment:
+  TEST_HUB_DATABASE_URL: "postgresql://test_hub@db.internal:5432/test_hub"
+  PGPASSWORD: "${TEST_HUB_DB_PASSWORD}"
+```
+
+### Without Docker
+
+```shell
+$ pip install "test-hub[postgres]"          # adds the psycopg driver
+$ export TEST_HUB_DATABASE_URL='postgresql://test_hub:PASSWORD@db.internal:5432/test_hub'
+$ test-hub db check                         # which database, and is it ready?
+$ test-hub serve
+```
+
+Test Hub needs one database and a role that owns it; it creates and migrates its
+own tables:
+
+```sql
+CREATE ROLE test_hub LOGIN PASSWORD '…';
+CREATE DATABASE test_hub OWNER test_hub;
+```
+
+A few things worth knowing:
+
+- **`postgres://` and `postgresql://` both work.** They are given the psycopg 3
+  driver automatically; a URL that names another driver (`postgresql+psycopg2://`)
+  keeps it.
+- **The password** can sit in the URL (percent-encode `@`, `:` and `/`), or be
+  left out of it and supplied the standard libpq ways — `PGPASSWORD` or a
+  `~/.pgpass` entry. `sslmode`, `connect_timeout` and other libpq options go in
+  the URL's query string: `…/test_hub?sslmode=require`.
+- **`--database-url`** on `serve`, `ingest`, `demo`, `prune` and `db` chooses the
+  database for one command. It refuses a URL with a password in it, for the same
+  reason tokens are never taken as arguments: a command line is visible to every
+  user in `ps` and stays in shell history.
+- **Connections** are pooled: `TEST_HUB_DATABASE_POOL_SIZE` (10) kept open, plus
+  up to `TEST_HUB_DATABASE_MAX_OVERFLOW` (20) under a burst. Each Test Hub
+  process can therefore hold 30 connections; check that against the server's
+  `max_connections`.
+- **Migrations** take an advisory lock, so two instances starting at once against
+  an empty database do not both try to create it; the second waits and finds the
+  schema at head.
+- **Artifacts still live on the filesystem**, under `TEST_HUB_DATA_DIR`. Moving
+  the database to PostgreSQL does not make the data volume optional, or remove it
+  from the backup plan.
+- **Still one Test Hub process.** PostgreSQL removes the single-writer limit, not
+  the in-process live-update bus: two API processes behind a load balancer would
+  each hold their own bus, and dashboards would miss each other's events. See
+  [scaling.md](scaling.md#the-bus).
+- **Switching an existing install starts empty.** Runs already in SQLite are not
+  copied to PostgreSQL. Keep the old instance running for its history until it
+  ages out, and point CI at the new one.
+
+If anything is wrong, Test Hub says so in one line and exits `78` (`EX_CONFIG`)
+before it binds a port: an unsupported backend, a missing driver
+(`pip install 'test-hub[postgres]'`), or a server it cannot reach — with the
+reason the server gave, and the URL with its password masked.
+
 ## Persistent data
 
 Everything Test Hub keeps lives under `TEST_HUB_DATA_DIR` (`/data` in the image):
@@ -221,6 +326,9 @@ buys you nothing unless the blobs need different storage.
 
 **The database is three files, not one.** That is the single most important
 sentence on this page for anyone writing a backup script.
+
+On PostgreSQL the three `test-hub.db*` files are not there — the database lives
+on the server — but `artifacts/` is, and it still needs backing up.
 
 ## Backups
 
@@ -281,6 +389,23 @@ artifact tree, and start. If the artifact tree is older than the database, the
 rows will reference blobs that are not there and downloads will 404 — the run
 data itself is unaffected. Restore artifacts first if you are doing them
 separately.
+
+### On PostgreSQL
+
+`pg_dump` takes a consistent snapshot of a live database, so there is no
+three-file trap — but the artifacts are still on the filesystem and still need
+the same `rsync` or tarball as above.
+
+```shell
+# The PostgreSQL compose deployment, with everything running.
+$ docker compose -f docker-compose.yml -f docker-compose.postgres.yml exec -T postgres \
+    pg_dump -U test_hub -Fc test_hub > test-hub-$(date +%F).dump
+$ docker run --rm -v test-hub-data:/data -v "$PWD:/backup" busybox \
+    tar czf /backup/test-hub-artifacts-$(date +%F).tgz /data/artifacts
+```
+
+Restore with `pg_restore --clean --if-exists -d test_hub` into a stopped Test
+Hub, artifacts first, as above.
 
 ## Retention
 
@@ -527,12 +652,20 @@ resolves the script location from inside the installed package rather than from
 `alembic.ini`, so this works from a wheel where the repo's ini file does not
 exist.
 
-Check what a database is stamped with:
+Check what a database is stamped with — SQLite or PostgreSQL alike:
 
 ```shell
-$ sqlite3 /var/lib/test-hub/test-hub.db 'select version_num from alembic_version;'
-0001_initial
+$ test-hub db check
+  database  sqlite+pysqlite:////var/lib/test-hub/test-hub.db
+  server    SQLite 3.46.1
+  schema    0003_postgresql_bigint (up to date)
+  ready
 ```
+
+It exits `1` when migrations are pending, so a deploy script can tell. To run
+them as a deliberate step of their own rather than on the next start, use
+`test-hub db upgrade`; it is safe to run repeatedly, and on PostgreSQL from two
+places at once.
 
 The upgrade procedure that respects the fact that migrations are one-way:
 
@@ -564,9 +697,11 @@ environment beats `.env`.
 | `TEST_HUB_PORT` | `8000` | |
 | `TEST_HUB_ROOT_PATH` | `""` | Set when behind a proxy on a sub-path. |
 | `TEST_HUB_DATA_DIR` | platform user-data dir | `/data` in the image. |
-| `TEST_HUB_DATABASE_URL` | SQLite inside `data_dir` | The interfaces support other backends; only SQLite ships. |
+| `TEST_HUB_DATABASE_URL` | SQLite inside `data_dir` | `postgresql://user:password@host:5432/dbname` selects PostgreSQL (needs `pip install "test-hub[postgres]"`; the image has it). See [Choosing a database](#choosing-a-database). |
+| `TEST_HUB_DATABASE_POOL_SIZE` | `10` | PostgreSQL: connections kept open. Ignored for SQLite. |
+| `TEST_HUB_DATABASE_MAX_OVERFLOW` | `20` | PostgreSQL: extra connections under a burst, on top of the pool. |
 | `TEST_HUB_ARTIFACTS_DIR` | `data_dir/artifacts` | |
-| `TEST_HUB_SQLITE_BUSY_TIMEOUT_MS` | `10000` | How long a writer waits behind another writer. |
+| `TEST_HUB_SQLITE_BUSY_TIMEOUT_MS` | `10000` | SQLite: how long a writer waits behind another writer. |
 | `TEST_HUB_API_TOKEN_HASHES` | — | Comma-separated, or a JSON array. The preferred form. |
 | `TEST_HUB_API_TOKENS` | — | Plaintext; hashed at startup. Use the hashes instead. |
 | `TEST_HUB_ADMIN_TOKEN_HASHES` | — | Tokens allowed to **delete** data. A separate list on purpose — see [Retention](#retention). |

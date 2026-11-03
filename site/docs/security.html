@@ -535,7 +535,8 @@ password=***REDACTED***</code></pre>
 <p><code>DEFAULT_REDACTION_PATTERNS</code> in <code>src/test_hub/config.py</code> covers
 <code>Bearer</code> and <code>Basic</code> credentials, PEM private-key blocks, database URLs
 with an inline password (<code>postgres</code>, <code>postgresql</code>, <code>mysql</code>,
-<code>mongodb</code>, <code>redis</code>, <code>amqp</code>), AWS access key ids, GitHub
+<code>mongodb</code>, <code>redis</code>, <code>amqp</code>, with or without a SQLAlchemy driver
+suffix such as <code>postgresql+psycopg://</code>), AWS access key ids, GitHub
 <code>ghp_</code> tokens, Slack <code>xox*</code> tokens, JWTs, and a generic
 <code>key=value</code> rule for <code>api_key</code>, <code>apikey</code>,
 <code>access_key</code>, <code>token</code>, <code>secret</code>, <code>password</code>,

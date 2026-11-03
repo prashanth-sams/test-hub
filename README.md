@@ -36,7 +36,7 @@ publish to it, and `curl` is a first-class client.
 | Secure by default | Loopback-only binding, a refusal to serve an unauthenticated public interface, hashed API tokens, XML parsed with entities disabled, size limits, content-addressed artifacts, a restrictive CSP, and configurable secret redaction over everything it stores. |
 | No Node, no CDN | The frontend is hand-written CSS and JavaScript shipped inside the wheel. It loads nothing from the internet, so an air-gapped install renders like a connected one and the CSP can be `default-src 'none'`. |
 | Retention you control | Clear runs past a cutoff — `12h`, `90d`, `6m`, an absolute date — along with everything under them and the artifact blobs left unreferenced. From the dashboard's Settings page, which previews exactly what would go before anything does, or with `test-hub prune`. A per-project floor keeps a dormant project from vanishing, and deleting needs an administrator token that is deliberately separate from the one CI publishes with. |
-| Runs anywhere | `pip install test-hub`, SQLite, one process. A Dockerfile and a Compose file with a persistent volume are included for when you want it to be somebody else's laptop. |
+| Runs anywhere | `pip install test-hub`, SQLite, one process. When many CI jobs publish at once, point it at PostgreSQL instead with one environment variable. A Dockerfile and a Compose file with a persistent volume are included — plus a PostgreSQL override — for when you want it to be somebody else's laptop. |
 
 ## A look at the dashboard
 
@@ -132,6 +132,34 @@ $ test-hub publish results.xml \
 The token is read from the environment, never from a command-line argument — an
 argument is visible in `ps` to every user on the machine and lands in shell
 history and CI logs.
+
+### Choose the database: SQLite or PostgreSQL
+
+SQLite is the default and needs nothing installed. It admits one writer at a
+time, so when many CI jobs publish at once they queue; PostgreSQL only makes
+writes to the *same* run take turns. Choosing it is one environment variable:
+
+```shell
+$ pip install "test-hub[postgres]"
+$ export TEST_HUB_DATABASE_URL='postgresql://test_hub:PASSWORD@db.internal:5432/test_hub'
+$ test-hub db check
+  database  postgresql+psycopg://test_hub:***@db.internal:5432/test_hub
+  server    PostgreSQL 16.15
+  schema    empty
+  run `test-hub db upgrade` (serve also does it on start)
+$ test-hub serve
+```
+
+With Docker, layer the PostgreSQL override on the Compose file — the image
+already has the driver:
+
+```shell
+$ echo "TEST_HUB_POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> .env
+$ docker compose -f docker-compose.yml -f docker-compose.postgres.yml up -d
+```
+
+[Choosing a database](docs/deployment.md#choosing-a-database) covers passwords,
+connection pooling, backups and what does not change.
 
 ## Publishing without Python
 
@@ -245,8 +273,8 @@ Full detail and the threat model are in [SECURITY.md](SECURITY.md) and
 | [REST API](docs/api.md) | Endpoints with `curl` examples |
 | [Adapter guide](docs/adapters.md) | Writing and publishing a format plugin |
 | [Security](docs/security.md) | Threat model and hardening |
-| [Deployment](docs/deployment.md) | Docker, Compose, reverse proxies, backups |
-| [Scaling](docs/scaling.md) | Where PostgreSQL, S3 and a queue would fit |
+| [Deployment](docs/deployment.md) | Docker, Compose, choosing SQLite or PostgreSQL, reverse proxies, backups |
+| [Scaling](docs/scaling.md) | Where the ceilings are, what PostgreSQL changes, where S3 and a queue would fit |
 | [Contributing](CONTRIBUTING.md) | Setup, layering rules, release process |
 
 ## Not in the first release
