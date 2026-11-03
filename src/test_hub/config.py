@@ -13,9 +13,10 @@ silent path to an open, unauthenticated Test Hub on a network.
 The database is chosen the same way. Leave ``TEST_HUB_DATABASE_URL`` unset and
 Test Hub keeps a SQLite file in the data directory, which needs nothing
 installed. Point it at ``postgresql://user:password@host:5432/dbname`` and it uses
-PostgreSQL instead, which is the better choice once many CI jobs publish at the
-same time: SQLite lets one writer in at a time, PostgreSQL only serializes
-writers that touch the same run.
+PostgreSQL instead: SQLite lets one writer in at a time, PostgreSQL only
+serializes writers that touch the same run. That buys a database server's
+operations and the groundwork for more than one process — not a faster single
+process, which is CPU-bound either way (``docs/scaling.md``).
 """
 
 from __future__ import annotations

@@ -97,6 +97,14 @@ runs `VACUUM (ANALYZE)` on Test Hub's own tables in autocommit.
 
 - Writers to different runs proceed in parallel; writers to one run queue, as
   every writer did on SQLite. Readers never block writers on either backend.
+- **One Test Hub process imports faster on SQLite than on PostgreSQL.**
+  Measured, a 40-import burst took 1.6 s on SQLite and 2.7 s on PostgreSQL with
+  the server on cores of its own ([scaling.md](../scaling.md#sqlite-or-postgresql)).
+  Imports are CPU-bound in the process, and PostgreSQL adds a round trip per
+  statement; the lock this ADR replaces was never the binding limit for one
+  process. PostgreSQL is chosen for its operations and as the database half of
+  scaling out — not as a speed-up on its own. Measuring this also found the fold
+  issuing ~270 statements per 50-test import, now ~20, which helped both.
 - The suite runs unchanged against PostgreSQL when `TEST_HUB_TEST_DATABASE_URL`
   is set, one schema per test. One SQLite-only test — the database-wide write lock
   — is skipped there, and PostgreSQL-only tests cover what replaced it.

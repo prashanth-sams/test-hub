@@ -36,7 +36,7 @@ publish to it, and `curl` is a first-class client.
 | Secure by default | Loopback-only binding, a refusal to serve an unauthenticated public interface, hashed API tokens, XML parsed with entities disabled, size limits, content-addressed artifacts, a restrictive CSP, and configurable secret redaction over everything it stores. |
 | No Node, no CDN | The frontend is hand-written CSS and JavaScript shipped inside the wheel. It loads nothing from the internet, so an air-gapped install renders like a connected one and the CSP can be `default-src 'none'`. |
 | Retention you control | Clear runs past a cutoff — `12h`, `90d`, `6m`, an absolute date — along with everything under them and the artifact blobs left unreferenced. From the dashboard's Settings page, which previews exactly what would go before anything does, or with `test-hub prune`. A per-project floor keeps a dormant project from vanishing, and deleting needs an administrator token that is deliberately separate from the one CI publishes with. |
-| Runs anywhere | `pip install test-hub`, SQLite, one process. When many CI jobs publish at once, point it at PostgreSQL instead with one environment variable. A Dockerfile and a Compose file with a persistent volume are included — plus a PostgreSQL override — for when you want it to be somebody else's laptop. |
+| Runs anywhere | `pip install test-hub`, SQLite, one process. Point it at PostgreSQL instead with one environment variable when you want the database on a server. A Dockerfile and a Compose file with a persistent volume are included — plus a PostgreSQL override — for when you want it to be somebody else's laptop. |
 
 ## A look at the dashboard
 
@@ -135,9 +135,13 @@ history and CI logs.
 
 ### Choose the database: SQLite or PostgreSQL
 
-SQLite is the default and needs nothing installed. It admits one writer at a
-time, so when many CI jobs publish at once they queue; PostgreSQL only makes
-writes to the *same* run take turns. Choosing it is one environment variable:
+SQLite is the default, needs nothing installed, and is the faster of the two for
+a single Test Hub. PostgreSQL drops SQLite's one-writer-at-a-time lock — only
+writes to the *same* run take turns — and brings a database server's
+operations: `pg_dump` backups, replication, a database other tools can query. It
+does not make one Test Hub process import faster; that process's CPU is the
+limit either way ([measured](docs/scaling.md#sqlite-or-postgresql)). Choosing it
+is one environment variable:
 
 ```shell
 $ pip install "test-hub[postgres]"

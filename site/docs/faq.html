@@ -202,9 +202,11 @@ has the driver — and Test Hub uses PostgreSQL instead of SQLite. Nothing else 
 <a href="deployment.html#database">Choosing a database</a> has the Compose override and the
 details.</p>
 
-<p>SQLite remains the default because <code>pip install</code> and run, with no services, is
-worth a lot. Switch when many CI jobs publish at the same time: SQLite admits one writer at a
-time, while PostgreSQL only makes writes to the same run take turns.</p>
+<p>SQLite remains the default, and for one Test Hub it is also the faster of the two:
+imports are bound by the process's CPU, and SQLite answers in-process. Choose PostgreSQL for
+what a database server gives you — managed backups, replication, a database other tools can
+query — and as the groundwork for running more than one Test Hub process, which is where
+its concurrent writers would pay.</p>
 
 <h2 id="no-node">Why is there no Node, no bundler, no framework?</h2>
 

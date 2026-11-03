@@ -119,11 +119,13 @@ the PostgreSQL stack and a database restart that Test Hub recovered from by itse
 
 <h2 id="database">Choosing a database</h2>
 
-<p>SQLite is the default and needs nothing: a file in the data directory. It lets one
-writer in at a time, so CI jobs that finish together queue behind each other. PostgreSQL
-lets writes to different runs proceed in parallel and only makes writes to the
-<em>same</em> run take turns. Nothing else changes — the API, the CLI, the dashboard and the
-adapters are identical — and the schema is created on first start either way.</p>
+<p>SQLite is the default and needs nothing: a file in the data directory. For one Test Hub
+it is also the faster of the two, because imports are bound by the process's CPU and SQLite
+answers in-process. PostgreSQL drops SQLite's one-writer-at-a-time lock — only writes to the
+<em>same</em> run take turns — and brings a database server's operations: <code>pg_dump</code>
+backups, replication, a database other tools can query. Nothing else changes — the API, the
+CLI, the dashboard and the adapters are identical — and the schema is created on first start
+either way.</p>
 
 <div class="tablewrap"><table>
   <thead><tr><th></th><th>SQLite (default)</th><th>PostgreSQL</th></tr></thead>
@@ -135,6 +137,8 @@ adapters are identical — and the schema is created on first start either way.<
     <td>Never block each other (MVCC)</td></tr>
     <tr><td>Backups</td><td>SQLite's <code>.backup</code>, plus artifacts</td>
     <td><code>pg_dump</code>, plus artifacts</td></tr>
+    <tr><td>Imports, one process</td><td>Faster — in-process</td>
+    <td>Slower — a round trip per statement, and the CPU is the limit either way</td></tr>
   </tbody>
 </table></div>
 
@@ -298,9 +302,10 @@ so fifty shards uploading the same screenshot store one copy.</p>
 <p>The real ceiling is write throughput: SQLite serializes writers, so concurrent
 publishers queue. That is correct rather than fast, and it is documented rather than
 hidden — read transactions were deliberately made not to take the write lock so that a
-long read or a dashboard poll cannot stall a publisher. When the queue becomes the
-problem, <a href="#database">switch to PostgreSQL</a>: writes to different runs then
-proceed in parallel. The next ceiling after that is the one process itself.</p>
+long read or a dashboard poll cannot stall a publisher. <a href="#database">PostgreSQL</a>
+removes that lock, but measured, one process imports no faster on it: the process's own CPU
+is the limit behind the lock, on either backend. Going past it means more than one process,
+which also needs the live-update bus to be shared.</p>
 
 <h2 id="packaging-name">Changing the distribution name</h2>
 

@@ -13,9 +13,8 @@ add, while latency grows without bound. The read path is no longer limited by
 SQLite at all — it is limited by one Python process.
 
 The measurements below are SQLite's, the default. PostgreSQL can now take its
-place for exactly the write ceiling they show — see
-[PostgreSQL](#postgresql-behind-runrepository-and-eventrepository) below and
-[deployment.md](deployment.md#choosing-a-database).
+place; what that changes, and what it does not, is
+[measured below](#sqlite-or-postgresql).
 
 ## The measurements
 
@@ -68,8 +67,9 @@ Correct, not fast.
 The practical read: **a single Test Hub comfortably absorbs a few thousand test
 results a second in bursts**, which is a lot of CI. What it will not do is stay
 responsive when fifty pipelines finish at the same instant — they will all
-succeed, and the last one will wait seconds. That burst is what the PostgreSQL
-backend is for: there, only writes to the *same* run queue.
+succeed, and the last one will wait seconds. PostgreSQL removes the lock behind
+that queue, but not the ceiling behind the lock — see
+[SQLite or PostgreSQL](#sqlite-or-postgresql).
 
 ### Reads are no longer SQLite-bound
 
@@ -109,6 +109,46 @@ grows with your data.
 
 If your dashboard feels slow before your imports do, this is why, and the fix is
 not PostgreSQL.
+
+## SQLite or PostgreSQL
+
+<a id="sqlite-or-postgresql"></a>
+
+Measured after PostgreSQL support landed, on different hardware from the tables
+above, so compare the rows with each other and not with those tables.
+
+**Hardware and versions.** A 4-core cloud VM, Python 3.13, SQLite 3.53.1,
+PostgreSQL 16.15 on the same VM. `test-hub serve` with
+`TEST_HUB_STORE_RAW_REPORTS=false`; 40 clients `POST /api/v1/imports` a 50-test
+JUnit report at the same instant, after a warm-up of 8; median of 3 rounds.
+
+| | 40 concurrent imports | p50 latency |
+|---|---:|---:|
+| SQLite | 1.6 s | 0.8 s |
+| PostgreSQL, sharing all 4 cores | 3.5 s | 2.7 s |
+| PostgreSQL on 2 cores of its own, Test Hub and clients on the other 2 | 2.7 s | 2.1 s |
+
+One import at a time, in process: SQLite 17 ms, PostgreSQL 28 ms — the same
+~20 statements each.
+
+**SQLite is faster for one Test Hub process, and that is structural.** An import
+is CPU-bound in the Python process: before the fold stopped issuing a statement
+per test, one import spent 118 ms of its 136 ms on PostgreSQL in Test Hub's own
+CPU, not waiting on the server. SQLite executes in-process; PostgreSQL adds a
+socket round trip and driver work to every statement. Removing the write lock
+lets PostgreSQL writers overlap, but they overlap on one interpreter, which runs
+Python one thread at a time — so the lock was never the binding limit for a
+single process. The process is.
+
+**What PostgreSQL is for, then.** A database server's operations: `pg_dump` and
+point-in-time recovery, replication, a database other tools and people can
+query, storage that is not a file on the API host's disk. And it is the database
+half of running more than one Test Hub process — which is where its concurrent
+writers would pay — once [the bus](#the-bus) below is shared too.
+
+For scale, the same change that made this comparison fair — an import costing
+~20 statements instead of ~270 — also halved both rows: before it, the burst took
+3.3 s on SQLite and 8.2 s on PostgreSQL.
 
 ## The bus
 
@@ -150,8 +190,10 @@ the following more than a comment.
 ([deployment.md](deployment.md#choosing-a-database)); SQLite stays the default.
 [ADR-0004](adr/0004-postgresql.md) records the decisions below.
 
-**When.** Sustained concurrent publishing — the queue measured above — or a data
-set where `overview` is slow because of row counts rather than serialization.
+**When.** You want the database on a server — its backups, replication and
+tooling — or are laying the ground for more than one Test Hub process. Not for
+import speed within one process: [SQLite or PostgreSQL](#sqlite-or-postgresql)
+measures why.
 
 **What did not change.** The wire contract (`test_hub.domain.models`, Pydantic,
 `schema_version 1`), the event contract, every route, the CLI, the dashboard, the
@@ -190,7 +232,8 @@ hold, and why.
   key is only useful for the minutes a publisher might retry in.
 
 **What you get.** Writers to different runs actually concurrent, and a database
-other tools can query. **What you still pay.** It is still one Test Hub process:
+other tools can query — but one process does not import faster for it, as
+[measured](#sqlite-or-postgresql). **What you still pay.** It is still one Test Hub process:
 the live-update bus is in-process, so PostgreSQL does not make a second API
 worker safe — [the bus](#the-bus) is the next ceiling, and behind it the CPU of
 that one process. And `pip install test-hub && test-hub serve` stops being the

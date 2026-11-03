@@ -24,9 +24,12 @@ one of those is listed under **Changed** or **Removed** with the migration.
 - **PostgreSQL, as a choice beside SQLite.** SQLite is still the default and
   still needs nothing installed. Set `TEST_HUB_DATABASE_URL=postgresql://…`
   (after `pip install "test-hub[postgres]"`; the Docker image already has the
-  driver) and Test Hub uses PostgreSQL instead — the better choice once many CI
-  jobs publish at the same time, because SQLite admits one writer at a time
-  while PostgreSQL only makes writes to the *same* run take turns. A per-run
+  driver) and Test Hub uses PostgreSQL instead. SQLite's database-wide write
+  lock goes — only writes to the *same* run take turns — though one Test Hub
+  process imports no faster for it: its CPU is the limit on either backend, and
+  SQLite answers in-process ([measured](docs/scaling.md#sqlite-or-postgresql)).
+  Choose it for a database server's operations, and as the database half of
+  running more than one Test Hub process later. A per-run
   advisory lock keeps the fold exactly as correct as SQLite's write lock did;
   the whole test suite runs against PostgreSQL with `TEST_HUB_TEST_DATABASE_URL`
   set. Design and trade-offs are in

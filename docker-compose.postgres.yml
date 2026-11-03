@@ -9,8 +9,10 @@
 #
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.postgres.yml
 #
-# Why: SQLite admits one writer at a time, so CI jobs publishing at once queue
-# behind each other. PostgreSQL only serializes writes to the *same* run.
+# Why: a database server's operations — pg_dump backups, replication, a
+# database other tools can query. PostgreSQL also drops SQLite's one-writer-at-
+# a-time lock (only writes to the same run take turns), but one Test Hub
+# process does not import faster for it: docs/scaling.md has the measurement.
 #
 # The image is the same one either way; it ships the PostgreSQL driver. Only the
 # database moves: artifacts (screenshots, logs, raw reports) still live on the

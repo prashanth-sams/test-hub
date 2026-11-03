@@ -13,9 +13,9 @@ Three decisions, in this order:
    refuses to start otherwise — see [security.md](security.md#binding).
 3. **What terminates TLS?** Test Hub speaks plain HTTP and always will. A bearer
    token on plain HTTP across a network is a token you have given away.
-4. **Which database?** SQLite, the default, needs nothing installed. PostgreSQL
-   is the better choice once many CI jobs publish at the same time — see
-   [Choosing a database](#choosing-a-database).
+4. **Which database?** SQLite, the default, needs nothing installed and is the
+   faster of the two for one instance. PostgreSQL is for when you want the
+   database on a server — see [Choosing a database](#choosing-a-database).
 
 ## Docker
 
@@ -213,7 +213,8 @@ no `--workers` flag on `test-hub serve` for this reason.
 | Concurrent publishers | One write at a time, database-wide. The rest queue (`TEST_HUB_SQLITE_BUSY_TIMEOUT_MS`). | Writes to different runs run in parallel; only writes to the **same** run take turns. |
 | Readers vs writers | Never block each other (WAL). | Never block each other (MVCC). |
 | Backups | Copy three files the right way — [Backups](#backups). | `pg_dump`, plus the artifacts directory. |
-| Choose it when | A team, a handful of pipelines, a laptop. | CI traffic where jobs finish together and imports start to queue. |
+| Imports, one Test Hub process | Faster: no round trip per statement. | Slower — the process's CPU is the limit either way, and each statement crosses a socket. [Measured](scaling.md#sqlite-or-postgresql). |
+| Choose it when | One Test Hub instance, which is what Test Hub runs as today. | You want the database on a server: managed backups, replication, other tools querying it, storage that is not a local disk. |
 
 **SQLite** needs no configuration at all: leave `TEST_HUB_DATABASE_URL` unset.
 
