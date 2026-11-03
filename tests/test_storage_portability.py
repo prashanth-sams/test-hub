@@ -161,6 +161,135 @@ def test_runs_that_never_started_sort_after_the_ones_that_did(context: Any) -> N
     assert [run.id for run in list_runs(context)] == [started.run_id, queued.run_id]
 
 
+# ------------------------------------------------------------ the fold
+
+
+def test_a_new_run_folds_a_whole_life_in_one_batch(context: Any, events: EventFactory) -> None:
+    """Start, fail, retry and pass — one batch, for a run that did not exist.
+
+    Everything this batch creates is found again through the batch's own state,
+    not through a query (the run is brand new, so there is nothing older to
+    find). This pins that the shortcut still sees every row it made.
+    """
+    from test_hub.domain.events import TestStartedData
+    from test_hub.domain.identity import suite_id as derive_suite_id
+    from test_hub.domain.identity import test_identity as derive_test_id
+
+    suite_path, name = "tests/test_core.py", "test_flaky"
+    test_id = derive_test_id(project=events.project_key, suite_path=suite_path, test_name=name)
+    started = make_event(
+        EventType.TEST_STARTED,
+        run_id=events.run_id,
+        workspace_id=events.workspace_id,
+        sequence=100,
+        data=TestStartedData(
+            test_id=test_id,
+            suite_id=derive_suite_id(project=events.project_key, suite_path=suite_path),
+            name=name,
+            suite_path=suite_path,
+            started_at=events.start,
+        ),
+    )
+    batch = [
+        events.queued(),
+        events.started(),
+        events.suite(),
+        started,
+        events.test(name, TestStatus.FAILED, attempt=1),
+        events.test(name, TestStatus.PASSED, attempt=2),
+        events.test("test_steady"),
+        events.finished(),
+    ]
+    apply(context, sorted(batch, key=lambda event: event.sequence))
+
+    with context.uow_factory(read_only=True) as uow:
+        detail = uow.runs.get_run_detail(events.run_id)
+    assert detail is not None
+    flaky = next(test for test in detail.tests if test.name == name)
+    assert [attempt.attempt_number for attempt in flaky.attempts] == [1, 2]
+    assert flaky.flaky is True
+    assert detail.run.counts.total == 2
+    assert detail.run.counts.flaky == 1
+
+
+def test_the_same_artifact_announced_twice_in_one_batch_is_one_row(
+    context: Any, events: EventFactory
+) -> None:
+    artifact_id = uuid.uuid4()
+
+    def announce(sequence: int, name: str) -> Any:
+        return make_event(
+            EventType.ARTIFACT_PUBLISHED,
+            run_id=events.run_id,
+            workspace_id=events.workspace_id,
+            sequence=sequence,
+            data=ArtifactPublishedData(
+                artifact_id=artifact_id, name=name, size_bytes=10, sha256="b" * 64
+            ),
+        )
+
+    apply(context, [events.queued(), announce(50, "first.png"), announce(51, "renamed.png")])
+
+    with context.uow_factory(read_only=True) as uow:
+        artifacts = uow.artifacts.list_for_run(events.run_id)
+    assert [(artifact.id, artifact.name) for artifact in artifacts] == [
+        (artifact_id, "renamed.png")
+    ]
+
+
+def test_an_import_does_not_cost_a_statement_per_test(context: Any) -> None:
+    """A 50-test import once issued ~270 SQL statements — five per test, each
+    autoflushing the last test's rows one INSERT at a time. A round trip each is
+    what made PostgreSQL slower than SQLite. Counted, not timed, so this is
+    deterministic; the bound leaves room without letting the old shape back."""
+    import sqlalchemy as sa
+
+    cases = "".join(
+        f'<testcase classname="pkg.Suite{i % 5}" name="test_{i}" time="0.01"/>' for i in range(50)
+    )
+    report = f'<?xml version="1.0"?><testsuite name="s" tests="50">{cases}</testsuite>'.encode()
+    statements: list[str] = []
+
+    def count(*args: Any, **kwargs: Any) -> None:
+        statements.append(args[2])
+
+    sa.event.listen(context.database.engine, "before_cursor_execute", count)
+    try:
+        result = ImportService(context).import_stream(
+            io.BytesIO(report), ImportRequest(project_key="counted", filename="r.xml")
+        )
+    finally:
+        sa.event.remove(context.database.engine, "before_cursor_execute", count)
+
+    assert result.counts.total == 50
+    assert len(statements) <= 40, f"{len(statements)} statements for one 50-test import"
+
+
+def test_a_batch_into_an_existing_run_batches_its_inserts(
+    context: Any, events: EventFactory
+) -> None:
+    """A run that already exists still has to be searched, one lookup per test.
+    What must not come back is each lookup autoflushing the previous test's rows
+    as single INSERTs: 50 tests cost 258 statements that way and 111 without."""
+    import sqlalchemy as sa
+
+    apply(context, [events.queued(), events.started(), events.suite()])
+    batch = [events.test(f"test_{i}") for i in range(50)]
+    statements: list[str] = []
+
+    def count(*args: Any, **kwargs: Any) -> None:
+        statements.append(args[2])
+
+    sa.event.listen(context.database.engine, "before_cursor_execute", count)
+    try:
+        apply(context, batch)
+    finally:
+        sa.event.remove(context.database.engine, "before_cursor_execute", count)
+
+    assert len(list_runs(context)) == 1
+    assert len(statements) <= 160, f"{len(statements)} statements for 50 tests"
+
+
 # ------------------------------------------------------------ concurrency
 
 

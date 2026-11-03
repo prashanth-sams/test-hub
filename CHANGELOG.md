@@ -172,6 +172,13 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Changed
 
+- **An import costs a handful of SQL statements, not five per test.** The fold
+  looked every test and attempt up with its own query — even in a run the same
+  batch had just created, which cannot have any — and each lookup flushed the
+  previous test's rows as single INSERTs. A 50-test import went from ~270
+  statements to ~20: about 3× faster on SQLite and 5× on PostgreSQL, and a burst
+  of concurrent imports finishes in roughly half the time on either. Two tests
+  count the statements so the old shape cannot come back unnoticed.
 - New migration `0003_postgresql_bigint` widens every publisher-supplied integer
   (sequences, durations, sizes, attempt numbers) to `BIGINT` on PostgreSQL. It
   changes nothing on SQLite, whose `INTEGER` is already 64-bit.

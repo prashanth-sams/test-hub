@@ -1223,29 +1223,37 @@ class SqlEventRepository:
 
         state = _BatchState(run_id=run_id)
         received = utcnow()
-        for event in ordered:
-            key = (event.source, event.id)
-            if key in already or key in seen:
-                state.ignored += 1
-                continue
-            seen.add(key)
-            self._session.add(
-                EventRow(
-                    id=uuid.uuid4(),
-                    workspace_id=event.workspaceid,
-                    run_id=event.runid,
-                    source=event.source,
-                    event_id=event.id,
-                    type=str(event.type),
-                    time=event.time,
-                    sequence=event.sequence,
-                    data=event.data,
-                    received_at=received,
+        # No autoflush while folding. Every row this batch creates is found
+        # again through `state`, never through a query, so nothing here needs
+        # the pending rows in the database early — and with autoflush on, each
+        # lookup pushed the previous event's rows out one INSERT at a time: a
+        # 50-test import cost ~270 statements instead of ~25. They now go in
+        # batches at the flush in `_refold`. The few places that genuinely need
+        # earlier rows to be visible flush explicitly.
+        with self._session.no_autoflush:
+            for event in ordered:
+                key = (event.source, event.id)
+                if key in already or key in seen:
+                    state.ignored += 1
+                    continue
+                seen.add(key)
+                self._session.add(
+                    EventRow(
+                        id=uuid.uuid4(),
+                        workspace_id=event.workspaceid,
+                        run_id=event.runid,
+                        source=event.source,
+                        event_id=event.id,
+                        type=str(event.type),
+                        time=event.time,
+                        sequence=event.sequence,
+                        data=event.data,
+                        received_at=received,
+                    )
                 )
-            )
-            self._dispatch(event, state)
-            state.applied += 1
-            state.emitted.append(event)
+                self._dispatch(event, state)
+                state.applied += 1
+                state.emitted.append(event)
 
         run = state.run or self._session.get(RunRow, run_id)
         if run is not None:
@@ -1537,7 +1545,10 @@ class SqlEventRepository:
 
     def _suite(self, run: RunRow, suite_id: uuid.UUID, state: _BatchState) -> SuiteRow | None:
         cached = state.suites.get(suite_id)
-        if cached is not None:
+        if cached is not None or state.created_run:
+            # A run this batch created has no older rows to find: suites, tests
+            # and attempts all carry a foreign key to it, and it did not exist
+            # until this transaction. Everything it has is in `state`.
             return cached
         row = self._session.execute(
             select(SuiteRow).where(SuiteRow.run_id == run.id, SuiteRow.suite_id == suite_id)
@@ -1641,7 +1652,7 @@ class SqlEventRepository:
             )
 
         row = state.cases.get(test_id)
-        if row is None:
+        if row is None and not state.created_run:
             row = self._session.execute(
                 select(TestCaseRow).where(
                     TestCaseRow.run_id == run.id, TestCaseRow.test_id == test_id
@@ -1689,7 +1700,7 @@ class SqlEventRepository:
         self, run: RunRow, state: _BatchState, test_id: uuid.UUID, number: int
     ) -> AttemptRow | None:
         cached = state.attempts.get((test_id, number))
-        if cached is not None:
+        if cached is not None or state.created_run:
             return cached
         row = self._session.execute(
             select(AttemptRow).where(
@@ -1812,6 +1823,10 @@ class SqlEventRepository:
     def _on_artifact_published(self, event: DomainEvent, state: _BatchState) -> None:
         data = ArtifactPublishedData.model_validate(event.data)
         run = self._ensure_run(event, state)
+        # The one lookup that may need a row pending in this very batch — the
+        # same artifact announced twice — so it flushes instead of relying on
+        # autoflush, which apply_events turns off. Artifact events are rare.
+        self._session.flush()
         row = self._session.get(ArtifactRow, data.artifact_id)
         if row is None:
             row = ArtifactRow(
