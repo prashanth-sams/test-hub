@@ -13,12 +13,16 @@
 
 name: CI
 
+# TEMPORARILY DISABLED: CI no longer runs automatically on pushes or pull
+# requests. It can still be started by hand from the Actions tab ("Run
+# workflow"). To turn it back on, uncomment the `push` and `pull_request`
+# triggers below.
 on:
-  push:
-    # Naming `branches` already means a tag push does not match this event, so a
-    # release tag runs release.yml and only release.yml.
-    branches: [main]
-  pull_request:
+  # push:
+  #   # Naming `branches` already means a tag push does not match this event, so a
+  #   # release tag runs release.yml and only release.yml.
+  #   branches: [main]
+  # pull_request:
   workflow_dispatch:
 
 # Read-only by default. No job here needs to write to the repository, and a

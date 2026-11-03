@@ -89,7 +89,12 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # A job-level `permissions` block replaces the workflow-level one rather than
+    # adding to it, so `contents: read` has to be repeated here. Without it the
+    # token cannot read this (private) repository and actions/checkout fails
+    # with "Repository not found" before anything is built or deployed.
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
