@@ -54,6 +54,7 @@ __all__ = [
     "ArtifactRow",
     "AttemptRow",
     "Base",
+    "Counter",
     "EventRow",
     "IdempotencyKeyRow",
     "ProjectRow",
@@ -93,6 +94,14 @@ NAMING_CONVENTION = {
 #: always six fractional digits. Changing it invalidates the ordering guarantee
 #: described in the module docstring.
 _ISO_UTC = "%Y-%m-%dT%H:%M:%S.%f+00:00"
+
+#: Every integer a publisher supplies — sequences, durations, sizes, attempt
+#: numbers — is validated ``ge=0`` and nothing more, so it is as wide as the
+#: database lets it be. On SQLite ``INTEGER`` already is 64-bit; on PostgreSQL
+#: it is 32-bit, and a publisher that numbers events by epoch milliseconds would
+#: fail every import there. ``BIGINT`` on PostgreSQL (migration 0003), plain
+#: ``INTEGER`` on SQLite so the two schemas compare equal to their migrations.
+Counter = sa.BigInteger().with_variant(sa.Integer(), "sqlite")
 
 _SLUG_ALLOWED = re.compile(r"[^A-Za-z0-9._\- ]")
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -216,7 +225,7 @@ class RunRow(Base):
 
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
-    duration_ms: Mapped[int | None] = mapped_column(sa.Integer)
+    duration_ms: Mapped[int | None] = mapped_column(Counter)
     counts: Mapped[dict[str, Any]] = mapped_column(sa.JSON, nullable=False, default=dict)
     tags: Mapped[list[str]] = mapped_column(sa.JSON, nullable=False, default=list)
     meta: Mapped[dict[str, Any]] = mapped_column(sa.JSON, nullable=False, default=dict)
@@ -250,7 +259,7 @@ class SuiteRow(Base):
     parent_id: Mapped[uuid.UUID | None] = mapped_column(sa.Uuid())
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
-    duration_ms: Mapped[int | None] = mapped_column(sa.Integer)
+    duration_ms: Mapped[int | None] = mapped_column(Counter)
     meta: Mapped[dict[str, Any]] = mapped_column(sa.JSON, nullable=False, default=dict)
 
 
@@ -287,9 +296,9 @@ class TestCaseRow(Base):
     tags: Mapped[list[str]] = mapped_column(sa.JSON, nullable=False, default=list)
     markers: Mapped[list[str]] = mapped_column(sa.JSON, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="unknown")
-    duration_ms: Mapped[int | None] = mapped_column(sa.Integer)
+    duration_ms: Mapped[int | None] = mapped_column(Counter)
     flaky: Mapped[bool] = mapped_column(sa.Boolean, nullable=False, default=False)
-    attempt_count: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+    attempt_count: Mapped[int] = mapped_column(Counter, nullable=False, default=0)
     meta: Mapped[dict[str, Any]] = mapped_column(sa.JSON, nullable=False, default=dict)
 
 
@@ -315,12 +324,12 @@ class AttemptRow(Base):
         sa.Uuid(), ForeignKey("runs.id", ondelete="CASCADE"), nullable=False
     )
     test_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(), nullable=False)
-    attempt_number: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=1)
+    attempt_number: Mapped[int] = mapped_column(Counter, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     original_status: Mapped[str | None] = mapped_column(String(SHORT_TEXT_MAX))
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
-    duration_ms: Mapped[int | None] = mapped_column(sa.Integer)
+    duration_ms: Mapped[int | None] = mapped_column(Counter)
     failure: Mapped[dict[str, Any] | None] = mapped_column(sa.JSON)
     stdout: Mapped[str | None] = mapped_column(Text)
     stderr: Mapped[str | None] = mapped_column(Text)
@@ -356,7 +365,7 @@ class EventRow(Base):
     event_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(), nullable=False)
     type: Mapped[str] = mapped_column(String(64), nullable=False)
     time: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
-    sequence: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+    sequence: Mapped[int] = mapped_column(Counter, nullable=False, default=0)
     data: Mapped[dict[str, Any]] = mapped_column(sa.JSON, nullable=False, default=dict)
     received_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
 
@@ -379,7 +388,7 @@ class ArtifactRow(Base):
     content_type: Mapped[str] = mapped_column(
         String(SHORT_TEXT_MAX), nullable=False, default="application/octet-stream"
     )
-    size_bytes: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+    size_bytes: Mapped[int] = mapped_column(Counter, nullable=False, default=0)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     url: Mapped[str | None] = mapped_column(String(SHORT_TEXT_MAX))
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
@@ -448,9 +457,16 @@ def long_text(value: str | None, max_bytes: int) -> tuple[str | None, bool]:
     wire contract. The smaller wins — storing more than the canonical model can
     carry produces a row that raises a validation error every time anyone tries
     to read it.
+
+    NUL characters are dropped first. Captured stdout from a test that printed
+    binary is the usual source, PostgreSQL refuses to store ``\\x00`` in any text
+    column at all, and nothing that reads a log is improved by one. Every other
+    control character is kept: a log is exactly where an ANSI colour code or a
+    tab belongs.
     """
     if value is None:
         return None, False
+    value = value.replace("\x00", "")
     truncated = False
     raw = value.encode("utf-8")
     if len(raw) > max_bytes:

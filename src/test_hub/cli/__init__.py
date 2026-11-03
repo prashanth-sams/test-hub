@@ -8,6 +8,7 @@ business logic::
     test-hub publish    send a report to a remote Test Hub
     test-hub demo       fill the store with realistic sample data
     test-hub prune      delete runs older than a retention cutoff
+    test-hub db         check the configured database and migrate it
     test-hub token      create and hash API tokens
     test-hub formats    list the installed report adapters
 
@@ -75,6 +76,7 @@ def _register() -> None:
     is the difference between a command that feels instant and one that does not.
     """
     from test_hub.cli.commands import (
+        db,
         demo,
         formats,
         ingest,
@@ -91,6 +93,7 @@ def _register() -> None:
     app.command("prune", help="Delete runs older than a retention cutoff.")(prune.prune)
     app.command("formats", help="List the installed report adapters.")(formats.formats)
     app.add_typer(token.app, name="token", help="Create and hash API tokens.")
+    app.add_typer(db.app, name="db", help="Check the configured database and migrate it.")
 
 
 def main() -> None:

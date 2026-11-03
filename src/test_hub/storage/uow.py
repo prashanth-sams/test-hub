@@ -28,13 +28,14 @@ from typing import Any, Protocol
 from test_hub.config import Settings
 from test_hub.storage.artifacts import FilesystemArtifactStore
 from test_hub.storage.db import Database
+from test_hub.storage.locks import WriteLocks
 from test_hub.storage.repositories import SqlEventRepository, SqlRunRepository
 
 __all__ = ["SqlUnitOfWork", "UnitOfWorkFactory", "create_unit_of_work_factory"]
 
 
 class SqlUnitOfWork:
-    """A transactional scope over the SQLite store.
+    """A transactional scope over the store — SQLite or PostgreSQL.
 
     Satisfies :class:`test_hub.storage.base.UnitOfWork`. The session is opened
     eagerly so that ``uow.runs`` is usable whether or not the caller went
@@ -48,9 +49,12 @@ class SqlUnitOfWork:
         self.read_only = read_only
         self._session = database.new_session(read_only=read_only)
         self._closed = False
+        # One per transaction scope. A no-op on SQLite, whose BEGIN IMMEDIATE
+        # already serializes writers; per-run advisory locks on PostgreSQL.
+        self._locks = WriteLocks(self._session)
 
         self.runs = SqlRunRepository(self._session, settings)
-        self.events = SqlEventRepository(self._session, settings, self.runs)
+        self.events = SqlEventRepository(self._session, settings, self.runs, locks=self._locks)
         self.artifacts = FilesystemArtifactStore(
             settings.resolved_artifacts_dir, self._session, settings
         )
@@ -75,11 +79,18 @@ class SqlUnitOfWork:
             raise RuntimeError(
                 "this unit of work was opened read-only; open a writable one to commit"
             )
-        self._session.commit()
+        try:
+            self._session.commit()
+        finally:
+            # Committed or not, the transaction is over and so are its locks.
+            self._locks.released()
 
     def rollback(self) -> None:
         """Discard anything not yet committed. A no-op after a commit."""
-        self._session.rollback()
+        try:
+            self._session.rollback()
+        finally:
+            self._locks.released()
 
     def close(self) -> None:
         if not self._closed:

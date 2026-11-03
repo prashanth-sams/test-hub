@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
-from test_hub.cli.options import DataDirOption, settings_from_cli
+from test_hub.cli.options import DatabaseUrlOption, DataDirOption, settings_from_cli
 from test_hub.cli.render import render_prune_result
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -75,16 +75,21 @@ def prune(
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask for confirmation.")] = False,
     vacuum: Annotated[
         bool,
-        typer.Option("--vacuum", help="Return the freed pages to the filesystem afterwards."),
+        typer.Option(
+            "--vacuum",
+            help="Reclaim the freed space afterwards: SQLite VACUUM, which shrinks the file, "
+            "or PostgreSQL VACUUM (ANALYZE), which makes it reusable.",
+        ),
     ] = False,
     data_dir: DataDirOption = None,
+    database_url: DatabaseUrlOption = None,
     json_output: Annotated[bool, typer.Option("--json", help="Print the result as JSON.")] = False,
 ) -> None:
     """Delete runs older than a cutoff, and the artifacts nothing else references."""
     from test_hub.service.retention import RetentionPolicy, RetentionService, resolve_cutoff
     from test_hub.service.runtime import create_context
 
-    settings = settings_from_cli(data_dir=data_dir)
+    settings = settings_from_cli(data_dir=data_dir, database_url=database_url)
     cutoff = resolve_cutoff(
         older_than=older_than,
         before=before,
@@ -103,22 +108,23 @@ def prune(
     context = create_context(settings)
     try:
         service = RetentionService(context)
+        backend = context.database.backend
         plan = service.plan(policy)
         if dry_run:
-            render_prune_result(plan, json_output=json_output)
+            render_prune_result(plan, json_output=json_output, backend=backend)
             return
         if not plan.runs:
-            render_prune_result(plan, json_output=json_output)
+            render_prune_result(plan, json_output=json_output, backend=backend)
             return
         if not yes:
-            _confirm(plan, json_output=json_output)
+            _confirm(plan, json_output=json_output, backend=backend)
         result = service.prune(policy, vacuum=vacuum)
-        render_prune_result(result, json_output=json_output)
+        render_prune_result(result, json_output=json_output, backend=backend)
     finally:
         context.close()
 
 
-def _confirm(plan: PruneResult, *, json_output: bool) -> None:
+def _confirm(plan: PruneResult, *, json_output: bool, backend: str) -> None:
     """Ask, unless there is nobody to ask.
 
     A cron entry that forgot ``--yes`` must fail rather than block: prompting
@@ -132,7 +138,7 @@ def _confirm(plan: PruneResult, *, json_output: bool) -> None:
             f"the plan.",
             param_hint="--yes",
         )
-    render_prune_result(plan, json_output=False)
+    render_prune_result(plan, json_output=False, backend=backend)
     typer.confirm(f"  delete {plan.runs} run(s)?", abort=True)
 
 

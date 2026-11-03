@@ -73,6 +73,11 @@ def create_context(
     settings.ensure_directories()
 
     database = create_database(settings)
+    if database.backend != "sqlite":
+        # A server can be down, firewalled or still starting; say which one and
+        # where, before Alembic turns it into a traceback. A SQLite file is
+        # created on demand and has nothing to be unreachable.
+        database.ping()
     if migrate:
         database.upgrade()
 
@@ -100,7 +105,8 @@ def create_context(
 
     logger.debug(
         "context ready: db=%s artifacts=%s workspace=%s",
-        settings.resolved_database_url,
+        # Masked: a PostgreSQL URL usually carries its password.
+        database.display_url,
         settings.resolved_artifacts_dir,
         workspace.id,
     )

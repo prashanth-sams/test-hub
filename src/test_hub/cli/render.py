@@ -132,7 +132,9 @@ def render_prune_plan(result: PruneResult) -> None:
     typer.echo()
 
 
-def render_prune_result(result: PruneResult, *, json_output: bool = False) -> None:
+def render_prune_result(
+    result: PruneResult, *, json_output: bool = False, backend: str = "sqlite"
+) -> None:
     """What the prune actually committed."""
     if json_output:
         typer.echo(json.dumps(result.as_dict(), indent=2))
@@ -161,12 +163,18 @@ def render_prune_result(result: PruneResult, *, json_output: bool = False) -> No
     _render_prune_rows(result)
     _render_prune_notes(result)
 
-    if not result.vacuumed and result.rows:
+    if not result.vacuumed and result.rows and backend == "sqlite":
         # Without this line an operator who pruned to free a disk sees the file
         # unchanged and concludes the command did nothing.
         typer.secho(
             "  the database file has not shrunk; SQLite reuses the freed pages. "
             "Pass --vacuum to return them to the filesystem.",
+            fg=typer.colors.BRIGHT_BLACK,
+        )
+    elif not result.vacuumed and result.rows:
+        typer.secho(
+            "  PostgreSQL reuses the freed space once it is vacuumed; autovacuum will "
+            "get to it, or pass --vacuum to do it now.",
             fg=typer.colors.BRIGHT_BLACK,
         )
     typer.echo()
