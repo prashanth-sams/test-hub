@@ -1,7 +1,7 @@
 """Single source of truth for the package version.
 
-Read by Hatchling at build time (``[tool.hatch.version]``) and by the API, the
-CLI and the snapshot exporter at run time.
+Read by Hatchling at build time (``[tool.hatch.version]``) and by the API and
+the CLI at run time.
 """
 
 from __future__ import annotations

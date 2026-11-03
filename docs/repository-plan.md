@@ -11,7 +11,7 @@ test-hub/
 ├── Dockerfile  docker-compose.yml  .dockerignore
 ├── .github/workflows/          # ci.yml, release.yml (Trusted Publishing), site.yml
 ├── docs/                       # long-form documentation (Markdown)
-│   ├── adr/0001-architecture.md
+│   ├── adr/                    # 0001 architecture, 0002 retention, 0003 no offline export
 │   ├── architecture.md         # the system as built
 │   ├── schemas/                # versioned wire-schema reference + generated JSON Schema
 │   ├── adapters.md             # adapter-authoring guide
@@ -40,9 +40,8 @@ test-hub/
 │   │   └── migrations/         # artifacts store, Alembic
 │   ├── service/                # ingest (fold events → rows), queries, event bus
 │   ├── api/                    # FastAPI app, security, public request/response models
-│   ├── cli/                    # Typer app: serve, ingest, publish, export, demo, token
+│   ├── cli/                    # Typer app: serve, ingest, publish, demo, prune, token
 │   ├── sdk/                    # Python publishing client
-│   ├── export/                 # standalone HTML snapshot writer
 │   ├── demo/                   # realistic seed data
 │   └── web/                    # static dashboard shipped in the wheel
 └── tests/                      # pytest; fixtures/ holds invented reports
@@ -73,7 +72,6 @@ cycle breaks `python -c "import test_hub.domain"`.
 | 5 | CLI `serve`/`ingest` | dashboard loads real data |
 | 6 | Frontend | overview, runs, run detail, test detail render from `LiveDataProvider` |
 | 7 | SSE | a run posted from `curl` appears without a refresh |
-| 8 | Exporter | `test-hub export` opens from `file://` with the network off |
 | 9 | `publish`, SDK, `demo` | remote publish works against `serve` |
 | 10 | Hardening | auth, CSP, limits, redaction, size caps |
 | 11 | Tests, docs, CI, Docker, site | everything in the definition of done |

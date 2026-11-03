@@ -134,34 +134,19 @@ are invalid.
 The dashboard's rule, enforced by review: **no `innerHTML` with interpolated
 data.** Text goes in with `textContent`, structure with `document.createElement`.
 
-The interesting boundary is the offline export, where the entire data set is
-embedded *inside* a `<script>` element. `embed_json` in
-`src/test_hub/export/snapshot.py` rewrites `<`, `>`, `&`, U+2028 and U+2029 as
-JSON `\uXXXX` escapes before serialization:
+The boundary that used to need the most care — a whole data set embedded inside a
+`<script>` element in an exported file — no longer exists: the dashboard is
+served as static files and fetches everything from the API
+([ADR-0003](adr/0003-drop-the-offline-export.md)). There is no document into
+which a test name is interpolated, so the byte sequence `</script` in a stack
+trace is just text in a JSON response.
 
-```shell
-$ python -c "from test_hub.export.snapshot import embed_json; \
-             print(embed_json({'name': '</script><img src=x onerror=alert(1)>'}))"
-{"name": "</script><img src=x onerror=alert(1)>"}
-```
-
-No byte sequence in test data can spell `</script` and terminate the element the
-data lives in. Because these are JSON escapes rather than HTML entities, the
-value the browser parses back is byte-for-byte the value that was serialized:
-
-```shell
-$ python -c "import json; from test_hub.export.snapshot import embed_json; \
-             print(json.loads(embed_json({'name': '</script><img src=x onerror=alert(1)>'}))['name'])"
-</script><img src=x onerror=alert(1)>
-```
-
-U+2028 and U+2029 matter because they are legal inside a JSON string and illegal
-inside a JavaScript one — a stack trace containing either would turn the whole
-snapshot into a syntax error, which is a denial of service on a report you
-already emailed to someone.
-
-`tests/test_snapshot_embedding.py` runs eleven real breakout payloads through
-both properties — nothing escapes, and every value survives exactly.
+What remains is the browser-side rule, and it is enforced by test:
+`tests/test_frontend_assets.py` fails the build if any file in the dashboard
+assigns `innerHTML`, generates an inline event handler, or reaches for `eval`.
+The fixture suite includes a test literally named
+`<script>alert(1)</script>`, which renders as those characters on every page it
+appears on.
 
 The adapters carry payloads through verbatim rather than sanitizing them.
 Importing `tests/fixtures/junit/html-injection.xml` stores test names that read:
@@ -448,10 +433,24 @@ size caps and by SQLite's single-writer ceiling, which under load means everyone
 else's imports queue behind it (see [Scaling](scaling.md)). If the port is
 reachable by anything you do not control, put a rate limit in the proxy.
 
-**There is no data retention, expiry or deletion.** No endpoint deletes a run, a
-project or an artifact; nothing ages data out; there is no artifact garbage
-collector, so a blob whose rows rolled back stays on disk forever. Storage grows
-monotonically. Plan a volume, or plan to `rm` the data directory.
+**Deleting data needs its own credential.** `POST /api/v1/retention/prune` is the
+only destructive endpoint, and it is behind a third scope rather than the write
+one: `require_write` is what every CI publisher token holds, and those tokens live
+in repository settings, get copied between projects and are the likeliest to leak.
+A credential that can post a test result must not also be able to delete a year of
+them ([ADR-0002](adr/0002-data-retention.md) D8). Configure
+`TEST_HUB_ADMIN_TOKEN_HASHES` with `test-hub token create --admin`.
+
+An unauthenticated **loopback** instance is admin without a token, because anyone
+who can reach that port can already run `test-hub prune` in a terminal. An
+instance bound to a public interface with `--insecure-no-auth` is **not** — open
+writes are a choice you made knowingly, and open deletes are a second one.
+
+Nothing ages out on a timer, so until you schedule a prune, storage still grows
+monotonically. Plan a volume either way.
+
+**No single-run deletion.** There is no `DELETE /runs/{id}`. Removing one bad
+import means a cutoff that covers it, or `test-hub prune` on the host.
 
 **Nothing is encrypted at rest.** The SQLite file and the artifact tree are plain
 files. `ensure_directories()` chmods the data directory to `0700` and blobs to

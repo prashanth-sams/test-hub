@@ -19,104 +19,140 @@
   These are local files served from the same origin; the parse cost is a few
   milliseconds and the alternative is a white flash on every load in dark mode.
 
-  The three marker pairs below are the contract with the snapshot exporter. It
-  replaces each block with an inlined equivalent — the stylesheet as one <style>,
-  the scripts as one <script>, the snapshot placeholder as the embedded data —
-  and the result is this same file with no external references. Keep the markers
-  exact; the load order of the scripts is the order in assets/manifest.json.
+  The load order below is the order in assets/manifest.json, and the two must
+  not drift: tests/test_frontend_assets.py fails the build if they do.
 -->
 
-<!-- test-hub:styles:start -->
 <link rel="stylesheet" href="assets/css/app.css">
-<!-- test-hub:styles:end -->
 
-<!-- test-hub:snapshot -->
-
-<!-- test-hub:scripts:start -->
 <script src="assets/js/00-util.js"></script>
 <script src="assets/js/10-provider.js"></script>
-<script src="assets/js/11-snapshot-provider.js"></script>
 <script src="assets/js/12-live-provider.js"></script>
 <script src="assets/js/20-charts.js"></script>
 <script src="assets/js/30-store.js"></script>
 <script src="assets/js/40-components.js"></script>
 <script src="assets/js/50-view-overview.js"></script>
+<script src="assets/js/52-view-analytics.js"></script>
+<script src="assets/js/53-view-suites.js"></script>
+<script src="assets/js/54-view-metrics.js"></script>
 <script src="assets/js/55-view-runs.js"></script>
+<script src="assets/js/56-view-evidence.js"></script>
 <script src="assets/js/60-view-run.js"></script>
 <script src="assets/js/65-view-test.js"></script>
+<script src="assets/js/70-view-settings.js"></script>
+<script src="assets/js/80-settings.js"></script>
 <script src="assets/js/90-app.js"></script>
-<!-- test-hub:scripts:end -->
 </head>
 <body>
 <a class="sr-only skiplink" href="#th-view">Skip to content</a>
 
 <div class="shell">
-  <header class="topbar">
-    <div class="container topbar__inner">
-      <a class="brand" href="#/overview">
-        <span class="brand__mark" aria-hidden="true">TH</span>
-        <span>Test Hub</span>
-        <span class="brand__sub" id="th-brand-sub"></span>
-      </a>
+  <!-- The primary navigation is a left rail rather than a row of tabs in the
+       header. Two things sit better here than they did up there: the brand,
+       which was competing with the nav for the same corner, and the route list
+       itself, which can grow downwards without pushing the connection pill off
+       the end of a narrow header. Below 860px the rail turns back into a
+       horizontal bar (see the responsive block in app.css) — a phone has no
+       width to spare for a permanent column.
 
-      <nav class="nav" aria-label="Primary">
-        <a class="nav__link" data-route="overview" href="#/overview">Overview</a>
-        <a class="nav__link" data-route="runs" href="#/runs">Runs</a>
-      </nav>
+       The icons are attached in 90-app.js from `data-icon`, not written out
+       here: the path data lives once, in the icon set in 40-components.js. -->
+  <aside class="sidebar">
+    <a class="brand" href="#/overview">
+      <span class="brand__mark" aria-hidden="true">TH</span>
+      <span>Test Hub</span>
+      <span class="brand__sub" id="th-brand-sub"></span>
+    </a>
 
-      <div class="topbar__meta">
-        <span class="updated" id="th-updated"></span>
+    <!-- Nine routes, in three groups. The grouping is the point: "where things
+         stand", "what ran", and "what the run left behind" are three different
+         questions, and a flat list of nine links makes the reader re-read all
+         nine every time to find which one they are in.
 
-        <span class="conn" id="th-conn" data-status="connecting" role="status" aria-live="polite">
-          <span class="conn__dot" aria-hidden="true"></span>
-          <span id="th-conn-label">Connecting</span>
-        </span>
-
-        <button class="iconbtn theme-toggle" id="th-theme" type="button"
-                aria-pressed="false" aria-label="Switch theme" title="Switch theme">
-          <svg class="theme-toggle__light" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.7" stroke-linecap="round" aria-hidden="true" focusable="false">
-            <path d="M12 17.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11Z"></path>
-            <path d="M12 1.8v2.4M12 19.8v2.4M4.2 12H1.8M22.2 12h-2.4M6.5 6.5 4.8 4.8M19.2 19.2l-1.7-1.7M17.5 6.5l1.7-1.7M4.8 19.2l1.7-1.7"></path>
-          </svg>
-          <svg class="theme-toggle__dark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-            <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a8.6 8.6 0 1 0 11.1 11.1Z"></path>
-          </svg>
-        </button>
+         Three of these routes — Test Steps, API Logs and Test Coverage — have
+         no model behind them yet. They are in the rail deliberately and each
+         one says what it is waiting for rather than pretending to be empty;
+         see the header comment in assets/js/56-view-evidence.js. -->
+    <nav class="nav" aria-label="Primary">
+      <div class="nav__group">
+        <a class="nav__link" data-route="overview" data-icon="home" href="#/overview">Overview</a>
+        <a class="nav__link" data-route="analytics" data-icon="line-chart" href="#/analytics">Analytics</a>
       </div>
-    </div>
-  </header>
 
-  <main class="main">
-    <div class="container">
-      <div id="th-banner"></div>
-      <div id="th-view" tabindex="-1">
-        <noscript>
-          <div class="banner banner--warn">
-            <div>
-              <div class="banner__title">Test Hub needs JavaScript</div>
-              <div>This dashboard renders entirely in the browser — including the offline
-                export, which has no server to render it instead.</div>
+      <div class="nav__group" role="group" aria-labelledby="th-nav-results">
+        <div class="nav__label" id="th-nav-results">Results</div>
+        <a class="nav__link" data-route="runs" data-icon="history" href="#/runs">Runs</a>
+        <a class="nav__link" data-route="suites" data-icon="briefcase" href="#/suites">Test Suites</a>
+        <a class="nav__link" data-route="metrics" data-icon="server" href="#/metrics">Test Metrics</a>
+        <a class="nav__link" data-route="steps" data-icon="list-ol" href="#/steps">Test Steps</a>
+      </div>
+
+      <div class="nav__group" role="group" aria-labelledby="th-nav-evidence">
+        <div class="nav__label" id="th-nav-evidence">Evidence</div>
+        <a class="nav__link" data-route="screenshots" data-icon="camera" href="#/screenshots">Screenshots</a>
+        <a class="nav__link" data-route="logs" data-icon="exchange" href="#/logs">API Logs</a>
+        <a class="nav__link" data-route="coverage" data-icon="shield" href="#/coverage">Test Coverage</a>
+      </div>
+    </nav>
+
+    <!-- The dark-mode switch mounts here, at the foot of the rail: a display
+         preference is flipped in passing, so it should not be two clicks deep
+         inside a menu. Built in JS because it carries state — see
+         `ui.themeSwitch` in assets/js/40-components.js. -->
+    <div class="sidebar__foot" id="th-appearance"></div>
+  </aside>
+
+  <div class="shell__body">
+    <header class="topbar">
+      <div class="container topbar__inner">
+        <div class="topbar__meta">
+          <span class="updated" id="th-updated"></span>
+
+          <span class="conn" id="th-conn" data-status="connecting" role="status" aria-live="polite">
+            <span class="conn__dot" aria-hidden="true"></span>
+            <span id="th-conn-label">Connecting</span>
+          </span>
+
+          <!-- The settings menu mounts here. Its trigger is built in JS rather
+               than written out below, because the panel it controls has to be
+               built there anyway and a half-static, half-dynamic control is the
+               kind that drifts. The theme itself is already resolved before this
+               point by the bootstrap in assets/js/00-util.js. -->
+          <div id="th-settings"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="container">
+        <div id="th-banner"></div>
+        <div id="th-view" tabindex="-1">
+          <noscript>
+            <div class="banner banner--warn">
+              <div>
+                <div class="banner__title">Test Hub needs JavaScript</div>
+                <div>This dashboard renders entirely in the browser — including the offline
+                  export, which has no server to render it instead.</div>
+              </div>
             </div>
-          </div>
-        </noscript>
-        <div class="card">
-          <div class="card__body">
-            <div class="skeleton skeleton--text skeleton--title"></div>
-            <div class="skeleton skeleton--chart"></div>
+          </noscript>
+          <div class="card">
+            <div class="card__body">
+              <div class="skeleton skeleton--text skeleton--title"></div>
+              <div class="skeleton skeleton--chart"></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </main>
+    </main>
 
-  <footer class="footer">
-    <div class="container footer__inner">
-      <span id="th-footer-meta"></span>
-      <span>Test Hub — universal test observability.</span>
-    </div>
-  </footer>
+    <footer class="footer">
+      <div class="container footer__inner">
+        <span id="th-footer-meta"></span>
+        <span>Test Hub — universal test observability.</span>
+      </div>
+    </footer>
+  </div>
 </div>
 </body>
 </html>

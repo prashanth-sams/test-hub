@@ -1,16 +1,21 @@
 """The ``test-hub`` command line.
 
-Six commands, each a thin wrapper over the service layer — nothing here contains
-business logic, so anything you can do from the terminal you can also do over
-HTTP and from Python::
+Each command is a thin wrapper over the service layer — nothing here contains
+business logic::
 
     test-hub serve      start the API and the dashboard
     test-hub ingest     import a report into the local store
     test-hub publish    send a report to a remote Test Hub
-    test-hub export     write a self-contained offline HTML report
     test-hub demo       fill the store with realistic sample data
+    test-hub prune      delete runs older than a retention cutoff
     test-hub token      create and hash API tokens
     test-hub formats    list the installed report adapters
+
+Everything here is also reachable over HTTP and from Python, with one deliberate
+exception: ``prune`` is the terminal only. Authentication has two scopes, and the
+write one is what every CI publisher token holds, so a prune endpoint behind it
+would let a token that lives in a repository's CI settings delete a year of
+history (ADR-0002 D8).
 
 One rule shows up everywhere: **tokens are never taken as arguments.** A token on
 a command line lands in shell history, in ``ps`` output for every user on the
@@ -69,13 +74,21 @@ def _register() -> None:
     pay for importing FastAPI, SQLAlchemy and every adapter. On a cold cache that
     is the difference between a command that feels instant and one that does not.
     """
-    from test_hub.cli.commands import demo, export, formats, ingest, publish, serve, token
+    from test_hub.cli.commands import (
+        demo,
+        formats,
+        ingest,
+        prune,
+        publish,
+        serve,
+        token,
+    )
 
     app.command("serve", help="Start the API and serve the dashboard.")(serve.serve)
     app.command("ingest", help="Import a report file into the local store.")(ingest.ingest)
     app.command("publish", help="Send a report to a remote Test Hub server.")(publish.publish)
-    app.command("export", help="Write a self-contained offline HTML report.")(export.export)
     app.command("demo", help="Populate the store with realistic sample data.")(demo.demo)
+    app.command("prune", help="Delete runs older than a retention cutoff.")(prune.prune)
     app.command("formats", help="List the installed report adapters.")(formats.formats)
     app.add_typer(token.app, name="token", help="Create and hash API tokens.")
 

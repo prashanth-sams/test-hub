@@ -83,29 +83,6 @@ exact hashed string is documented and testable, so a publisher in any language c
 same UUID without ever talking to the server —
 <a href="canonical-schema.html#identity">see the recipe</a>.</p>
 
-<h2 id="two-modes">Two products, one dashboard</h2>
-
-<p>A live service and a single self-contained HTML file. They are the same dashboard code
-behind two implementations of one <code>DataProvider</code> interface: the snapshot provider
-reads a frozen object embedded in the file, the live provider reads REST and Server-Sent
-Events. There is no second renderer, so there is nothing to drift.</p>
-
-<div class="tablewrap"><table>
-  <thead><tr><th>&nbsp;</th><th>Snapshot</th><th>Live</th></tr></thead>
-  <tbody>
-    <tr><th scope="row">Command</th><td><code>test-hub export</code></td><td><code>test-hub serve</code></td></tr>
-    <tr><th scope="row">Output</th><td>one <code>.html</code> file</td><td>a service on a port</td></tr>
-    <tr><th scope="row">Needs a server to read</th><td>no</td><td>yes</td></tr>
-    <tr><th scope="row">Works with the network off</th><td>yes</td><td>the dashboard is local</td></tr>
-    <tr><th scope="row">Updates while you watch</th><td>no</td><td>yes, over SSE</td></tr>
-    <tr><th scope="row">Data provider</th><td><code>SnapshotDataProvider</code></td><td><code>LiveDataProvider</code></td></tr>
-  </tbody>
-</table></div>
-
-<p>The cost is stated in the architecture decision record: every view has to render from a
-plain object graph and tolerate both "no more data will arrive" and "more data will arrive".
-Views never call <code>fetch</code> themselves.</p>
-
 <h2 id="live">Live updates over SSE</h2>
 
 <p>Results appear in the browser within a couple of seconds without a refresh. The transport
@@ -161,8 +138,8 @@ failing, added and removed tests by identity, plus deltas on pass rate, duration
 <p>Within a run, a test is flaky when it both failed and succeeded across its attempts in that
 one run. Across runs, it is flaky when it disagreed with its own recent history. Both formulas
 are implemented exactly once, in <code>test_hub.domain.metrics</code>, and nothing else in the
-codebase is allowed to compute one — so the number in the offline snapshot and the number in
-the live API cannot disagree. <a href="metrics.html">The formulas.</a></p>
+codebase is allowed to compute one — so no two parts of the product can disagree about the
+same number. <a href="metrics.html">The formulas.</a></p>
 
 <h2 id="altitudes">Two altitudes, kept apart on purpose</h2>
 
@@ -170,6 +147,11 @@ the live API cannot disagree. <a href="metrics.html">The formulas.</a></p>
 test pages are the engineering drill-down and are allowed to return a lot. They are separate
 endpoints and separate payload types, so that making the drill-down richer cannot make the
 front page slower.</p>
+
+<p>The analytics page sits between them and pays a bounded price for it: it reads the five
+most recent finished runs in full — enough for "what keeps breaking" to be a pattern rather
+than one run's luck — caches them, because a finished run cannot change, and never mixes in
+a run that is still going.</p>
 
 <h2 id="adapters-feature">Formats are plugins, including ours</h2>
 
@@ -212,11 +194,11 @@ things that look like markup — and renders it in a browser. The defaults assum
 <h2 id="no-node">No Node, no CDN, no build step</h2>
 
 <p>The frontend is hand-written CSS and classic (non-module) JavaScript shipped inside the
-wheel. Charts are inline SVG drawn by hand. This is not asceticism, it buys four specific
-things: ES modules do not load over <code>file://</code>, so the snapshot could not be one file;
-the CSP can forbid remote origins outright; a Python package that needs <code>npm</code> to
-build is a packaging liability; and the offline export cannot quietly start leaking a request
-to a font host.</p>
+wheel. Charts are inline SVG drawn by hand. This is not asceticism, it buys three specific
+things: the CSP can forbid remote origins outright; a Python package that needs
+<code>npm</code> to build is a packaging liability; and a dashboard that fetches nothing from
+the internet renders identically on an air-gapped network and cannot quietly start leaking a
+request to a font host.</p>
 
 <p>The same rule applies to this documentation site. It loads nothing from the internet
 either.</p>
@@ -237,7 +219,6 @@ features is a sales document:</p>
   integrations.</li>
 </ul>
 
-<p>Three known limits of the first release are documented rather than hidden: single-process
-write throughput, an in-process SSE bus that stops one Uvicorn worker from becoming four, and a
-snapshot export that fully materializes and is therefore not meant for a million tests.
+<p>Two known limits of the first release are documented rather than hidden: single-process
+write throughput, and an in-process SSE bus that stops one Uvicorn worker from becoming four.
 <a href="deployment.html#limits">Where each one starts to bite.</a></p>

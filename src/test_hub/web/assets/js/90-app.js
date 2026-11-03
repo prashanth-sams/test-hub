@@ -1,14 +1,13 @@
 /* Test Hub — boot, routing and the chrome around the views.
  *
  * The one decision this file makes that the rest of the app must never make:
- * which provider is mounted. `window.TEST_HUB_SNAPSHOT` present means the page
- * is a self-contained export and everything comes out of that object; absent
- * means there is a server, and everything comes over REST and SSE (ADR-0001
- * D1). After the two lines below, nothing else in the codebase can tell.
+ * which provider is mounted. There is one — the live REST + SSE client — and it
+ * is named here and nowhere else, so a view still cannot tell where its data
+ * came from (ADR-0001 D1, narrowed by ADR-0003).
  *
  * Everything else here is chrome: the header's connection pill and last-updated
- * clock, the theme toggle, the disconnected banner, and a router that mounts one
- * view at a time and lets it own its own DOM.
+ * clock, the settings menu, the disconnected banner, and a router that mounts
+ * one view at a time and lets it own its own DOM.
  */
 (function (window, document) {
   'use strict';
@@ -20,24 +19,28 @@
 
   var VIEWS = {
     overview: function () { return TestHub.views.overview; },
+    analytics: function () { return TestHub.views.analytics; },
+    suites: function () { return TestHub.views.suites; },
+    metrics: function () { return TestHub.views.metrics; },
+    steps: function () { return TestHub.views.steps; },
+    screenshots: function () { return TestHub.views.screenshots; },
+    logs: function () { return TestHub.views.logs; },
+    coverage: function () { return TestHub.views.coverage; },
     runs: function () { return TestHub.views.runs; },
     run: function () { return TestHub.views.run; },
-    test: function () { return TestHub.views.test; }
+    test: function () { return TestHub.views.test; },
+    settings: function () { return TestHub.views.settings; }
   };
 
   var STATUS_TEXT = {
     connecting: 'Connecting',
     live: 'Live',
     reconnecting: 'Reconnecting',
-    offline: 'Offline',
-    static: 'Static export'
+    offline: 'Offline'
   };
 
   function boot() {
-    var snapshot = window.TEST_HUB_SNAPSHOT || null;
-    var provider = snapshot
-      ? TestHub.SnapshotDataProvider.create(snapshot)
-      : TestHub.LiveDataProvider.create();
+    var provider = TestHub.LiveDataProvider.create();
 
     var store = TestHub.store.create(provider);
     var ctx = { store: store, provider: provider };
@@ -47,30 +50,36 @@
     var connPill = document.getElementById('th-conn');
     var connLabel = document.getElementById('th-conn-label');
     var updatedNode = document.getElementById('th-updated');
-    var themeButton = document.getElementById('th-theme');
+    var settingsHost = document.getElementById('th-settings');
+    var appearanceHost = document.getElementById('th-appearance');
     var brandSub = document.getElementById('th-brand-sub');
     var footerMeta = document.getElementById('th-footer-meta');
     var navLinks = document.querySelectorAll('[data-route]');
 
+    /* The rail's icons come from the one icon set rather than from inline SVG
+     * in index.html, so there is a single copy of each path to fix. */
+    for (var n = 0; n < navLinks.length; n++) {
+      var iconName = navLinks[n].getAttribute('data-icon');
+      if (iconName) {
+        navLinks[n].insertBefore(ui.railIcon(iconName, 16), navLinks[n].firstChild);
+      }
+    }
+
     var current = { name: null, view: null };
 
-    /* ------------------------------------------------------------- theme */
+    /* ---------------------------------------------------------- settings */
 
-    function syncThemeButton() {
-      if (!themeButton) { return; }
-      var dark = util.theme.current() === 'dark';
-      themeButton.setAttribute('aria-pressed', String(dark));
-      themeButton.setAttribute('title', dark ? 'Switch to light theme' : 'Switch to dark theme');
-      themeButton.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    // Mounted after the provider is chosen, because the About block reports
+    // what it is connected to.
+    if (settingsHost) {
+      util.replace(settingsHost, TestHub.settings.create(ctx).el);
     }
 
-    if (themeButton) {
-      themeButton.addEventListener('click', function () {
-        util.theme.toggle();
-      });
+    // The theme is already resolved by the bootstrap in 00-util.js; this only
+    // mounts the control that changes it.
+    if (appearanceHost) {
+      util.replace(appearanceHost, ui.themeSwitch().el);
     }
-    util.theme.onChange(syncThemeButton);
-    syncThemeButton();
 
     /* -------------------------------------------------------------- head */
 
@@ -80,10 +89,7 @@
       connPill.setAttribute('data-status', status);
       var text = STATUS_TEXT[status] || util.titleCase(status);
       if (connLabel) { connLabel.textContent = text; }
-      var title = state.statusDetail ||
-        (status === 'static'
-          ? 'This page is a frozen export. Nothing will change while it is open.'
-          : 'Live updates over server-sent events.');
+      var title = state.statusDetail || 'Live updates over server-sent events.';
       connPill.setAttribute('title', title);
     }
 
@@ -95,8 +101,7 @@
         updatedNode.textContent = '';
         return;
       }
-      var prefix = provider.kind === 'snapshot' && !state.lastUpdated ? 'Exported ' : 'Updated ';
-      updatedNode.textContent = prefix + util.timeAgo(stamp);
+      updatedNode.textContent = 'Updated ' + util.timeAgo(stamp);
       updatedNode.setAttribute('title', util.formatDateTime(stamp));
     }
 
@@ -131,14 +136,36 @@
       }
     }
 
+    var navScroller = document.querySelector('.nav');
+
     function syncNav(state) {
-      var name = state.route.name === 'run' ? 'runs' : (state.route.name === 'test' ? 'runs' : state.route.name);
+      var name = state.route.name === 'run' || state.route.name === 'test'
+        ? 'runs'
+        : state.route.name;
+      var active = null;
       for (var i = 0; i < navLinks.length; i++) {
         var link = navLinks[i];
         if (link.getAttribute('data-route') === name) {
           link.setAttribute('aria-current', 'page');
+          active = link;
         } else {
           link.removeAttribute('aria-current');
+        }
+      }
+      // On a phone the rail is a horizontal strip that scrolls, and nine routes
+      // do not fit in it. Landing on a page whose own link is off the end of
+      // that strip reads as "this page is not in the nav", so the strip is
+      // moved rather than the reader being asked to go looking. `scrollLeft` is
+      // set directly rather than using scrollIntoView, which would also scroll
+      // the document and take the page heading off the top of the screen.
+      if (active && navScroller && navScroller.scrollWidth > navScroller.clientWidth) {
+        var margin = 16;
+        var left = active.offsetLeft - margin;
+        var right = active.offsetLeft + active.offsetWidth + margin;
+        if (left < navScroller.scrollLeft) {
+          navScroller.scrollLeft = Math.max(0, left);
+        } else if (right > navScroller.scrollLeft + navScroller.clientWidth) {
+          navScroller.scrollLeft = right - navScroller.clientWidth;
         }
       }
     }
@@ -146,23 +173,15 @@
     function syncMeta() {
       var meta = provider.meta || {};
       if (brandSub) {
-        brandSub.textContent = provider.kind === 'snapshot'
-          ? (meta.title || 'Snapshot')
-          : 'Live';
-      }
-      if (provider.kind === 'snapshot' && meta.title) {
-        document.title = meta.title + ' · Test Hub';
+        brandSub.textContent = 'Live';
+        brandSub.title = brandSub.textContent;
       }
       if (footerMeta) {
         util.clear(footerMeta);
         var parts = [];
         if (meta.generator_version) { parts.push('test-hub ' + meta.generator_version); }
         if (meta.schema_version) { parts.push('schema v' + meta.schema_version); }
-        if (provider.kind === 'snapshot') {
-          parts.push(util.formatNumber(meta.run_count || 0) + ' runs in this file');
-        } else if (meta.apiBase) {
-          parts.push('API ' + meta.apiBase);
-        }
+        if (meta.apiBase) { parts.push('API ' + meta.apiBase); }
         footerMeta.textContent = parts.join(' · ');
       }
     }
@@ -206,6 +225,12 @@
     syncStatus(store.state);
     syncUpdated(store.state);
     store.start();
+    // The provider learns the server's version a round trip after start, so
+    // the footer is drawn twice: once with what we knew, once with what the
+    // server said.
+    if (provider.serverInfo && provider.serverInfo.then) {
+      provider.serverInfo.then(syncMeta);
+    }
     mount(store.state);
     syncNav(store.state);
     if (current.view) { current.view.update(store.state, 'route'); }

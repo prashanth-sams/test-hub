@@ -6,10 +6,10 @@
 #   `wheel-smoke`  — what `pip install test-hub` actually gives a stranger works.
 #
 # The second is the one that catches the failures that embarrass a release: a
-# data file left out of the wheel, an entry point that does not resolve, an
-# exporter that emits an HTML file referencing assets that only exist in the
-# source checkout. Running the CLI from a clean virtualenv with no repository on
-# disk is the only way to see those.
+# data file left out of the wheel, an entry point that does not resolve, a
+# dashboard that asks for an asset which only exists in the source checkout.
+# Running the CLI from a clean virtualenv with no repository on disk is the only
+# way to see those.
 
 name: CI
 
@@ -149,64 +149,64 @@ jobs:
           set -euo pipefail
           "$RUNNER_TEMP/smoke/bin/test-hub" --version
 
-      # Printed, not asserted on: it costs one line and turns "unrecognised
-      # option --output" three steps below into an obvious diagnosis instead of
-      # a guess.
+      # Printed, not asserted on: it costs one line and turns an unrecognised
+      # option three steps below into an obvious diagnosis instead of a guess.
       - name: Show the CLI surface
         working-directory: ${{ runner.temp }}/elsewhere
         run: |
           "$RUNNER_TEMP/smoke/bin/test-hub" --help
-          "$RUNNER_TEMP/smoke/bin/test-hub" export --help
 
-      - name: Seed demo data and export a snapshot
+      - name: Seed demo data and serve it
         working-directory: ${{ runner.temp }}/elsewhere
         env:
           TEST_HUB_DATA_DIR: ${{ runner.temp }}/smoke-data
         run: |
           set -euo pipefail
           "$RUNNER_TEMP/smoke/bin/test-hub" demo
-          "$RUNNER_TEMP/smoke/bin/test-hub" export --output report.html
-          ls -l report.html
+          nohup "$RUNNER_TEMP/smoke/bin/test-hub" serve --port 8901 > serve.log 2>&1 &
+          echo $! > serve.pid
+          for _ in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8901/healthz > /dev/null 2>&1; then
+              echo "server is up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "server never became healthy:"; cat serve.log; exit 1
 
-      # The real packaging test. A snapshot that pulls a stylesheet from the
-      # source tree looks perfect in CI and is blank on the reviewer's laptop,
-      # and one that pulls a font from a CDN quietly breaks the offline promise
-      # and leaks a request to whoever opens the report.
-      - name: Assert the export is one self-contained file
+      # The real packaging test. A dashboard that pulls a stylesheet from the
+      # source tree renders perfectly in a developer's checkout and is blank
+      # from the wheel, and one that pulls a font from a CDN quietly breaks the
+      # promise that an air-gapped install works. Both are invisible until
+      # something asks the *installed* package for every file the page names.
+      - name: Assert the served dashboard is complete and self-hosted
         working-directory: ${{ runner.temp }}/elsewhere
         run: |
-          python - report.html <<'PY'
+          curl -fsS http://127.0.0.1:8901/ -o page.html
+          python - page.html <<'PY'
           import re
           import sys
+          import urllib.error
+          import urllib.request
           from pathlib import Path
 
-          path = Path(sys.argv[1])
-          if not path.is_file():
-              sys.exit(f"FAIL: {path} was not produced")
-
-          html = path.read_text(encoding="utf-8", errors="replace")
-          size = path.stat().st_size
+          BASE = "http://127.0.0.1:8901/"
+          html = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
           problems: list[str] = []
 
-          # A dashboard with CSS, JS and embedded data cannot be small. A tiny
-          # file here means the exporter wrote a stub and exited 0.
-          if size < 20_000:
-              problems.append(f"only {size} bytes — that is a stub, not a dashboard")
           if "<html" not in html.lower():
               problems.append("no <html> element")
 
           # Every URL the browser would *fetch*. A plain <a href> hyperlink is
           # not one of those — clicking "report an issue" needs the network, but
           # rendering the page does not — so anchors are exempt and everything
-          # else is not. data:, fragments and about:blank are already inside the
-          # file or inert.
+          # else is not. data:, fragments and about:blank are inert.
           tag = re.compile(r"<(?P<name>[a-zA-Z][-\w:]*)(?P<attrs>[^>]*)>")
           url_attr = re.compile(
               r"""\b(?:src|srcset|href|xlink:href|data|poster)\s*=\s*"""
               r"""(?P<q>["'])(?P<url>[^"']*)(?P=q)""",
               re.IGNORECASE,
           )
-          external: set[str] = set()
+          fetched = 0
           for element in tag.finditer(html):
               if element.group("name").lower() == "a":
                   continue
@@ -214,27 +214,48 @@ jobs:
                   url = attr.group("url").strip()
                   if not url or url.startswith(("data:", "#", "about:blank")):
                       continue
-                  external.add(f"<{element.group('name')} …={url[:80]}>")
-          if external:
-              listed = ", ".join(sorted(external)[:10])
-              problems.append(f"references {len(external)} file(s) it does not contain: {listed}")
+                  if url.startswith(("http://", "https://", "//")):
+                      problems.append(f"{url[:80]} is off-origin")
+                      continue
+                  try:
+                      with urllib.request.urlopen(BASE + url.lstrip("/"), timeout=20) as resp:
+                          body = resp.read()
+                      fetched += 1
+                      if not body:
+                          problems.append(f"{url} served 0 bytes")
+                  except urllib.error.HTTPError as err:
+                      problems.append(f"{url} -> HTTP {err.code} (missing from the wheel?)")
+                  except OSError as err:
+                      problems.append(f"{url} -> {err}")
 
-          for pattern, why in (
-              (r"@import\b", "CSS @import pulls in another stylesheet"),
-              (r"url\(\s*['\"]?(?:https?:)?//", "CSS url() points at a remote origin"),
-              (r"\bintegrity\s*=", "an SRI hash implies a remote asset"),
-          ):
-              if re.search(pattern, html, re.IGNORECASE):
-                  problems.append(why)
+          if not fetched:
+              problems.append("the page referenced no assets at all — it is a stub")
+
+          # …and the data path, because a dashboard that loads and shows nothing
+          # is not a working install either.
+          try:
+              with urllib.request.urlopen(BASE + "api/v1/overview", timeout=20) as resp:
+                  payload = resp.read().decode()
+              if '"total_runs"' not in payload:
+                  problems.append("GET /api/v1/overview returned an unexpected shape")
+          except OSError as err:
+              problems.append(f"GET /api/v1/overview -> {err}")
 
           if problems:
-              print(f"{path} ({size} bytes) is NOT self-contained:")
+              print("the installed dashboard is NOT complete:")
               for problem in problems:
                   print(f"  - {problem}")
               sys.exit(1)
 
-          print(f"OK: {path} is one self-contained file, {size} bytes, no external references")
+          print(f"OK: {fetched} assets served from the wheel, none off-origin")
           PY
+
+      - name: Stop the server
+        if: always()
+        working-directory: ${{ runner.temp }}/elsewhere
+        run: |
+          [ -f serve.pid ] && kill "$(cat serve.pid)" || true
+          [ -f serve.log ] && cat serve.log || true
 
   # ----------------------------------------------------------------------------
   # Aggregate status. Branch protection points at this one job, so adding a

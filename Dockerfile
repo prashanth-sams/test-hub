@@ -107,11 +107,10 @@ VOLUME ["/data"]
 
 USER 10001
 
-# Everything Test Hub writes goes to TEST_HUB_DATA_DIR, but a command that takes
-# an output path does not: `docker compose exec test-hub test-hub export -o
-# report.html` would otherwise try to write to `/`, which the compose file
-# mounts read-only. Landing in /data puts it on the volume, where the operator
-# can actually retrieve it.
+# Everything Test Hub writes goes to TEST_HUB_DATA_DIR, but a command given a
+# relative path does not — `docker compose exec test-hub …` would otherwise
+# resolve it against `/`, which the compose file mounts read-only. Landing in
+# /data puts it on the volume, where the operator can actually retrieve it.
 WORKDIR /data
 
 EXPOSE 8000

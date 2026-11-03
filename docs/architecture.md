@@ -31,9 +31,8 @@ go and check.
                    │ RunRepository                         │
                    ▼                                       ▼
           ┌───────────────────────────────────────────────────────┐
-          │                     the dashboard                     │
-          │   SnapshotDataProvider   │   LiveDataProvider          │
-          │   (embedded JSON)        │   (REST + EventSource)      │
+          │                     the dashboard                      │
+          │            LiveDataProvider (REST + EventSource)       │
           └───────────────────────────────────────────────────────┘
 ```
 
@@ -43,7 +42,6 @@ go and check.
 cli ──▶ api ──▶ service ──▶ storage ──▶ (sqlite / filesystem)
  │       │         │
  │       │         └──▶ domain ◀── adapters
- ├──▶ export ──────────▶ domain
  └──▶ sdk ─(http)─▶ api
 ```
 
@@ -116,38 +114,81 @@ with context.uow_factory(read_only=True) as uow:
 ```
 
 which begins deferred and cannot block a publisher. Every query route, the
-health check and the snapshot exporter use it. Committing such a scope raises,
+health check and the retention planner use it. Committing such a scope raises,
 rather than silently taking the lock after all. Measured: with a *writing* scope
 held open, a second writer is refused after the busy timeout; with a read-only
 scope held open across a full overview query, the same writer completes in about
 a millisecond (`tests/test_read_only_scope.py`).
 
-## One dashboard, two providers
+## One dashboard, one provider
 
-This is ADR-0001 D1 and the reason the offline report cannot drift from the live
-one.
+ADR-0001 D1 put a seam between the dashboard and its data so that a served page
+and an offline file could share one renderer. [ADR-0003](adr/0003-drop-the-offline-export.md)
+removed the offline file; the seam stayed, for the two jobs it still does.
 
 `web/assets/js/10-provider.js` defines the interface — `getOverview`, `listRuns`,
-`getRun`, `getTest`, `getFacets`, `subscribe`, `capabilities`, `status` — plus a
-shared base that both implementations build on, so the connection pill means the
-same thing in both modes.
+`getRun`, `getTest`, `getFacets`, `subscribe`, `capabilities`, `status` — plus the
+shared base that owns the status field, so the connection pill has one definition
+rather than one per transport. `12-live-provider.js` is the implementation: REST
+for reads, `EventSource` for changes.
 
-| | `SnapshotDataProvider` | `LiveDataProvider` |
+The seam earns its keep twice over:
+
+- **No view can reach the network.** A view renders from a plain object graph, so
+  it cannot grow a `fetch` in the middle of a render — enforced by
+  `tests/test_frontend_assets.py`, which fails if a view file so much as mentions
+  `fetch`.
+- **The browser-side arithmetic has one home.** When a filter the API cannot
+  express forces the client to fetch runs and refine them, the counts have to be
+  recomputed — and they have to agree, to the decimal, with
+  `test_hub.domain.metrics`. Every formula in `10-provider.js` is a transcription
+  of that module, and says which one.
+
+### What the detail pages cost
+
+Most views read one payload. Seven routes are the exception — analytics, test
+suites, test metrics, test steps, screenshots, API logs and coverage — and they
+share one dataset rather than each fetching their own. Failure taxonomy, suite
+hotspots, ownership, per-test timing and every attached file all need every
+attempt of every test, and no summary carries those. So the store reads the
+**five most recent finished runs** in full — `ANALYTICS_RUNS` in `30-store.js`,
+loaded by `loadRunDetails` for every route in `DETAIL_ROUTES` — plus the overview
+it shares with the dashboard. Moving between those seven pages costs nothing: the
+runs are already in memory and already cached.
+
+Three things keep that honest:
+
+- Runs still in flight are skipped. Half a run's failures classified as if they
+  were all of them is a wrong answer, not a partial one.
+- Finished run details are immutable, so they are cached by run id. A live
+  update on the page costs one overview request and, at most, one new run.
+- A run that fails to load costs only itself: the page draws the rest and says
+  how many of the five it is describing.
+
+The across-run questions — flakiest tests, most failing tests, the per-test
+verdicts — are *not* recomputed here. They come from the overview, which the
+server computes over the whole window.
+
+### The pages with nothing behind them
+
+Three routes in the rail name things the schema does not model, and they say so
+rather than going missing:
+
+| Route | What exists | What the page does |
 |---|---|---|
-| Source | `window.TEST_HUB_SNAPSHOT` | `fetch` + `EventSource` |
-| Filtering | in memory | server-side |
-| `subscribe` | no-op | SSE messages |
-| `status` | `static` | `connecting` / `live` / `reconnecting` / `offline` |
+| Screenshots | `ArtifactKind.SCREENSHOT` / `.VIDEO` | Real. A gallery, images served from `/api/v1/artifacts/{id}` under the existing `img-src 'self'`; video is linked, never embedded, because `media-src` is not in the CSP. |
+| API Logs | `ArtifactKind.LOG` / `.TRACE`, and `stdout` / `stderr` / `logs` per attempt | Shows those, and states in a banner that there is **no request/response object** in the schema — nothing can be filtered by status code or endpoint. |
+| Test Coverage | `ArtifactKind.COVERAGE` | Lists the stored reports. Test Hub does not parse a percentage out of them, so the page prints no coverage figure and draws no trend. |
+| Test Steps | nothing | The finest grain recorded is the attempt. The page renders `attempt.metadata.steps` when a publisher supplies it — an interim convention, not a model — and otherwise says how many attempts it checked and found none. |
 
-`90-app.js` picks one at boot: if `window.TEST_HUB_SNAPSHOT` is present it is the
-snapshot provider, otherwise the live one. Nothing else in the application knows
-which it got — enforced by `tests/test_frontend_assets.py`, which fails if a view
-file so much as mentions `fetch`.
+The rule they follow: an empty page names what would fill it. "No screenshots in
+the last five runs" is a fact about the suite, and it is the fact somebody
+clicked the link to find out.
 
-The exporter takes this further: it does not render a parallel template, it reads
-the dashboard's own `index.html` and replaces three marker blocks with their
-inlined contents. The offline report *is* the live page with its external
-references resolved.
+`test-hub demo` publishes a sample of each kind — screenshots for the browser
+suite's failures, a request log, a coverage report, a trace — so the three pages
+can be judged without wiring up a publisher first. Every byte of it is generated
+by `test_hub.demo.evidence`, including the PNGs.
 
 ## The SSE bus
 
@@ -209,9 +250,10 @@ populated events table later is the migration nobody wants to write.
 ## Frontend
 
 No framework, no bundler, no CDN, no Node at build or run time. Classic scripts
-(not ES modules — those do not load over `file://`, and the offline report is a
-`file://` page), one namespace on `window.TestHub`, load order recorded once in
-`web/assets/manifest.json` and read by both the served page and the exporter.
+sharing one namespace on `window.TestHub`, with the load order recorded once in
+`web/assets/manifest.json` and asserted against `index.html` by the test suite.
+Nothing is fetched from a remote origin, so an air-gapped install renders exactly
+like a connected one.
 
 Charts are hand-rolled inline SVG that read their colours from CSS custom
 properties, so they follow the theme. Every colour in the stylesheet is a
@@ -235,9 +277,8 @@ the theme.
 | SSE frames, heartbeats, replay, resync | `tests/test_sse.py` (against real Uvicorn) |
 | Read-only scopes do not block writers | `tests/test_read_only_scope.py` |
 | Migrations match the ORM, both directions | `tests/test_migrations.py` |
-| Script injection cannot escape the data block | `tests/test_snapshot_embedding.py` |
-| The export is one file with no external refs | `tests/test_export_offline.py` |
-| Frontend invariants (no `innerHTML`, no CDN, theme tokens) | `tests/test_frontend_assets.py` |
+| Frontend invariants (no `innerHTML`, no CDN, theme tokens, the type scale) | `tests/test_frontend_assets.py` |
+| The demo attaches evidence the dashboard can draw | `tests/test_demo_evidence.py` |
 
 Browser-level behaviour — rendering, contrast in both themes, keyboard order,
 the 375px layout, and that a `<script>alert(1)</script>` test name displays as
@@ -256,6 +297,4 @@ place. [scaling.md](scaling.md) has the detail.
 2. **One Uvicorn worker.** The bus is in-process, so a second worker would hold a
    second bus and half the dashboards would miss half the events. `serve` runs
    one and says why.
-3. **Snapshot export materializes everything.** It is for a run or a fortnight,
-   not for a million tests.
-4. **One workspace.** The column is there; the UI is not.
+3. **One workspace.** The column is there; the UI is not.

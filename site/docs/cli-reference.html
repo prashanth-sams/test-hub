@@ -123,8 +123,8 @@ test-hub 0.1.0 (canonical schema v1)</code></pre>
 <pre><code>  serve    Start the API and serve the dashboard.
   ingest   Import a report file into the local store.
   publish  Send a report to a remote Test Hub server.
-  export   Write a self-contained offline HTML report.
   demo     Populate the store with realistic sample data.
+  prune    Delete runs older than a retention cutoff.
   formats  List the installed report adapters.
   token    Create and hash API tokens.</code></pre>
 </div>
@@ -468,79 +468,6 @@ not on the specific code.</div>
 <code>curl</code>, with the same authentication, is on the
 <a href="getting-started.html#publish-from-ci">getting started</a> page.</p>
 
-<h2 id="export">export</h2>
-
-<p>Writes the dashboard, its CSS, its JavaScript and a frozen data snapshot into one HTML file
-with no external references. It is the same rendering code the live dashboard uses, reading a
-<code>SnapshotDataProvider</code> instead of REST — there is no second renderer that could
-drift.</p>
-
-<div class="tablewrap"><table>
-  <thead><tr><th>Option</th><th>Default</th><th>What it does</th></tr></thead>
-  <tbody>
-    <tr><td><code>--output</code>, <code>-o</code></td><td><code>test-hub-report.html</code></td>
-    <td>Where to write the file.</td></tr>
-    <tr><td><code>--input</code>, <code>-i</code></td><td>—</td><td>A directory or a single file of
-    reports to export <em>instead of</em> the local store. Must exist.</td></tr>
-    <tr><td><code>--project</code>, <code>-p</code></td><td>—</td><td>Required when
-    <code>--input</code> is used; ignored otherwise.</td></tr>
-    <tr><td><code>--team</code>, <code>--component</code>, <code>--type</code></td><td>—,
-    —, <code>other</code></td><td>Metadata applied to every file parsed under
-    <code>--input</code>.</td></tr>
-    <tr><td><code>--title</code></td><td><code>Test Hub report</code></td><td>Title shown inside
-    the report.</td></tr>
-    <tr><td><code>--days</code></td><td><code>30</code></td><td>How much history to include.</td></tr>
-    <tr><td><code>--max-runs</code></td><td><code>200</code></td><td>Ceiling on runs in the
-    snapshot. The export fully materializes, so this is the knob that keeps a large store from
-    producing an unopenable file.</td></tr>
-    <tr><td><code>--format</code>, <code>-f</code></td><td>auto-detect</td><td>Force an adapter for
-    <code>--input</code> files.</td></tr>
-    <tr><td><code>--data-dir</code></td><td>platform default</td><td>Which store to export.</td></tr>
-    <tr><td><code>--open</code></td><td>off</td><td>Open the written file in a browser.</td></tr>
-  </tbody>
-</table></div>
-
-<div class="codeblock" data-lang="shell" data-caption="From the local store"><div class="codeblock__head"><span class="codeblock__lang">shell</span><span class="codeblock__cap">From the local store</span></div>
-<pre><code>$ test-hub export --output report.html --title "Payments nightly"</code></pre>
-</div>
-
-<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
-<pre><code>  wrote /private/tmp/th-site-work/report.html
-  295 KB, self-contained — no network needed to open it</code></pre>
-</div>
-
-<h3 id="export-input">Exporting straight from a directory of reports</h3>
-
-<p>On a build agent you usually have shard results on disk and no store at all.
-<code>--input</code> parses them into a throwaway temporary database and exports that, so your
-real data directory is never touched:</p>
-
-<div class="codeblock" data-lang="shell"><div class="codeblock__head"><span class="codeblock__lang">shell</span></div>
-<pre><code>$ test-hub export --input ./results --output agent.html --project payments-api --type integration</code></pre>
-</div>
-
-<div class="codeblock" data-lang="output"><div class="codeblock__head"><span class="codeblock__lang">output</span></div>
-<pre><code>  parsed results.xml
-
-  wrote /private/tmp/th-site-work/agent.html
-  274 KB, self-contained — no network needed to open it</code></pre>
-</div>
-
-<p>It walks the directory recursively and considers only <code>.xml</code> and <code>.json</code>
-files, because a results folder routinely contains screenshots, videos and logs, and warning about
-each one would bury the warnings that matter. Files are sorted before parsing so the same directory
-produces the same output twice.</p>
-
-<p>One unparseable file does not abandon the rest — it is reported as
-<code>skipped &lt;name&gt;: &lt;reason&gt;</code> and the walk continues. Only if <em>every</em>
-candidate fails does the command give up, and only if there were no candidates at all does it
-refuse before starting. Both refusals are configuration errors, exit 78:</p>
-
-<div class="codeblock" data-lang="output" data-caption="--input without --project"><div class="codeblock__head"><span class="codeblock__lang">output</span><span class="codeblock__cap">--input without --project</span></div>
-<pre><code>error: --project is required with --input: report files do not carry a project key, so Test Hub cannot guess which project they belong to
-# exit 78</code></pre>
-</div>
-
 <h2 id="demo">demo</h2>
 
 <p>Fills the store with a plausible organization so you can judge the dashboard against data
@@ -798,8 +725,6 @@ value for a <code>TEST_HUB_*</code> variable surfaces as a Pydantic
 <li class="lvl-3"><a href="#ingest-idempotent">Re-importing the same file</a></li>
 <li class="lvl-3"><a href="#ingest-errors">When it will not import</a></li>
 <li class="lvl-2"><a href="#publish">publish</a></li>
-<li class="lvl-2"><a href="#export">export</a></li>
-<li class="lvl-3"><a href="#export-input">Exporting straight from a directory of reports</a></li>
 <li class="lvl-2"><a href="#demo">demo</a></li>
 <li class="lvl-2"><a href="#formats">formats</a></li>
 <li class="lvl-2"><a href="#token">token</a></li>

@@ -1,7 +1,7 @@
 # The canonical schemas
 
-Everything that crosses a boundary — an HTTP response body, the JSON embedded in
-an offline export, the output of an adapter — is one of the Pydantic v2 models in
+Everything that crosses a boundary — an HTTP response body, the output of an
+adapter — is one of the Pydantic v2 models in
 [`test_hub/domain/models.py`](../../src/test_hub/domain/models.py). Database rows
 are never serialized directly (ADR-0001 D3). That separation is what lets the
 table layout change — a new index, a split table, PostgreSQL — without a version
@@ -44,7 +44,7 @@ top-level document that a consumer might have received without context:
 
 | Carries `schema_version` | Does not |
 |---|---|
-| `TestRun`, `RunDetail`, `TestDetail`, `OverviewSnapshot`, `ImportResult`, `Snapshot`, `DomainEvent` (as `schemaversion`) | `Workspace`, `Project`, `RunSummary`, `RunCounts`, `TestSuite`, `TestCase`, `TestAttempt`, `Artifact`, `RunComparison`, `TestHistoryPoint`, `TrendPoint`, `ProjectHealth`, `ParserWarning`, `FailureDetail`, `RunContext` |
+| `TestRun`, `RunDetail`, `TestDetail`, `OverviewSnapshot`, `ImportResult`, `DomainEvent` (as `schemaversion`) | `Workspace`, `Project`, `RunSummary`, `RunCounts`, `TestSuite`, `TestCase`, `TestAttempt`, `Artifact`, `RunComparison`, `TestHistoryPoint`, `TrendPoint`, `ProjectHealth`, `ParserWarning`, `FailureDetail`, `RunContext` |
 
 A `TestCase` is only ever seen inside a `RunDetail`, so stamping a version on it
 would be noise on every one of ten thousand objects in the same document.
@@ -156,13 +156,13 @@ there is no second artefact to keep in step:
 
 ```console
 $ PYTHONPATH=src .venv/bin/python -c \
-  "import json;from test_hub.domain.models import Snapshot;print(json.dumps(Snapshot.model_json_schema())[:200])"
+  "import json;from test_hub.domain.models import RunDetail;print(json.dumps(RunDetail.model_json_schema())[:200])"
 {"$defs": {"Artifact": {"additionalProperties": false, "description": "A file produced by a run — a screenshot, a log, a trace, the raw report.\n\nStored content-addressed: ``sha256`` is the stor
 ```
 
-`Snapshot`'s schema pulls in 25 definitions and is about 33 KB of JSON. Every
-model's docstring becomes the `description`, so the generated schema carries the
-same reasoning this document does.
+`RunDetail`'s schema pulls in most of the model tree. Every model's docstring
+becomes the `description`, so the generated schema carries the same reasoning
+this document does.
 
 **Ask for the serialization schema when you are describing a response.**
 Pydantic's default is the *validation* schema, which omits computed fields —
@@ -493,28 +493,6 @@ What every import returns, whether it came from the CLI, the SDK or REST.
 | `events_applied` `events_ignored` | int | The idempotency signal. |
 | `warnings` | list of `ParserWarning` | |
 | `duration_ms` | int or null | How long the import took. |
-
-### `Snapshot`
-
-The complete frozen payload embedded in a standalone HTML export, and exactly
-what `SnapshotDataProvider` reads in the browser.
-
-| Field | Type | Notes |
-|---|---|---|
-| `kind` | `"test-hub-snapshot"` | Literal discriminator. |
-| `generated_at` | timestamp | |
-| `generator` `generator_version` | `ShortText` | `"test-hub"` and the package version. |
-| `title` | `ShortText` | |
-| `workspace` | `Workspace` | |
-| `projects` | list of `Project` | |
-| `overview` | `OverviewSnapshot` | |
-| `runs` | list of `RunDetail` | Each with its own comparison. |
-| `tests` | list of `TestDetail` | |
-
-It is a superset of what the live API returns for the same data: the two
-providers obtain the same shapes by different means. Note the `kind` value —
-`test-hub-snapshot` — is *not* one of the two `kind` values the JSON adapter
-accepts on import. An export is a report to read, not a report to re-ingest.
 
 ## Identity
 

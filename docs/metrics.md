@@ -5,8 +5,8 @@ Every number Test Hub shows is defined here and implemented once, in
 computed fields of `RunCounts` in
 [`test_hub/domain/models.py`](../src/test_hub/domain/models.py). Nothing else in
 the Python codebase computes a pass rate, a flake rate or a percentile — a view
-that needs one calls in there, so the number in the snapshot and the number in
-the live API cannot disagree.
+that needs one calls in there, so no two parts of the product can disagree about
+the same number.
 
 `tests/test_metrics.py` is the executable version of this document. Most of the
 worked examples below are lifted from it verbatim; if a definition changes, that
@@ -14,8 +14,8 @@ file and this one change together.
 
 There is exactly one second implementation, and it is deliberate:
 `src/test_hub/web/assets/js/10-provider.js` transcribes `finalizeCounts` and the
-trend arithmetic into JavaScript, because the offline snapshot has no server to
-ask when the user applies a filter. The JavaScript carries the Python function
+trend arithmetic into JavaScript, because a filter the API cannot express is
+applied in the browser and the counts have to be recomputed there. The JavaScript carries the Python function
 names in its comments so the two stay greppable from each other. That is a real
 duplication and worth knowing about before you change a formula.
 

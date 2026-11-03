@@ -19,7 +19,134 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A type scale, one step larger.** Every font size in the dashboard is now one
+  of eight named `--fs-*` tokens rather than a literal, and the whole scale moved
+  up a step: body text is 15px, tables and buttons 14px, and nothing that is not
+  a badge sits below 12px. Icons, control padding, table rows and the chart axis
+  labels grew with it. A test fails the build if new text is sized off the scale.
+- **Six more pages in the rail, and a rail that can hold them.** Test Suites
+  (every suite folded by path across the recent runs, sortable, searchable, and
+  expandable into its tests), Test Metrics (one row per test identity with runs,
+  pass rate, retries, flakiness and where its time goes), Screenshots, API Logs,
+  Test Coverage and Test Steps. The rail is now dark in both themes, grouped
+  under *Results* and *Evidence*, and on a phone it becomes a full-width
+  scrolling strip that brings the current route into view. All seven pages that
+  read run detail share one fetch, so moving between them costs nothing; see
+  [the architecture notes](docs/architecture.md#what-the-detail-pages-cost).
+- **Honest empty states for what Test Hub does not model.** API Logs says there
+  is no request/response object in the schema and shows the log evidence there
+  is; Test Coverage says the report is stored rather than parsed, so it prints no
+  percentage; Test Steps says the finest grain recorded is the attempt, and
+  renders `attempt.metadata.steps` when a publisher supplies it. In an offline
+  export, the pages that read attachments say the export carries the runs and not
+  the files — rather than reporting that nothing was captured.
+- **Sample data with something attached.** `test-hub demo` now publishes the
+  files a run leaves behind: screenshots for the browser suite's failures, a
+  request log, a coverage report and a trace. They are generated, never captured
+  — including the PNGs, which are drawn by a thirty-line encoder in
+  `test_hub.demo.evidence` rather than by adding an image dependency.
+- **An analytics page.** A third view in the rail, one level below the portfolio
+  overview and above the run drill-down. Six tiles (stability score, pass rate of
+  the last run and its delta, flaky tests, what is failing now, runs analysed,
+  time in tests), failures grouped by the exception that raised them with the
+  tests behind each type, suite hotspots, ownership, where the run's time goes,
+  and a per-test verdict — stable, flaky, broken or quiet — with the shape of its
+  recent history. It reads the five most recent finished runs in full and caches
+  them; see [the architecture notes](docs/architecture.md#what-the-detail-pages-cost).
+- **A richer headline on the overview and the run page.** The health card leads
+  with the number of results, the donut and a strip of outcome counters covering
+  every status a test can end on, plus flaky and retried. On a run page those
+  counters are buttons: pressing one filters the test table below to that outcome
+  and scrolls to it.
+- **Data retention.** `test-hub prune` deletes runs older than a cutoff, everything
+  under them, and the content-addressed artifact blobs left unreferenced as a
+  result. `--older-than 90d|6m|2w|1y`, or `--before <date>`; `--dry-run` prints the
+  plan and touches nothing. New settings `TEST_HUB_RETENTION_DAYS` (the command's
+  default cutoff — nothing sweeps on its own), `TEST_HUB_RETENTION_MIN_RUNS`
+  (runs always kept per project, default 5) and `TEST_HUB_ARTIFACT_GC_GRACE_HOURS`
+  (default 24). Deliberately CLI-only: the write scope is what CI publisher tokens
+  hold. See [ADR-0002](docs/adr/0002-data-retention.md).
+- `ArtifactStore.collect_unreferenced()`, which frees a content-addressed blob only
+  once no row anywhere still names its digest.
+- **Retention from the dashboard.** The gear menu's *Retention and data…* opens a
+  Settings page that shows the configured policy and clears old data by a cutoff in
+  hours, days, weeks, months or years. It previews exactly what would be deleted —
+  runs, tests, attempts, events and artifact bytes, broken down by project — before
+  anything is, and changing any field discards the preview so the delete button
+  always describes the numbers on screen.
+- **An administrator scope.** `POST /api/v1/retention/preview` and
+  `/retention/prune` are the only destructive endpoints and are guarded by
+  `TEST_HUB_ADMIN_TOKEN_HASHES`, a separate list from the publisher tokens —
+  create one with `test-hub token create --admin`. An unauthenticated loopback
+  instance is admin already; a public bind with `--insecure-no-auth` is not.
+  `GET /api/v1/retention` reports whether the calling request may prune, so the
+  dashboard never draws a control that would 403.
+- **Hours are a retention unit.** `--older-than 12h`, for clearing up after a bad
+  import. `UNIT_DAYS` became `UNIT_HOURS`.
+- **A left navigation rail.** Overview and Runs moved out of the header into a
+  216px column that also carries the brand and, at its foot, the dark-mode
+  switch; each route has an icon from the dashboard's own icon set. Below 860px
+  the rail folds back into a horizontal bar, so a phone still spends its width
+  on content.
+- **A settings menu in the dashboard header**, replacing the light/dark toggle in
+  the header. It holds the doorway to retention and an About block that says
+  whether the page is a live server or an offline export, and which version and
+  schema it is. The theme itself is a single "Dark mode" switch at the foot of
+  the rail, reading the theme actually on screen — so a reader who has never
+  chosen sees their operating system reflected back.
+  Built on a new `ui.menu()` primitive with the keyboard contract the dashboard
+  did not previously have anywhere: arrow keys, Home/End, and Escape returning
+  focus to the trigger.
+
+### Fixed
+
+- **The dashboard was served without `Cache-Control`.** `StaticFiles` sends an
+  `ETag` and a `Last-Modified` but no freshness directive, which browsers are free
+  to cache heuristically — so an upgraded Test Hub could keep running the previous
+  release's JavaScript against the current release's markup, with no error and no
+  console message. `/` and `/assets/*` now send `no-cache`, which revalidates and
+  still answers 304. The API is unchanged.
+- The live dashboard never knew its own version: `LiveDataProvider.meta` carried
+  only the API base, so the footer showed no version or schema in live mode. It
+  now reads both from `/healthz` at startup.
+- The theme preference is three-state underneath the switch — light, dark, or no
+  stored choice at all — so an untouched dashboard still follows
+  `prefers-color-scheme` in both directions, including a change made while the
+  page is open.
+- `FilesystemArtifactStore.put()` now updates the mtime of content it finds already
+  stored, instead of leaving it at the first upload's. Nothing read that mtime
+  before; the artifact sweep does, and without the bump it could unlink bytes an
+  in-flight import was about to claim.
+
+### Removed
+
+- **The offline HTML export, and everything under it.** `test-hub export`,
+  `test_hub.export`, `domain.models.Snapshot`, `SnapshotDataProvider` and the
+  `static` connection status are gone. `test-hub serve` is now the only way to
+  open the dashboard. The reasoning is in
+  [ADR-0003](docs/adr/0003-drop-the-offline-export.md): a Test Hub report is a
+  view onto a store that keeps changing, and a frozen file had to apologise for
+  not being that on every page — most visibly on Screenshots, API Logs and Test
+  Coverage, which are pages about files an export could not carry.
+
+  **If you relied on it**: there is no replacement command. Sharing a result now
+  means sharing a URL, so the server has to be reachable by whoever reads it. An
+  HTML file you exported before this release is a self-contained document and
+  keeps working exactly as it did.
+
+  `SCHEMA_VERSION` does **not** move. `Snapshot` was written by the exporter and
+  read by the browser; no publisher sent one and no endpoint returned one, so
+  nothing on the wire changes shape.
+
+### Changed
+
+- New migration `0002_retention_indexes` adds `ix_idempotency_keys_run_id`. That
+  table had no index but its primary key, so deleting by run scanned it whole.
+- ADR-0002 D8 is amended. It originally ruled out a REST endpoint for pruning
+  entirely; the reasoning underneath it was never "no endpoint" but "not on the
+  publisher's credential", and that is what the admin scope implements.
 
 <!--
 Add entries here as you merge, under these headings, in this order. Delete the

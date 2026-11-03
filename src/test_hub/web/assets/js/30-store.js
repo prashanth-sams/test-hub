@@ -2,8 +2,8 @@
  *
  * Views never call `fetch`, never call the provider and never keep their own
  * copy of anything (ADR-0001 D1). They read `store.state` and re-render when
- * the store says a section changed. That is what lets the same view code sit on
- * top of a frozen snapshot and a live stream without a single conditional.
+ * the store says a section changed — so a view is a pure function of state, and
+ * the transport underneath it is somebody else's problem.
  *
  * The URL is the source of truth for filters. `#/runs?team=payments&page=2` is
  * not a side effect of the filter bar — it *is* the filter bar's state, which
@@ -34,9 +34,28 @@
   var DEFAULT_WINDOW_DAYS = 30;
   var DEFAULT_PAGE_SIZE = 25;
 
+  /* The routes that read the same thing: the portfolio overview plus the most
+   * recent finished runs, in full. Analytics asks that dataset why the suite
+   * fails; suites, metrics, screenshots, logs and coverage ask it what ran,
+   * what it cost and what it left behind. One loader, one cache, one loading
+   * state — seven pages that would otherwise each fetch the same five runs.
+   *
+   * `steps` is in the list because it is honest about being empty: it says how
+   * many runs it looked through before finding no step data, and that sentence
+   * needs the same runs as everything else. */
+  var DETAIL_ROUTES = {
+    analytics: true,
+    suites: true,
+    metrics: true,
+    steps: true,
+    screenshots: true,
+    logs: true,
+    coverage: true
+  };
+
   function create(provider) {
     var bus = util.emitter();
-    var tokens = { overview: 0, runs: 0, run: 0, test: 0, facets: 0 };
+    var tokens = { overview: 0, runs: 0, run: 0, test: 0, analytics: 0, facets: 0 };
 
     var state = {
       providerKind: provider.kind,
@@ -51,9 +70,10 @@
       runs: null,
       run: null,
       test: null,
+      analytics: null,
       lastUpdated: null,
-      loading: { overview: false, runs: false, run: false, test: false },
-      errors: { overview: null, runs: null, run: null, test: null }
+      loading: { overview: false, runs: false, run: false, test: false, analytics: false },
+      errors: { overview: null, runs: null, run: null, test: null, analytics: null }
     };
 
     function emit(section) {
@@ -92,6 +112,12 @@
       if (head === 'tests') {
         return { name: 'runs', params: {}, query: parsed.query };
       }
+      if (DETAIL_ROUTES[head]) {
+        return { name: head, params: {}, query: parsed.query };
+      }
+      if (head === 'settings') {
+        return { name: 'settings', params: {}, query: parsed.query };
+      }
       return { name: 'overview', params: {}, query: parsed.query };
     }
 
@@ -108,6 +134,8 @@
 
       if (route.name === 'overview') {
         loadOverview();
+      } else if (DETAIL_ROUTES[route.name]) {
+        loadRunDetails();
       } else if (route.name === 'runs') {
         loadRuns();
       } else if (route.name === 'run') {
@@ -147,6 +175,8 @@
         segments = ['tests', route.params.testId];
       } else if (route.name === 'runs') {
         segments = ['runs'];
+      } else if (DETAIL_ROUTES[route.name]) {
+        segments = [route.name];
       } else {
         segments = ['overview'];
       }
@@ -203,9 +233,9 @@
       var keys = Object.keys(state.filters);
       for (var i = 0; i < keys.length; i++) { filters[keys[i]] = state.filters[keys[i]]; }
       // The run list is paged, not windowed: `GET /runs` has no window
-      // parameter, so passing one through would silently narrow the snapshot
-      // and be ignored by the API, and the two modes would disagree about what
-      // the same URL means. The overview owns `window_days`; this view does not.
+      // parameter, so passing one through would be silently ignored and the URL
+      // would claim a narrowing that never happened. The overview owns
+      // `window_days`; this view does not.
       delete filters.window_days;
       filters.limit = limit;
       filters.offset = (page - 1) * limit;
@@ -261,9 +291,102 @@
       });
     }
 
+    //: How many finished runs the detail pages read in full. Five is the
+    //: number at which "what keeps breaking" stops being one run's luck, and
+    //: it is also the point past which a live server is being asked for real
+    //: work to draw one page. The API answers them in parallel.
+    var ANALYTICS_RUNS = 5;
+
+    /**
+     * The detail pages read the portfolio overview and the newest finished
+     * runs that match the filters, in full.
+     *
+     * In full is the point: failure taxonomy, suite hotspots, ownership and the
+     * slowest tests all need every attempt of every test, and no summary
+     * carries those. Five runs rather than the window's worth of them, because
+     * the questions this page answers are about what the suite is doing *now*
+     * and the cost of asking is one payload per run.
+     *
+     * Live runs are skipped deliberately: half a run's failures classified as
+     * if they were all of them is a wrong answer, not a partial one.
+     */
+    function analyticsRunsFrom(overview) {
+      var candidates = (overview && overview.recent_runs) || [];
+      var chosen = [];
+      for (var i = 0; i < candidates.length && chosen.length < ANALYTICS_RUNS; i++) {
+        if (candidates[i].is_live || !candidates[i].finished_at) { continue; }
+        chosen.push(candidates[i]);
+      }
+      return chosen;
+    }
+
+    /**
+     * Finished runs do not change. Their details are immutable once the run has
+     * ended, which is what makes them safe to keep — and what turns a live
+     * update on this page from five requests into none. A resync empties it,
+     * because after a resync we know nothing, including whether those runs
+     * still exist.
+     */
+    var analyticsCache = {};
+    var ANALYTICS_CACHE_MAX = 20;
+
+    function cacheRun(detail) {
+      var keys = Object.keys(analyticsCache);
+      if (keys.length >= ANALYTICS_CACHE_MAX) { delete analyticsCache[keys[0]]; }
+      analyticsCache[String(detail.run.id)] = detail;
+      return detail;
+    }
+
+    function loadRunDetails() {
+      // The analytics section owns the loading state for the whole page: the
+      // overview it fetches is a dependency of this view, not a second view
+      // loading beside it, and two spinners for one page is one too many.
+      var token = begin('analytics');
+      return provider.getOverview(state.filters).then(function (overview) {
+        if (token !== tokens.analytics) { return null; }
+        state.overview = overview;
+        emit('overview');
+
+        var summaries = analyticsRunsFrom(overview);
+        if (!summaries.length) {
+          state.analytics = { summaries: [], runs: [], partial: false };
+          settle('analytics', token, null);
+          return null;
+        }
+        // One run that will not load must not cost the reader the other four,
+        // so every fetch resolves — to the detail, or to null — and the page
+        // says how many it is drawing.
+        return Promise.all(summaries.map(function (summary) {
+          var cached = analyticsCache[String(summary.id)];
+          if (cached) { return Promise.resolve(cached); }
+          return provider.getRun(summary.id).then(cacheRun, function (error) {
+            util.reportError('run ' + summary.id + ' did not load for analytics', error);
+            return null;
+          });
+        })).then(function (details) {
+          if (token !== tokens.analytics) { return null; }
+          var loaded = details.filter(Boolean);
+          state.analytics = {
+            summaries: summaries,
+            runs: loaded,
+            partial: loaded.length !== summaries.length
+          };
+          settle('analytics', token, loaded.length ? null : {
+            message: 'None of the recent runs could be loaded.',
+            code: 'analytics_unavailable'
+          });
+          return null;
+        });
+      }, function (error) {
+        settle('analytics', token, error);
+        return null;
+      });
+    }
+
     function reloadCurrent() {
       var route = state.route;
       if (route.name === 'overview') { return loadOverview(); }
+      if (DETAIL_ROUTES[route.name]) { return loadRunDetails(); }
       if (route.name === 'runs') { return loadRuns(); }
       if (route.name === 'run') { return loadRun(route.params.runId, { keepPrevious: true }); }
       if (route.name === 'test') { return loadTest(route.params.testId, { keepPrevious: true }); }
@@ -284,6 +407,12 @@
       var resync = message.reason === 'resync';
       if (route.name === 'overview') {
         loadOverview();
+      } else if (DETAIL_ROUTES[route.name]) {
+        // Cheap to repeat: the overview is one request and the finished runs it
+        // names are already cached, so a live update costs a run payload only
+        // when a run this page has never drawn appears.
+        if (resync) { analyticsCache = {}; }
+        loadRunDetails();
       } else if (route.name === 'runs') {
         loadRuns();
       } else if (route.name === 'run') {
@@ -320,5 +449,5 @@
     return store;
   }
 
-  TestHub.store = { create: create, FILTER_KEYS: FILTER_KEYS };
+  TestHub.store = { create: create, FILTER_KEYS: FILTER_KEYS, DETAIL_ROUTES: DETAIL_ROUTES };
 })(window);

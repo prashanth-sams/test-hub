@@ -21,21 +21,9 @@
 
   TestHub.views = TestHub.views || {};
 
-  var FIELDS = [
-    {
-      key: 'window_days', label: 'Window', type: 'segmented', defaultValue: '30',
-      options: [
-        { value: '7', label: '7d' }, { value: '14', label: '14d' },
-        { value: '30', label: '30d' }, { value: '90', label: '90d' }
-      ]
-    },
-    { key: 'project', label: 'Project' },
-    { key: 'team', label: 'Team' },
-    { key: 'component', label: 'Component' },
-    { key: 'test_type', label: 'Test type', facet: 'test_types' },
-    { key: 'environment', label: 'Environment' },
-    { key: 'branch', label: 'Branch', facet: 'branches' }
-  ];
+  //: The seven dimensions the portfolio slices by, shared with the analytics
+  //: page — see `ui.portfolioFields`.
+  var FIELDS = ui.portfolioFields();
 
   function create(ctx) {
     var store = ctx.store;
@@ -191,21 +179,50 @@
         ]);
       }));
 
+      // The headline card, in the proportions the eye reads them: the size of
+      // the thing first, its shape second, the breakdown third. The pass rate
+      // stays in the middle of the donut rather than competing with the total
+      // for the same corner — one number per level of detail.
+      var live = overview.live_runs || [];
+      var failing = (counts.failed || 0) + (counts.error || 0);
+      var pills = [
+        pill('clock', util.formatNumber(overview.total_runs) + ' ' +
+          util.pluralize(overview.total_runs, 'run') + ' in ' + overview.window_days + ' days'),
+        pill('grid', util.formatNumber((overview.projects || []).length) + ' ' +
+          util.pluralize((overview.projects || []).length, 'project')),
+        // Not the pass rate: the donut is already saying that, two inches to
+        // the right and in larger type.
+        pill(failing ? 'alert' : 'check', util.formatNumber(failing) + ' failed or errored')
+      ];
+      if (live.length) {
+        pills.push(el('span', { className: 'hero__pill' }, [
+          ui.liveBadge(),
+          el('span', { text: util.formatNumber(live.length) + ' in flight' })
+        ]));
+      }
+
       return el('div', { className: 'grid grid--2' }, [
         ui.card({
           title: 'Health',
           hint: 'Last ' + overview.window_days + ' days',
-          body: el('div', { className: 'headline' }, [
-            el('div', {}, [
-              el('div', { className: 'headline__value', text: util.formatPercent(counts.pass_rate, 2) }),
-              el('div', { className: 'headline__label', text: 'pass rate over ' +
-                util.formatNumber(counts.executed) + ' executed ' + util.pluralize(counts.executed, 'test') }),
-              el('div', { className: 'section' }, [
-                ui.countBar(counts),
-                el('div', { className: 'kpi__meta', text: ui.countsSentence(counts) })
-              ])
+          body: el('div', { className: 'stack--sm' }, [
+            el('div', { className: 'hero' }, [
+              el('div', { className: 'hero__figure' }, [
+                el('div', { className: 'hero__value', text: util.formatNumber(counts.total) }),
+                el('div', { className: 'hero__label', text: 'test results' }),
+                el('div', { className: 'hero__meta' }, pills)
+              ]),
+              donut
             ]),
-            donut
+            ui.countBar(counts),
+            ui.statStrip(counts, {
+              extras: [
+                { label: 'Flaky', value: counts.flaky, status: 'xpassed',
+                  title: 'Tests that failed and then passed inside one run' },
+                { label: 'Retried', value: counts.retried, status: 'running',
+                  title: 'Tests that ran more than once' }
+              ]
+            })
           ])
         }),
         ui.card({
@@ -309,6 +326,10 @@
           ]
         })
       ]);
+    }
+
+    function pill(iconName, text) {
+      return el('span', { className: 'hero__pill' }, [ui.icon(iconName, 13), el('span', { text: text })]);
     }
 
     function legendItem(status, label) {

@@ -167,8 +167,10 @@ so the database's shape can move without the API's shape moving.
   safe only because nothing can interleave. On PostgreSQL that becomes
   `INSERT … ON CONFLICT (source, event_id) DO NOTHING RETURNING id`, which is
   both correct under MVCC and faster.
-- Idempotency keys become a table with a real expiry rather than rows that
-  accumulate forever.
+- Idempotency keys get an expiry of their own. Retention deletes them with their
+  run ([ADR-0002](adr/0002-data-retention.md)), which bounds them, but a key is
+  only useful for the minutes a publisher might retry in and is currently kept for
+  as long as the run is.
 
 **What you get.** Concurrent writers actually concurrent, connection pooling
 across processes, and partial indexes and materialized views for the overview.
@@ -183,8 +185,8 @@ serve the same blobs.
 This is the easiest of the three, and deliberately so. The store is
 content-addressed: `FilesystemArtifactStore` writes `<root>/<aa>/<bb>/<sha256>`
 and an S3 implementation uses the same digest as the key. `put`, `open`,
-`exists`, `delete` are the whole blob interface, and `put` already streams and
-already enforces `max_bytes` while reading.
+`exists`, `delete` and `collect_unreferenced` are the whole blob interface, and
+`put` already streams and already enforces `max_bytes` while reading.
 
 **What changes.** One class. `record`, `list_for_run` and `get` are row
 operations and stay on the database — an S3 store would compose with the existing
@@ -194,10 +196,16 @@ would split into "blobs" and "rows".
 **What does not.** Every caller, the artifact download route, the API shape, and
 deduplication — which is free either way, because the key is the content.
 
-Two things worth designing at the same time, because they are missing today:
-presigned URLs (so `GET /api/v1/artifacts/{id}` can redirect instead of
-proxying 128 MiB through the API process), and a garbage collector (nothing ever
-deletes a blob, including one whose rows rolled back).
+One thing worth designing at the same time, because it is missing today:
+presigned URLs, so `GET /api/v1/artifacts/{id}` can redirect instead of proxying
+128 MiB through the API process.
+
+Note that `collect_unreferenced` is the one method whose implementation is not
+a straight translation. On a filesystem it can ask "is this digest still named by
+a row?" and unlink in the same breath, because both the rows and the bytes are
+local. An object store would want the same question answered in bulk — the
+digests to keep, diffed against a listing — rather than one HEAD-and-DELETE per
+blob. The signature takes an iterable of digests for exactly that reason.
 
 ### Redis Streams or NATS behind `EventBus`
 
@@ -248,18 +256,20 @@ containers can sit behind a load balancer. Three things need attention:
 
 ## Limits that are not about throughput
 
-**Snapshot export is a full materialization.** `test-hub export` builds the
-entire object graph in memory and writes it into one HTML file — 252 KB for the
-demo data set. It is not intended for a million tests, and the fix is not a
-faster database; it is `--days` and `--max-runs`, which already exist.
-
 **`GET /runs/{id}` has no paging.** A run returns every suite, every test and
 every attempt. A 50 000-test run is one enormous response. That is a deliberate
 altitude choice — the drill-down is allowed to be large, the overview is not —
 and the first thing to revisit if anyone runs a suite that big.
 
-**Storage grows monotonically.** No retention, no expiry, no deletion endpoint,
-no artifact GC. See [security.md](security.md#what-test-hub-does-not-protect-against).
+**Storage grows only as far as retention lets it.** `test-hub prune` deletes runs
+past a cutoff, everything under them, and the content-addressed blobs left
+unreferenced as a result ([ADR-0002](adr/0002-data-retention.md)). Two things it
+is not: it is not automatic — nothing sweeps until you schedule the command — and
+it is not a size ceiling, because the policy is age with a per-project floor, so
+a workspace full of dormant projects keeps `--keep-min` runs of each regardless
+of the cutoff. The dashboard's Settings page drives the same service over
+`/api/v1/retention`, behind an administrator token that is deliberately separate
+from the one CI publishes with (D8).
 
 **One workspace.** The column is on every row from the first migration
 (ADR-0001 D9) precisely so that adding tenancy later is not the migration nobody

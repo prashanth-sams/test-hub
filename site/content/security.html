@@ -143,59 +143,24 @@ yourself loosening the CSP to make a feature work, the feature is wrong.</p>
 specific reason: the latter buffers responses, which would defeat the Server-Sent Events
 endpoint entirely.</p>
 
-<h3 id="snapshot-embedding">The offline export's data block</h3>
+<h3 id="no-embedded-data">No data is embedded in the page</h3>
 
-<p>This is the subtle one, and it is the place where the defences are not defence in depth
-but the whole defence. The exported HTML file embeds the entire data set <em>inside</em> a
-<code>&lt;script&gt;</code> element:</p>
+<p>The dashboard is served as static files and asks the API for everything, so there is no
+document into which a test name is ever interpolated. That removes a whole class of bug
+rather than defending against it: the byte sequence <code>&lt;/script</code> in a stack trace
+is just text inside a JSON response, and the response is parsed by
+<code>JSON.parse</code>, never by an HTML parser.</p>
 
-<div class="codeblock" data-lang="html">
-<pre><code>&lt;script id="test-hub-snapshot" type="application/json"&gt;…&lt;/script&gt;</code></pre>
-</div>
+<p>Test Hub used to ship an offline HTML export that embedded its entire data set inside a
+<code>&lt;script&gt;</code> element, which needed careful escaping on the way in — that export
+was removed (<a href="https://github.com/prashanth-sams/test-hub/blob/main/docs/adr/0003-drop-the-offline-export.md">ADR-0003</a>),
+and the escaping problem went with it.</p>
 
-<p>An HTML parser does not parse the contents of a script element. The only thing that can
-end it early is the literal string <code>&lt;/script</code> — so a test named
-<code>&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;</code> would close the data block and
-start executing. <code>embed_json</code> in <code>src/test_hub/export/snapshot.py</code>
-rewrites <code>&lt;</code>, <code>&gt;</code>, <code>&amp;</code>, U+2028 and U+2029 as JSON
-<code>\uXXXX</code> escapes before serialization:</p>
-
-<div class="codeblock" data-lang="shell">
-<pre><code>$ python -c "from test_hub.export.snapshot import embed_json; \
-             print(embed_json({'name': '&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;'}))"
-{"name": "\u003c/script\u003e\u003cimg src=x onerror=alert(1)\u003e"}</code></pre>
-</div>
-
-<p>No byte sequence in test data can spell <code>&lt;/script</code>. Because these are JSON
-escapes rather than HTML entities, the value the browser parses back is byte-for-byte the
-value that was serialized — the escaping costs nothing in fidelity:</p>
-
-<div class="codeblock" data-lang="shell">
-<pre><code>$ python -c "import json; from test_hub.export.snapshot import embed_json; \
-             print(json.loads(embed_json({'name': '&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;'}))['name'])"
-&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;</code></pre>
-</div>
-
-<p>U+2028 and U+2029 are in that list because they are legal inside a JSON string and illegal
-inside a JavaScript one. A stack trace containing either would turn the whole snapshot into a
-syntax error — a denial of service on a report you have already emailed to somebody.
-<code>tests/test_snapshot_embedding.py</code> runs eleven real breakout payloads through both
-properties: nothing escapes, and every value survives exactly.</p>
-
-<p>The same class of bug bit the <em>asset</em> inliner rather than the data. The dashboard's
-own <code>40-components.js</code> explains its escaping contract with a comment containing a
-literal <code>&lt;script&gt;alert(1)&lt;/script&gt;</code>, and inlining that verbatim ended
-the script element in the middle of the bundle. <code>_neutralize()</code> now rewrites those
-sequences, and <code>_concat()</code> re-checks the result and raises rather than writing a
-file that would truncate itself.</p>
-
-<div class="note note--warn"><span class="note__title">The exported snapshot carries no CSP</span>
-It is a single <code>file://</code> document. A <code>&lt;meta&gt;</code> policy there would
-be weaker than a header and, under <code>default-src 'none'</code>, self-defeating for a file
-whose script and style are inline by construction. In the export, <code>embed_json</code> and
-the no-<code>innerHTML</code> rule are not layers on top of a policy — they are the only
-thing standing there. That is exactly why both are enforced where the data is
-<em>written</em> rather than where it is displayed.</div>
+<p>What remains is the rule inside the browser: no <code>innerHTML</code> with interpolated
+data. <code>tests/test_frontend_assets.py</code> fails the build if any dashboard file assigns
+<code>innerHTML</code>, writes an inline event handler, or reaches for <code>eval</code>. The
+fixture suite includes a test named <code>&lt;script&gt;alert(1)&lt;/script&gt;</code>, which
+renders as those characters everywhere it appears.</p>
 
 <h3 id="artifacts-serving">Artifacts are always downloads</h3>
 

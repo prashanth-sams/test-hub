@@ -112,7 +112,7 @@
 <code>src/test_hub/domain/metrics.py</code> and the computed fields of <code>RunCounts</code>
 in <code>src/test_hub/domain/models.py</code>. Nothing else in the Python codebase computes a
 pass rate, a flake rate or a percentile. A view that needs one calls in there, so the number in
-an exported snapshot and the number in the live API cannot disagree.</p>
+one part of the product and the number in another cannot disagree.</p>
 
 <div class="note note--tip"><span class="note__title">The executable version of this
 page</span><code>tests/test_metrics.py</code> is this document as assertions. Almost every
@@ -125,10 +125,9 @@ right.</div>
 <p>There is exactly one second implementation of any of this, and it is on purpose:
 <code>src/test_hub/web/assets/js/10-provider.js</code> transcribes
 <code>RunCounts</code>'s computed fields as <code>finalizeCounts()</code>, and
-<code>percentile()</code> line for line, into JavaScript. It has to, because the offline
-snapshot has no server to ask when the reader applies a filter — the same
-<code>test-hub export</code> file has to recompute a pass rate for "the payments team, staging
-only" with the network off.</p>
+<code>percentile()</code> line for line, into JavaScript. It has to, because some filters
+cannot be expressed to the API: the dashboard fetches the matching runs and recomputes a pass
+rate for "the payments team, staging only" in the browser.</p>
 
 <p>The JavaScript carries the Python function names in its comments so the two stay greppable
 from each other. That is a real duplication and worth knowing about before you change a
@@ -137,7 +136,7 @@ formula.</p>
 <div class="note note--warn"><span class="note__title">One place they genuinely differ</span>
 Python's <code>round()</code> breaks ties to even; the JavaScript
 <code>Math.round(value * 100) / 100</code> breaks them upward. One test passing out of 32
-executed is <code>3.12</code> from the server and <code>3.13</code> from the snapshot's
+executed is <code>3.12</code> from the server and <code>3.13</code> from the browser's
 filtered recomputation. Both are verified; the divergence is at most 0.01 and only at an exact
 half-cent tie, but it is there.</div>
 
@@ -441,7 +440,7 @@ what the JUnit adapter's handling of Surefire's <code>&lt;flakyFailure&gt;</code
 <p><code>TestDetail.flake_rate</code> is the percentage of runs in a trailing window in which a
 test misbehaved. The window is <code>Settings.flaky_window_runs</code> (default 20) for the
 overview's flakiest-tests list, 30 by default on
-<code>GET /api/v1/tests/{id}?history=…</code> (1–200), and 20 in an exported snapshot.</p>
+<code>GET /api/v1/tests/{id}?history=…</code> (1–200).</p>
 
 <div class="codeblock" data-lang="python" data-caption="test_hub.domain.metrics.flake_rate"><div class="codeblock__head"><span class="codeblock__lang">python</span><span class="codeblock__cap">test_hub.domain.metrics.flake_rate</span></div>
 <pre><code>def flake_rate(per_run):

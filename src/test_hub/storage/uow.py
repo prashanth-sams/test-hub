@@ -90,7 +90,7 @@ class SqlUnitOfWork:
     def session(self) -> Any:
         """The underlying SQLAlchemy session.
 
-        Exposed for the exporter and the demo seeder, which occasionally need a
+        Exposed for the demo seeder, which occasionally needs a
         query this interface does not have a method for. Not part of the
         storage contract — anything above :mod:`test_hub.service` that reaches
         for it is reaching through an abstraction on purpose.

@@ -33,8 +33,65 @@
     search: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z', 'm20 20-4.1-4.1'],
     back: ['M20 12H4', 'm10 6-6 6 6 6'],
     filter: ['M3.5 5.5h17l-6.5 7.6V19l-4 2v-7.9Z'],
-    clock: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7.2V12l3 1.8']
+    clock: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7.2V12l3 1.8'],
+    gear: ['M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z', 'M19.4 14.4a1.5 1.5 0 0 0 .3 1.7l.1.1a1.9 1.9 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-2.6 1v.2a1.9 1.9 0 1 1-3.8 0v-.1a1.5 1.5 0 0 0-2.6-1l-.1.1a1.9 1.9 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0-1-2.6h-.2a1.9 1.9 0 1 1 0-3.8h.1a1.5 1.5 0 0 0 1-2.6l-.1-.1a1.9 1.9 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 1.7.3h.1a1.5 1.5 0 0 0 .9-1.4v-.2a1.9 1.9 0 1 1 3.8 0v.1a1.5 1.5 0 0 0 2.6 1l.1-.1a1.9 1.9 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0-.3 1.7v.1a1.5 1.5 0 0 0 1.4.9h.2a1.9 1.9 0 1 1 0 3.8h-.1a1.5 1.5 0 0 0-1.4.9Z'],
+    check: ['m5 12.8 4.4 4.4L19 7.6'],
+    monitor: ['M4.5 4.8h15a1.5 1.5 0 0 1 1.5 1.5v8.4a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 14.7V6.3a1.5 1.5 0 0 1 1.5-1.5Z', 'M9 19.2h6M12 16.2v3'],
+    grid: ['M4.2 4.2h6.2v6.2H4.2zM13.6 4.2h6.2v6.2h-6.2zM4.2 13.6h6.2v6.2H4.2zM13.6 13.6h6.2v6.2h-6.2z'],
+    list: ['M9 6.5h11M9 12h11M9 17.5h11', 'M4.6 6.5h.01M4.6 12h.01M4.6 17.5h.01'],
+    chart: ['M4 4.5v15h16', 'm7.5 15.2 3.6-4.6 3 2.4L20 6.6'],
+    bug: ['M9 7.4a3 3 0 0 1 6 0', 'M7.5 10.4h9v4.1a4.5 4.5 0 0 1-9 0Z', 'M4.6 12.2h2.9M16.5 12.2h2.9M5.6 7.2l2 1.6M18.4 7.2l-2 1.6M5.6 17.6l2-1.4M18.4 17.6l-2-1.4'],
+    users: ['M9.4 11.6a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8Z', 'M3.6 19.6a5.8 5.8 0 0 1 11.6 0', 'M16.2 5.3a3.4 3.4 0 0 1 0 6.6', 'M17.6 14.5a5.6 5.6 0 0 1 2.8 5.1'],
+    bolt: ['M13.2 3.2 5.6 13.6h5.3l-.8 7.2 8.3-10.4h-5.3Z'],
+    layers: ['m12 3.6 8 4.2-8 4.2-8-4.2 8-4.2Z', 'm4 12.2 8 4.2 8-4.2', 'm4 16.4 8 4.2 8-4.2'],
+    briefcase: ['M4.5 8h15a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5v-9A1.5 1.5 0 0 1 4.5 8Z', 'M9 8V6.2A1.5 1.5 0 0 1 10.5 4.7h3A1.5 1.5 0 0 1 15 6.2V8', 'M3 12.6h18'],
+    rows: ['M3.6 5.6h16.8M3.6 10h16.8M3.6 14h16.8M3.6 18.4h16.8'],
+    steps: ['M9.5 6.5h10.5M9.5 12h10.5M9.5 17.5h10.5', 'M3.8 5h1.3v3.4', 'M3.6 11.2a1 1 0 0 1 1.7.7c0 .9-1.7 1.4-1.7 2.3h1.9', 'M3.7 16.3h1.6l-1 1.2a1.1 1.1 0 1 1-.6 1.7'],
+    archive: ['M3.6 5.4h16.8v3.2H3.6z', 'M5.2 8.6v9.2a1.5 1.5 0 0 0 1.5 1.5h10.6a1.5 1.5 0 0 0 1.5-1.5V8.6', 'M10 12.2h4'],
+    camera: ['M4.5 8h2.9l1.4-2.3h6.4L16.6 8h2.9A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-8A1.5 1.5 0 0 1 4.5 8Z', 'M12 16.3a3.3 3.3 0 1 0 0-6.6 3.3 3.3 0 0 0 0 6.6Z'],
+    swap: ['M4 8.6h13', 'm13.6 5.1 3.5 3.5-3.5 3.5', 'M20 15.4H7', 'm10.4 11.9-3.5 3.5 3.5 3.5'],
+    shield: ['M12 3.4 4.8 6v5.5c0 4.2 2.9 7.5 7.2 9.1 4.3-1.6 7.2-4.9 7.2-9.1V6L12 3.4Z', 'm9 12.2 2.2 2.2 4-4.3']
   };
+
+  /* The rail draws from a second set, and it is deliberately a different kind
+   * of drawing from the one above. The outline icons are right beside body
+   * text in a card, where a 1.7px stroke matches the weight of the words next
+   * to it. The rail is read from the far edge of the screen at a glance, and
+   * an outline at that distance is a grey smudge — so its icons are solid
+   * glyphs that hold their shape, taken from the Font Awesome set the
+   * pytest-html-reporter rail uses, one for one, at its 18px.
+   *
+   * Every glyph is re-windowed onto Font Awesome's own 1792-unit em square,
+   * centred. That one detail is what keeps the set honest: these drawings have
+   * per-icon bounds — the shield is 1280 units wide, the line chart 2048 — and
+   * fitting each one to a square box instead would scale the narrow ones up
+   * until they all filled it, which is both wrong against the report and
+   * visibly uneven down the rail. Rendered at 16px the square reproduces FA's
+   * metrics exactly: the shield lands at 11.4px wide, the line chart at 18.3px,
+   * each in a shared 16px box so the labels beside them still line up. */
+  var RAIL_ICON_PATHS = {
+    'home': { box: '0 -1.5 1792 1792', d: 'M1472 992v480q0 26-19 45t-45 19h-384v-384h-256v384h-384q-26 0-45-19t-19-45v-480q0-1 .5-3t.5-3l575-474 575 474q1 2 1 6zm223-69l-62 74q-8 9-21 11h-3q-13 0-21-7l-692-577-692 577q-12 8-24 7-13-2-21-11l-62-74q-8-10-7-23.5t11-21.5l719-599q32-26 76-26t76 26l244 204v-195q0-14 9-23t23-9h192q14 0 23 9t9 23v408l219 182q10 8 11 21.5t-7 23.5z' },
+    'line-chart': { box: '128 0 1792 1792', d: 'M2048 1536v128h-2048v-1536h128v1408h1920zm-128-1248v435q0 21-19.5 29.5t-35.5-7.5l-121-121-633 633q-10 10-23 10t-23-10l-233-233-416 416-192-192 585-585q10-10 23-10t23 10l233 233 464-464-121-121q-16-16-7.5-35.5t29.5-19.5h435q14 0 23 9t9 23z' },
+    'history': { box: '0 0 1792 1792', d: 'M1664 896q0 156-61 298t-164 245-245 164-298 61q-172 0-327-72.5t-264-204.5q-7-10-6.5-22.5t8.5-20.5l137-138q10-9 25-9 16 2 23 12 73 95 179 147t225 52q104 0 198.5-40.5t163.5-109.5 109.5-163.5 40.5-198.5-40.5-198.5-109.5-163.5-163.5-109.5-198.5-40.5q-98 0-188 35.5t-160 101.5l137 138q31 30 14 69-17 40-59 40h-448q-26 0-45-19t-19-45v-448q0-42 40-59 39-17 69 14l130 129q107-101 244.5-156.5t284.5-55.5q156 0 298 61t245 164 164 245 61 298zm-640-288v448q0 14-9 23t-23 9h-320q-14 0-23-9t-9-23v-64q0-14 9-23t23-9h224v-352q0-14 9-23t23-9h64q14 0 23 9t9 23z' },
+    'briefcase': { box: '0 -128 1792 1792', d: 'M640 256h512v-128h-512v128zm1152 640v480q0 66-47 113t-113 47h-1472q-66 0-113-47t-47-113v-480h672v160q0 26 19 45t45 19h320q26 0 45-19t19-45v-160h672zm-768 0v128h-256v-128h256zm768-480v384h-1792v-384q0-66 47-113t113-47h352v-160q0-40 28-68t68-28h576q40 0 68 28t28 68v160h352q66 0 113 47t47 113z' },
+    'server': { box: '0 -64 1792 1792', d: 'M128 1408h1024v-128h-1024v128zm0-512h1024v-128h-1024v128zm1568 448q0-40-28-68t-68-28-68 28-28 68 28 68 68 28 68-28 28-68zm-1568-960h1024v-128h-1024v128zm1568 448q0-40-28-68t-68-28-68 28-28 68 28 68 68 28 68-28 28-68zm0-512q0-40-28-68t-68-28-68 28-28 68 28 68 68 28 68-28 28-68zm96 832v384h-1792v-384h1792zm0-512v384h-1792v-384h1792zm0-512v384h-1792v-384h1792z' },
+    'list-ol': { box: '7.5 4.5 1792 1792', d: 'M381 1620q0 80-54.5 126t-135.5 46q-106 0-172-66l57-88q49 45 106 45 29 0 50.5-14.5t21.5-42.5q0-64-105-56l-26-56q8-10 32.5-43.5t42.5-54 37-38.5v-1q-16 0-48.5 1t-48.5 1v53h-106v-152h333v88l-95 115q51 12 81 49t30 88zm2-627v159h-362q-6-36-6-54 0-51 23.5-93t56.5-68 66-47.5 56.5-43.5 23.5-45q0-25-14.5-38.5t-39.5-13.5q-46 0-81 58l-85-59q24-51 71.5-79.5t105.5-28.5q73 0 123 41.5t50 112.5q0 50-34 91.5t-75 64.5-75.5 50.5-35.5 52.5h127v-60h105zm1409 319v192q0 13-9.5 22.5t-22.5 9.5h-1216q-13 0-22.5-9.5t-9.5-22.5v-192q0-14 9-23t23-9h1216q13 0 22.5 9.5t9.5 22.5zm-1408-899v99h-335v-99h107q0-41 .5-121.5t.5-121.5v-12h-2q-8 17-50 54l-71-76 136-127h106v404h108zm1408 387v192q0 13-9.5 22.5t-22.5 9.5h-1216q-13 0-22.5-9.5t-9.5-22.5v-192q0-14 9-23t23-9h1216q13 0 22.5 9.5t9.5 22.5zm0-512v192q0 13-9.5 22.5t-22.5 9.5h-1216q-13 0-22.5-9.5t-9.5-22.5v-192q0-13 9.5-22.5t22.5-9.5h1216q13 0 22.5 9.5t9.5 22.5z' },
+    'camera': { box: '128 -64 1792 1792', d: 'M1024 672q119 0 203.5 84.5t84.5 203.5-84.5 203.5-203.5 84.5-203.5-84.5-84.5-203.5 84.5-203.5 203.5-84.5zm704-416q106 0 181 75t75 181v896q0 106-75 181t-181 75h-1408q-106 0-181-75t-75-181v-896q0-106 75-181t181-75h224l51-136q19-49 69.5-84.5t103.5-35.5h512q53 0 103.5 35.5t69.5 84.5l51 136h224zm-704 1152q185 0 316.5-131.5t131.5-316.5-131.5-316.5-316.5-131.5-316.5 131.5-131.5 316.5 131.5 316.5 316.5 131.5z' },
+    'exchange': { box: '0 64 1792 1792', d: 'M1792 1184v192q0 13-9.5 22.5t-22.5 9.5h-1376v192q0 13-9.5 22.5t-22.5 9.5q-12 0-24-10l-319-320q-9-9-9-22 0-14 9-23l320-320q9-9 23-9 13 0 22.5 9.5t9.5 22.5v192h1376q13 0 22.5 9.5t9.5 22.5zm0-544q0 14-9 23l-320 320q-9 9-23 9-13 0-22.5-9.5t-9.5-22.5v-192h-1376q-13 0-22.5-9.5t-9.5-22.5v-192q0-13 9.5-22.5t22.5-9.5h1376v-192q0-14 9-23t23-9q12 0 24 10l319 319q9 9 9 23z' },
+    'shield': { box: '0 0 1792 1792', d: 'M1344 960v-640h-448v1137q119-63 213-137 235-184 235-360zm192-768v768q0 86-33.5 170.5t-83 150-118 127.5-126.5 103-121 77.5-89.5 49.5-42.5 20q-12 6-26 6t-26-6q-16-7-42.5-20t-89.5-49.5-121-77.5-126.5-103-118-127.5-83-150-33.5-170.5v-768q0-26 19-45t45-19h1152q26 0 45 19t19 45z' },
+  };
+
+  function railIcon(name, size) {
+    var glyph = RAIL_ICON_PATHS[name];
+    if (!glyph) { return icon(name, size); }
+    var node = svgEl('svg', {
+      width: size || 16, height: size || 16, viewBox: glyph.box,
+      fill: 'currentColor', stroke: 'none',
+      'aria-hidden': 'true', focusable: 'false'
+    });
+    node.appendChild(svgEl('path', { d: glyph.d }));
+    return node;
+  }
 
   function icon(name, size) {
     var paths = ICON_PATHS[name] || ICON_PATHS.inbox;
@@ -90,7 +147,7 @@
     return el('a', {
       attrs: { href: href, rel: 'noreferrer noopener', target: '_blank' },
       className: 'row row--tight'
-    }, [document.createTextNode(text), icon('external', 13)]);
+    }, [document.createTextNode(text), icon('external', 14)]);
   }
 
   function deltaText(value, options) {
@@ -150,6 +207,9 @@
     if (spec.title || spec.actions || spec.hint) {
       var head = el('div', { className: 'card__head' }, [
         el('div', { className: 'row row--tight' }, [
+          // The icon is decorative: it repeats what the title already says, so
+          // it is aria-hidden and the heading keeps the whole accessible name.
+          spec.icon ? el('span', { className: 'card__icon' }, icon(spec.icon, 18)) : null,
           el('h2', { className: 'card__title', text: spec.title || '' }),
           spec.badge || null
         ]),
@@ -188,6 +248,146 @@
     ]);
   }
 
+  /**
+   * The headline tile of the analytics page: one number, what it measures, and
+   * the sentence that stops it being misread. `tone` colours the top rule with
+   * the status language, so a score that is bad looks bad at a glance and a
+   * count that is merely a count does not.
+   */
+  function statTile(spec) {
+    return el('div', {
+      className: 'stat',
+      dataset: spec.tone ? { tone: spec.tone } : null
+    }, [
+      el('div', { className: 'stat__value' }, [
+        el('span', { text: spec.value }),
+        spec.delta === null || spec.delta === undefined
+          ? null
+          : deltaText(spec.delta, { unit: spec.deltaUnit || 'pct' })
+      ]),
+      el('div', { className: 'stat__label', text: spec.label }),
+      spec.hint ? el('div', { className: 'stat__hint', text: spec.hint }) : null
+    ]);
+  }
+
+  /**
+   * A proportion drawn as a bar. Always paired with the number it draws — the
+   * bar is the comparison between rows, never the value itself, which is why
+   * `label` is rendered as text next to it rather than inside it.
+   */
+  function meter(spec) {
+    var max = spec.max || 0;
+    var value = spec.value || 0;
+    var share = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+    var fill = el('span', { className: 'meter__fill', dataset: { status: spec.status || 'total' } });
+    fill.style.width = (share * 100).toFixed(2) + '%';
+    return el('span', {
+      className: 'meter',
+      attrs: { role: 'img', 'aria-label': spec.ariaLabel || (spec.label || String(value)) }
+    }, fill);
+  }
+
+  /** A short piece of evidence — usually a test name under a failure type. */
+  function chip(text, hash) {
+    if (hash) {
+      return el('a', { className: 'chip chip--link', text: text, attrs: { href: hash } });
+    }
+    return el('span', { className: 'chip', text: text });
+  }
+
+  /**
+   * What history says about one test. The four words are deliberate and
+   * exclusive: `stable` never failed, `flaky` disagreed with itself, `broken`
+   * has not passed, `quiet` did not run often enough for any of the three to
+   * mean anything.
+   */
+  function verdictBadge(verdict, title) {
+    return el('span', {
+      className: 'verdict',
+      dataset: { verdict: verdict },
+      text: verdict,
+      attrs: title ? { title: title } : null
+    });
+  }
+
+  /**
+   * The outcome counters, sized to be read across a room and clickable when the
+   * caller can say where each one leads. A status with no tests is still drawn:
+   * "0 failed" is the reassurance people come to the page for, and a strip that
+   * changes shape between runs cannot be compared with the one before it.
+   */
+  //: The outcomes a finished test can carry. `running`, `queued`, `cancelled`
+  //: and `unknown` are states, not outcomes, and a strip that lists them spends
+  //: a third of its width on zeroes.
+  var STRIP_STATUSES = ['passed', 'failed', 'error', 'skipped', 'xfailed', 'xpassed'];
+
+  function statStrip(counts, options) {
+    var opts = options || {};
+    var statuses = opts.statuses || STRIP_STATUSES;
+    var nodes = [];
+    var build = function (status, value) {
+      var label = util.statusLabel(status);
+      var children = [
+        el('span', { className: 'statstrip__value', text: util.formatNumber(value) }),
+        el('span', { className: 'statstrip__label', text: label })
+      ];
+      // A counter at zero has nothing behind it to show, so it stays a figure
+      // rather than becoming a button that does nothing when pressed.
+      if (!opts.onSelect || !value) {
+        return el('div', { className: 'statstrip__item', dataset: { status: status } }, children);
+      }
+      return el('button', {
+        className: 'statstrip__item',
+        dataset: { status: status },
+        attrs: { type: 'button', title: 'Show only the ' + label.toLowerCase() + ' tests' },
+        on: { click: function () { opts.onSelect(status); } }
+      }, children);
+    };
+    for (var i = 0; i < statuses.length; i++) {
+      var value = counts[statuses[i]] || 0;
+      if (!value && opts.hideEmpty) { continue; }
+      nodes.push(build(statuses[i], value));
+    }
+    // Flakiness and retries are properties of a test's attempts rather than
+    // outcomes it can end on, so they are counted separately and never
+    // clickable: there is no "the flaky ones" filter to jump to.
+    var extras = opts.extras || [];
+    for (var e = 0; e < extras.length; e++) {
+      nodes.push(el('div', {
+        className: 'statstrip__item',
+        dataset: { status: extras[e].status || 'unknown' },
+        attrs: extras[e].title ? { title: extras[e].title } : null
+      }, [
+        el('span', { className: 'statstrip__value', text: util.formatNumber(extras[e].value || 0) }),
+        el('span', { className: 'statstrip__label', text: extras[e].label })
+      ]));
+    }
+    return el('div', { className: 'statstrip' }, nodes);
+  }
+
+  /**
+   * One cell per run, oldest on the left: the shape of a test's recent history
+   * at the size of a word. Deliberately not a sparkline — the value being drawn
+   * is categorical (it passed, it did not), and a line implies a magnitude
+   * between two outcomes that has no meaning.
+   */
+  function streak(points, options) {
+    var opts = options || {};
+    var limit = opts.limit || 12;
+    var items = points.slice(-limit);
+    var cells = items.map(function (point) {
+      return el('span', {
+        className: 'streak__cell',
+        dataset: { status: point.status || 'unknown' },
+        attrs: { title: point.title || util.statusLabel(point.status) }
+      });
+    });
+    return el('span', {
+      className: 'streak',
+      attrs: { role: 'img', 'aria-label': opts.ariaLabel || (items.length + ' most recent runs') }
+    }, cells);
+  }
+
   function kv(pairs) {
     var nodes = [];
     for (var i = 0; i < pairs.length; i++) {
@@ -212,7 +412,7 @@
       className: 'banner' + (spec.tone ? ' banner--' + spec.tone : ''),
       attrs: { role: spec.tone === 'error' ? 'alert' : 'status' }
     }, [
-      icon(spec.icon || (spec.tone === 'error' ? 'alert' : 'clock'), 16),
+      icon(spec.icon || (spec.tone === 'error' ? 'alert' : 'clock'), 18),
       el('div', {}, [
         spec.title ? el('div', { className: 'banner__title', text: spec.title }) : null,
         spec.text ? el('div', { text: spec.text }) : null
@@ -240,7 +440,7 @@
 
   function emptyState(spec) {
     return el('div', { className: 'empty' }, [
-      el('div', { className: 'empty__icon' }, icon(spec.icon || 'inbox', 20)),
+      el('div', { className: 'empty__icon' }, icon(spec.icon || 'inbox', 22)),
       el('p', { className: 'empty__title', text: spec.title || 'Nothing here yet' }),
       spec.hint ? el('p', { className: 'empty__hint', text: spec.hint }) : null,
       spec.action || null
@@ -253,10 +453,10 @@
     if (spec.onRetry) {
       actions.push(el('button', {
         className: 'btn', attrs: { type: 'button' }, on: { click: spec.onRetry }
-      }, [icon('refresh', 14), document.createTextNode('Try again')]));
+      }, [icon('refresh', 15), document.createTextNode('Try again')]));
     }
     return el('div', { className: 'errorbox', attrs: { role: 'alert' } }, [
-      el('div', { className: 'errorbox__icon' }, icon('alert', 20)),
+      el('div', { className: 'errorbox__icon' }, icon('alert', 22)),
       el('p', { className: 'errorbox__title', text: spec.title || 'That did not load' }),
       el('p', { className: 'errorbox__hint', text: error.message || String(error) || 'Unknown error' }),
       error.hint ? el('p', { className: 'errorbox__detail', text: error.hint }) : null,
@@ -496,6 +696,29 @@
    * `sync(values, facets)` that edits the controls in place, and only replaces
    * a select's options when the facet list itself has changed.
    */
+  /**
+   * The portfolio filter bar's fields, in one place: the overview and the
+   * analytics page slice the same data by the same seven dimensions, and two
+   * copies of this list is two lists that drift.
+   */
+  function portfolioFields() {
+    return [
+      {
+        key: 'window_days', label: 'Window', type: 'segmented', defaultValue: '30',
+        options: [
+          { value: '7', label: '7d' }, { value: '14', label: '14d' },
+          { value: '30', label: '30d' }, { value: '90', label: '90d' }
+        ]
+      },
+      { key: 'project', label: 'Project' },
+      { key: 'team', label: 'Team' },
+      { key: 'component', label: 'Component' },
+      { key: 'test_type', label: 'Test type', facet: 'test_types' },
+      { key: 'environment', label: 'Environment' },
+      { key: 'branch', label: 'Branch', facet: 'branches' }
+    ];
+  }
+
   function filterPanel(spec) {
     var controls = {};
     var row = el('div', { className: 'filters__row' });
@@ -621,8 +844,218 @@
     return { el: root, sync: sync };
   }
 
+  /* ---------------------------------------------------------------- menu */
+
+  /* An anchored popover with a trigger. The dashboard's first, so the keyboard
+   * contract is written here once rather than per caller:
+   *
+   *   Enter/Space/click  toggle, and on open move focus to the first item
+   *   ArrowDown/Up       roving focus within the panel, wrapping
+   *   Home/End           first / last item
+   *   Escape             close and return focus to the trigger
+   *   Tab                close, and let focus leave naturally
+   *   click outside      close, without stealing focus
+   *
+   * Returning focus to the trigger on Escape is the part that is easy to skip
+   * and impossible to work around: without it a keyboard user who opens the
+   * menu and changes their mind is dropped at the top of the document.
+   *
+   * `items` are built by the caller and are expected to carry a menu role
+   * (`menuitem`, `menuitemradio`); anything focusable inside the panel is
+   * treated as an item for arrow-key purposes.
+   */
+  function menu(spec) {
+    var id = spec.id || ('th-menu-' + Math.random().toString(36).slice(2, 8));
+    var open = false;
+
+    var panel = el('div', {
+      className: 'menu__panel',
+      attrs: {
+        id: id,
+        role: 'menu',
+        'aria-label': spec.label || 'Menu',
+        hidden: true
+      }
+    });
+
+    var trigger = el('button', {
+      className: 'iconbtn menu__trigger',
+      attrs: {
+        type: 'button',
+        'aria-haspopup': 'true',
+        'aria-expanded': 'false',
+        'aria-controls': id,
+        'aria-label': spec.label || 'Menu',
+        title: spec.title || spec.label || 'Menu'
+      }
+    }, icon(spec.icon || 'gear', 18));
+
+    var root = el('div', { className: 'menu' }, [trigger, panel]);
+
+    function items() {
+      return panel.querySelectorAll('[role^="menuitem"], button, [href], input, select');
+    }
+
+    function focusItem(index) {
+      var list = items();
+      if (!list.length) { return; }
+      var wrapped = (index + list.length) % list.length;
+      list[wrapped].focus();
+    }
+
+    function indexOfActive() {
+      var list = items();
+      for (var i = 0; i < list.length; i++) {
+        if (list[i] === document.activeElement) { return i; }
+      }
+      return -1;
+    }
+
+    function setOpen(next, options) {
+      if (open === next) { return; }
+      open = next;
+      panel.hidden = !next;
+      root.setAttribute('data-open', String(next));
+      trigger.setAttribute('aria-expanded', String(next));
+      if (next) {
+        if (spec.onOpen) { spec.onOpen(panel); }
+        if (!options || options.focus !== false) { focusItem(0); }
+      } else if (options && options.restoreFocus) {
+        trigger.focus();
+      }
+    }
+
+    trigger.addEventListener('click', function () {
+      setOpen(!open, { focus: true });
+    });
+
+    panel.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setOpen(false, { restoreFocus: true });
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        focusItem(indexOfActive() + 1);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        focusItem(indexOfActive() - 1);
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        focusItem(0);
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        focusItem(items().length - 1);
+      } else if (event.key === 'Tab') {
+        setOpen(false);
+      }
+    });
+
+    trigger.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown' && !open) {
+        event.preventDefault();
+        setOpen(true, { focus: true });
+      } else if (event.key === 'Escape' && open) {
+        setOpen(false, { restoreFocus: true });
+      }
+    });
+
+    // Pointer-down rather than click: a click that starts inside the panel and
+    // ends outside it — a drag over a label — would otherwise close the menu.
+    function onDocumentMouseDown(event) {
+      if (!open || root.contains(event.target)) { return; }
+      setOpen(false);
+    }
+
+    // Focus leaving the menu entirely closes it, which covers Tab out and
+    // clicking straight into another control.
+    function onDocumentFocusIn(event) {
+      if (!open || root.contains(event.target)) { return; }
+      setOpen(false);
+    }
+
+    document.addEventListener('mousedown', onDocumentMouseDown);
+    document.addEventListener('focusin', onDocumentFocusIn);
+
+    return {
+      el: root,
+      panel: panel,
+      trigger: trigger,
+      open: function () { setOpen(true, { focus: true }); },
+      close: function (options) { setOpen(false, options); },
+      isOpen: function () { return open; },
+      // These two listeners are on `document`, not on the menu, so dropping the
+      // element is not enough to collect them — a caller that mounts a menu per
+      // view would otherwise accumulate one pair per mount.
+      destroy: function () {
+        document.removeEventListener('mousedown', onDocumentMouseDown);
+        document.removeEventListener('focusin', onDocumentFocusIn);
+      }
+    };
+  }
+
+  /* The dark-mode switch that sits at the foot of the rail.
+   *
+   * It reads the *painted* theme rather than the stored preference: with
+   * nothing stored the page is following the operating system, and a switch
+   * reading storage would sit at "off" on a dark page. Flipping it is what
+   * turns the OS default into an explicit choice.
+   *
+   * `role="switch"` with `aria-checked` is what is announced; the track and
+   * thumb are drawn, and only follow. The listener is on the theme, not on the
+   * button, so the switch is also right when the OS changes underneath it.
+   */
+  function themeSwitch() {
+    var track = el('span', { className: 'switch' }, [
+      el('span', { className: 'switch__thumb' })
+    ]);
+
+    var node = el('button', {
+      className: 'switchrow',
+      attrs: {
+        type: 'button',
+        role: 'switch',
+        'aria-checked': 'false',
+        'aria-label': 'Dark mode'
+      },
+      on: {
+        click: function () {
+          util.theme.toggle();
+          // `toggle` notifies the theme listeners, and `sync` is one of them,
+          // so the switch moves without being told twice.
+        }
+      }
+    }, [
+      icon('moon', 17),
+      el('span', { className: 'switchrow__label', text: 'Dark mode' }),
+      track
+    ]);
+
+    function sync() {
+      node.setAttribute('aria-checked', String(util.theme.current() === 'dark'));
+    }
+
+    var stopListening = util.theme.onChange(sync);
+    sync();
+
+    return {
+      el: node,
+      destroy: function () { if (stopListening) { stopListening(); } }
+    };
+  }
+
+  function menuSection(title, children) {
+    return el('div', { className: 'menu__section' }, [
+      title ? el('div', { className: 'menu__label', text: title }) : null,
+      el('div', { className: 'menu__group' }, children)
+    ]);
+  }
+
   TestHub.ui = {
     icon: icon,
+    railIcon: railIcon,
+    menu: menu,
+    menuSection: menuSection,
+    themeSwitch: themeSwitch,
     statusPill: statusPill,
     liveBadge: liveBadge,
     tag: tag,
@@ -635,6 +1068,12 @@
     card: card,
     section: section,
     kpi: kpi,
+    statTile: statTile,
+    meter: meter,
+    chip: chip,
+    verdictBadge: verdictBadge,
+    statStrip: statStrip,
+    streak: streak,
     kv: kv,
     metaGrid: metaGrid,
     banner: banner,
@@ -646,6 +1085,7 @@
     pager: pager,
     selectField: selectField,
     filterPanel: filterPanel,
+    portfolioFields: portfolioFields,
     searchField: searchField,
     segmented: segmented
   };

@@ -662,23 +662,6 @@ def landing() -> str:
     {"".join(cards)}
   </section>
 
-  <section class="modes">
-    <h2>Two ways to read your results</h2>
-    <p>Both are the same dashboard. The only thing that differs is where the data comes from, and
-    that difference lives in exactly one interface.</p>
-    <div class="tablewrap"><table>
-      <thead><tr><th>&nbsp;</th><th>Snapshot</th><th>Live</th></tr></thead>
-      <tbody>
-        <tr><th scope="row">Command</th><td><code>test-hub export</code></td><td><code>test-hub serve</code></td></tr>
-        <tr><th scope="row">Output</th><td>one self-contained <code>.html</code></td><td>a service on a port</td></tr>
-        <tr><th scope="row">Needs a server to read</th><td>no</td><td>yes</td></tr>
-        <tr><th scope="row">Updates while you watch</th><td>no</td><td>yes, over SSE</td></tr>
-        <tr><th scope="row">Data provider</th><td><code>SnapshotDataProvider</code></td><td><code>LiveDataProvider</code></td></tr>
-        <tr><th scope="row">Dashboard code</th><td><b>identical</b></td><td><b>identical</b></td></tr>
-      </tbody>
-    </table></div>
-  </section>
-
   <section class="closing">
     <h2>Start where you are</h2>
     <div class="closing__grid">

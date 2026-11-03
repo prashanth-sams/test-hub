@@ -3,9 +3,9 @@
 SQLite serializes writers. Test Hub takes the write lock up front
 (``BEGIN IMMEDIATE``) so two publishers queue instead of deadlocking on a lock
 upgrade — but that means *any* transaction holds the write lock for its whole
-life, including one that only ever reads. A full snapshot export walks every run
-in the window; holding the write lock for that would stall every publisher until
-it finished.
+life, including one that only ever reads. A retention plan walks every run in
+the store to count what a prune would remove; holding the write lock for that
+would stall every publisher until it finished.
 """
 
 from __future__ import annotations
@@ -91,10 +91,15 @@ def test_reads_still_return_the_same_data(context: Any) -> None:
     assert writing_runs[0].counts.total == reading_runs[0].counts.total
 
 
-def test_the_export_path_uses_a_read_only_scope(context: Any, tmp_path: Any) -> None:
-    """The export is the longest-lived read in the product; assert it, don't assume it."""
+def test_the_longest_read_uses_a_read_only_scope(context: Any) -> None:
+    """A retention plan counts what a prune would delete by walking the whole
+    store. It is the longest read left in the product; assert the scope it opens
+    rather than assuming it."""
     seed(context)
-    from test_hub.export.snapshot import ExportOptions, SnapshotExporter
+    from datetime import timedelta
+
+    from test_hub.domain.models import utcnow
+    from test_hub.service.retention import RetentionPolicy, RetentionService
 
     opened: list[bool] = []
     original = context.uow_factory
@@ -105,8 +110,8 @@ def test_the_export_path_uses_a_read_only_scope(context: Any, tmp_path: Any) -> 
 
     object.__setattr__(context, "uow_factory", spy)
     try:
-        SnapshotExporter(context).export(tmp_path / "r.html", ExportOptions(window_days=3650))
+        RetentionService(context).plan(RetentionPolicy(cutoff=utcnow() - timedelta(days=1)))
     finally:
         object.__setattr__(context, "uow_factory", original)
 
-    assert opened and all(opened), "the exporter opened a writing transaction"
+    assert opened and all(opened), "the retention plan opened a writing transaction"

@@ -5,10 +5,10 @@
  * to be a link somebody can paste into an incident channel, and it has to
  * survive a reload and the back button.
  *
- * Sorting is a server concern in live mode and a client concern in snapshot
- * mode, and this file knows about neither: it puts `sort` and `dir` in the
- * hash, the store hands them to whichever provider is mounted, and the provider
- * decides how to honour them.
+ * Sorting is the provider's concern, not this file's: it puts `sort` and `dir`
+ * in the hash, and the provider honours them on the server where it can and in
+ * the browser where a filter the API cannot express forced it to fetch a page
+ * and refine it. The table says which of the two happened.
  */
 (function (window) {
   'use strict';
@@ -40,9 +40,8 @@
 
   // Deliberately no time-window control here, unlike the overview. `GET /runs`
   // has no window parameter — it pages, newest first — so a window selector
-  // would filter the snapshot properly and do nothing at all against the live
-  // API. One control that means two different things is worse than no control;
-  // the Started column and the pager already answer "how far back am I".
+  // would sit there doing nothing. The Started column and the pager already
+  // answer "how far back am I".
 
 
   function create(ctx) {

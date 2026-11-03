@@ -184,7 +184,7 @@
           el('button', {
             className: 'btn btn--sm', attrs: { type: 'button' },
             on: { click: function () { store.retry(); } }
-          }, [ui.icon('refresh', 14), document.createTextNode('Refresh')])
+          }, [ui.icon('refresh', 15), document.createTextNode('Refresh')])
         ])
       ]);
     }
@@ -226,30 +226,77 @@
         ui.card({
           title: 'Outcome',
           body: el('div', { className: 'stack--sm' }, [
-            chart({
-              kind: 'donut',
-              title: 'Outcomes in this run',
-              description: ui.countsSentence(counts),
-              segments: segments,
-              size: 150,
-              centerValue: util.formatPercent(counts.pass_rate, 1),
-              centerLabel: 'pass rate'
-            }),
+            el('div', { className: 'hero' }, [
+              el('div', { className: 'hero__figure' }, [
+                el('div', { className: 'hero__value', text: util.formatNumber(counts.total) }),
+                el('div', { className: 'hero__label', text: 'test cases' }),
+                el('div', { className: 'hero__meta' }, [
+                  el('span', { className: 'hero__pill' }, [
+                    ui.icon('clock', 14),
+                    el('span', { text: util.formatDuration(run.duration_ms) })
+                  ]),
+                  context.environment
+                    ? el('span', { className: 'hero__pill' }, [
+                      ui.icon('monitor', 14),
+                      el('span', { text: context.environment })
+                    ])
+                    : null,
+                  run.is_live ? ui.liveBadge() : null
+                ])
+              ]),
+              chart({
+                kind: 'donut',
+                title: 'Outcomes in this run',
+                description: ui.countsSentence(counts),
+                segments: segments,
+                size: 150,
+                centerValue: util.formatPercent(counts.pass_rate, 1),
+                centerLabel: 'pass rate'
+              })
+            ]),
             ui.countBar(counts),
-            el('div', { className: 'legend' }, segments.map(function (segment) {
-              return el('span', { className: 'legend__item' }, [
-                el('span', { className: 'legend__swatch', dataset: { status: segment.key } }),
-                el('span', { text: segment.label + ' · ' + util.formatNumber(segment.value) })
-              ]);
-            })),
-            counts.flaky || counts.retried
-              ? el('div', { className: 'kpi__meta', text:
-                util.formatNumber(counts.flaky) + ' flaky · ' +
-                util.formatNumber(counts.retried) + ' retried' })
-              : null
+            // Every counter is a way into the table below, filtered to it. The
+            // number and the list of tests behind it are the same question
+            // asked twice, and making people retype it in the status box was
+            // the one thing this page kept sending them back for.
+            ui.statStrip(counts, {
+              onSelect: filterTestsByStatus,
+              extras: [
+                { label: 'Flaky', value: counts.flaky, status: 'xpassed',
+                  title: 'Tests that failed and then passed inside this run' },
+                { label: 'Retried', value: counts.retried, status: 'running',
+                  title: 'Tests that ran more than once' }
+              ]
+            })
           ])
         })
       ]);
+    }
+
+    /**
+     * Point the test table at one outcome and take the reader to it. The select
+     * is updated too, because it is the control that says what the table is
+     * showing — a filter that is on but not visible anywhere is a bug report.
+     */
+    function filterTestsByStatus(status) {
+      // The select is built from the statuses actually present in the payload.
+      // If the counts claim an outcome the test list does not contain, the
+      // counter is not a filter — leave the table as it is rather than emptying
+      // it and blaming the reader's click.
+      var available = false;
+      for (var i = 0; i < statusSelect.options.length; i++) {
+        if (statusSelect.options[i].value === status) { available = true; }
+      }
+      if (!available) { return; }
+      local.status = local.status === status ? '' : status;
+      statusSelect.value = local.status;
+      renderTests();
+      if (tableHolder.scrollIntoView) {
+        tableHolder.scrollIntoView({
+          behavior: util.prefersReducedMotion() ? 'auto' : 'smooth',
+          block: 'start'
+        });
+      }
     }
 
     function text(value) {
@@ -328,7 +375,7 @@
         className: 'tree__row',
         attrs: { type: 'button', 'aria-expanded': 'false' }
       }, [
-        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 14)),
+        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 15)),
         el('span', { className: 'tree__name', text: label }),
         el('span', { className: 'statuspill', dataset: { status: status },
           text: util.formatNumber(ids.length) })
@@ -473,7 +520,7 @@
         className: 'tree__row',
         attrs: { type: 'button', 'aria-expanded': String(expanded) }
       }, [
-        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 14)),
+        el('span', { className: 'tree__chevron' }, ui.icon('chevron', 15)),
         el('span', { className: 'tree__name' }, [
           el('span', { text: node.suite.name || node.suite.path }),
           node.suite.path && node.suite.path !== node.suite.name

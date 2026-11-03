@@ -3,7 +3,7 @@
 ADR-0001 D3 draws a hard line between the wire contract
 (:mod:`test_hub.domain.models`, Pydantic) and the rows on disk (this module).
 The repositories translate; no ORM object is ever serialized, returned from an
-API handler or embedded in a snapshot. That is what lets the table layout change
+API handler. That is what lets the table layout change
 — a new index, a split table, PostgreSQL — without a schema-version bump.
 
 Three decisions in here are worth knowing before you touch anything:
@@ -396,6 +396,11 @@ class IdempotencyKeyRow(Base):
     """
 
     __tablename__ = "idempotency_keys"
+    # `run_id` is indexed for the retention sweep and nothing else: it is the
+    # only table the prune deletes by run that has no other reason to carry the
+    # index, and without it every batch full-scans a table that grows with
+    # every import (ADR-0002, schema change).
+    __table_args__ = (Index("ix_idempotency_keys_run_id", "run_id"),)
 
     key: Mapped[str] = mapped_column(String(SHORT_TEXT_MAX), primary_key=True)
     run_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(), nullable=False)

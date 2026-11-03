@@ -160,6 +160,20 @@ class Settings(BaseSettings):
         default_factory=list,
         description="Pre-hashed tokens, `sha256$<salt-hex>$<hash-hex>`. The preferred form.",
     )
+    #: Tokens allowed to run destructive maintenance — currently retention.
+    #: Deliberately a *separate* list from `api_tokens`: the write token is the
+    #: one that lives in every repository's CI settings and gets copied between
+    #: projects, and a token that can post a test result must not also be able
+    #: to delete a year of them (ADR-0002 D8).
+    admin_tokens: CsvList = Field(
+        default_factory=list,
+        description="Plaintext admin tokens; hashed at startup. Prefer the hashes.",
+    )
+    admin_token_hashes: CsvList = Field(
+        default_factory=list,
+        description="Hashed admin tokens, from `test-hub token create --admin`.",
+    )
+
     insecure_no_auth: bool = Field(
         default=False,
         description="Explicitly allow a non-loopback bind with no authentication. Development "
@@ -203,9 +217,41 @@ class Settings(BaseSettings):
     flaky_window_runs: Annotated[int, Field(ge=2)] = 20
     open_browser: bool = False
 
+    # ------------------------------------------------------------ retention
+    #
+    # These bound how long data is *kept*, which is a different question from
+    # `history_window_days` above — that one bounds what the overview *shows*
+    # and deletes nothing. Nothing here sweeps on its own either: the settings
+    # are defaults for `test-hub prune`, which an operator schedules (ADR-0002
+    # D1). A setting that silently deleted data on a timer would take SQLite's
+    # single write lock at an hour nobody chose.
+    retention_days: Annotated[int | None, Field(ge=1)] = Field(
+        default=None,
+        description=(
+            "Default cutoff for `test-hub prune`, in days. Nothing is deleted until "
+            "that command runs; schedule it."
+        ),
+    )
+    retention_min_runs: Annotated[int, Field(ge=0)] = Field(
+        default=5,
+        description=(
+            "Runs always kept per project, however old. 0 disables the floor. Stops a "
+            "cutoff from deleting a dormant project out of existence."
+        ),
+    )
+    artifact_gc_grace_hours: Annotated[float, Field(ge=0)] = Field(
+        default=24.0,
+        description=(
+            "A content-addressed blob touched more recently than this is never "
+            "unlinked, even with no rows referencing it."
+        ),
+    )
+
     # ------------------------------------------------------------ validators
 
     @field_validator(
+        "admin_tokens",
+        "admin_token_hashes",
         "api_tokens",
         "api_token_hashes",
         "cors_allow_origins",

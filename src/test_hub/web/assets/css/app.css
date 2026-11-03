@@ -23,77 +23,139 @@
   color-scheme: light;
 
   /* -- surfaces ------------------------------------------------------ */
-  --bg: #f4f6f9;
-  --bg-accent: #eaeef6;
+  --bg: #eeeeee;
+  --bg-accent: #f5f5f5;
   --surface: #ffffff;
-  --surface-2: #f7f9fc;
-  --surface-3: #eef1f6;
-  --surface-inset: #f2f5f9;
-  --border: #e2e7ef;
-  --border-strong: #c8d0dc;
+  --surface-2: #fcfcfd;
+  --surface-3: #eef3f9;
+  --surface-inset: #f1f3f7;
+  --border: #dbe3ec;
+  --border-strong: #cfd7e3;
 
   /* -- ink ----------------------------------------------------------- */
-  --text: #111621;
-  --text-muted: #4f5a6b;
-  --text-subtle: #66707f;
+  --text: #2f3742;
+  --text-muted: #5d6775;
+  --text-subtle: #7b8390;
   --text-on-accent: #ffffff;
 
   /* -- accent -------------------------------------------------------- */
-  --accent: #2f4fd8;
-  --accent-hover: #2440b4;
-  --accent-ink: #1f37a0;
-  --accent-soft: #e7ecfd;
-  --accent-border: #c3cef9;
-  --focus: #2f4fd8;
-  --focus-halo: #2f4fd83d;
+  --accent: #3571a3;
+  --accent-hover: #2c608c;
+  --accent-ink: #264f73;
+  --accent-soft: #e7eef4;
+  --accent-border: #c2d4e3;
+  --focus: #3571a3;
+  --focus-halo: #3571a333;
 
-  /* -- status language ----------------------------------------------- */
-  --status-passed: #0f6b3c;
-  --status-passed-soft: #e4f3ea;
-  --status-failed: #b3251d;
-  --status-failed-soft: #fceceb;
-  --status-error: #7d1210;
-  --status-error-soft: #f8e5e4;
-  --status-skipped: #855400;
-  --status-skipped-soft: #fbeed7;
-  --status-xfailed: #5a37bd;
-  --status-xpassed: #9c4200;
-  --status-xfailed-soft: #ece7fb;
-  --status-xpassed-soft: #fbebdf;
-  --status-running: #0d5cb6;
-  --status-running-soft: #e3eefc;
-  --status-queued: #545e6c;
-  --status-queued-soft: #eceff4;
-  --status-cancelled: #545e6c;
-  --status-cancelled-soft: #eceff4;
-  --status-unknown: #545e6c;
-  --status-unknown-soft: #eceff4;
-  --status-flaky: #93306f;
-  --status-flaky-soft: #fae8f3;
+  /* -- status language ------------------------------------------------
+     Three names per status, and which one you reach for is decided by the
+     job the colour is doing, not by taste:
+
+       --status-X       the MARK. Saturated, drawn as a shape — chart bar,
+                        pie segment, legend swatch, meter fill, streak cell.
+                        A shape carries its own area, so it can be bright.
+       --status-X-fg    the INK. The same hue pushed to a text-legible
+                        lightness. Never used as a fill; always as `color`.
+       --status-X-soft  the TINT. The mark at low alpha, for the ground
+                        behind -fg ink. Alpha rather than a flat hex so a
+                        pill reads the same on a card, on the page and on
+                        an already-tinted row.
+
+     Writing the mark where the ink belongs is the one mistake this split
+     exists to prevent: pass green (#98cc64) is a fine bar and an unreadable
+     label. Both themes carry all three, so the language survives the switch.
+     ------------------------------------------------------------------- */
+  --status-passed: #98cc64;
+  --status-passed-fg: #5c8f2e;
+  --status-passed-soft: rgba(152, 204, 100, 0.18);
+  --status-failed: #fc6766;
+  --status-failed-fg: #d5403c;
+  --status-failed-soft: rgba(252, 103, 102, 0.15);
+  --status-error: #b13635;
+  --status-error-fg: #9d3231;
+  --status-error-soft: rgba(177, 54, 53, 0.14);
+  --status-skipped: #ffd050;
+  --status-skipped-fg: #a07405;
+  --status-skipped-soft: rgba(255, 208, 80, 0.24);
+  --status-xfailed: #d35fbf;
+  --status-xfailed-fg: #a53c94;
+  --status-xfailed-soft: rgba(211, 95, 191, 0.15);
+  --status-xpassed: #aaaaaa;
+  --status-xpassed-fg: #6f747c;
+  --status-xpassed-soft: rgba(170, 170, 170, 0.16);
+  --status-running: #5a8fc4;
+  --status-running-fg: #3571a3;
+  --status-running-soft: rgba(53, 113, 163, 0.13);
+  --status-queued: #cfd6e0;
+  --status-queued-fg: #6b7381;
+  --status-queued-soft: rgba(107, 115, 129, 0.12);
+  --status-cancelled: #cfd6e0;
+  --status-cancelled-fg: #6b7381;
+  --status-cancelled-soft: rgba(107, 115, 129, 0.12);
+  --status-unknown: #cfd6e0;
+  --status-unknown-fg: #6b7381;
+  --status-unknown-soft: rgba(107, 115, 129, 0.12);
+  --status-flaky: #e6a800;
+  --status-flaky-fg: #936c00;
+  --status-flaky-soft: rgba(230, 168, 0, 0.18);
 
   /* -- charts -------------------------------------------------------- */
-  --chart-grid: #e6ebf2;
-  --chart-axis: #646f7e;
-  --chart-line: #2f4fd8;
-  --chart-line-alt: #855400;
-  --chart-fill-top: #2f4fd842;
-  --chart-fill-bottom: #2f4fd805;
+  --chart-grid: #f0f2f6;
+  --chart-axis: #666666;
+  --chart-line: #36a2eb;
+  --chart-line-alt: #f0a95c;
+  --chart-fill-top: #36a2eb33;
+  --chart-fill-bottom: #36a2eb05;
   --chart-marker: #ffffff;
-  --chart-band: #eef1f6;
+  --chart-band: #f1f3f7;
 
   /* -- effects ------------------------------------------------------- */
-  --shadow-1: 0 1px 2px #0b101a14, 0 1px 3px #0b101a0d;
-  --shadow-2: 0 10px 30px #0b101a1f, 0 2px 8px #0b101a14;
-  --overlay: #0b101a5c;
-  --skeleton-a: #e9edf3;
-  --skeleton-b: #f5f7fa;
-  --live-halo: #0d5cb63d;
+  --shadow-1: 0 1px 2px #2e3d4914, 0 1px 3px #2e3d491a;
+  --shadow-2: 0 10px 30px #2e3d4959, 0 2px 8px #2e3d4924;
+  --overlay: #2e3d496b;
+  --skeleton-a: #eef1f5;
+  --skeleton-b: #fbfcfd;
+  --live-halo: #3571a333;
+
+  /* -- the rail ------------------------------------------------------ */
+  /* The navigation rail is dark in BOTH themes. It is chrome, not content:
+     holding it constant gives the page one fixed edge, and the nine routes in
+     it read as a single object rather than as nine cards. These are their own
+     token names rather than --surface / --text on purpose — painting a light
+     theme's rail with dark-theme tokens would drag the charts' palette along
+     with it, because the SVGs read those same custom properties back out. */
+  --rail-bg: #211f1f;
+  --rail-bg-soft: #322f2f;
+  --rail-text: #dcdcdc;
+  --rail-muted: #a2a2a2;
+  --rail-label: #6f6d6d;
+  --rail-border: #322f2f;
+  --rail-active-bg: #565656;
+  --rail-active-text: #ffffff;
+  --rail-active-bar: #8cbdec;
 
   /* -- non-colour design tokens (safe to read anywhere) -------------- */
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "Noto Sans", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", monospace;
+
+  /* One type scale, eight steps, and nothing in this file writes a font size
+     that is not one of them. Dense product UI drifts small a step at a time —
+     a hint here, a caption there — until half the page is 11px and only the
+     person who wrote it can read the whole thing. Naming the steps makes the
+     drift visible in review, and makes rescaling the entire dashboard one edit.
+
+     The steps are named by role, not by size, so a label that should be a label
+     does not become a body size by being nudged. */
+  --fs-3xs: 11px;   /* uppercase micro-labels: nav sections, the live badge */
+  --fs-2xs: 12px;   /* field labels, tags, pills */
+  --fs-xs: 13px;    /* hints and secondary meta */
+  --fs-sm: 14px;    /* dense UI: tables, buttons, inputs, definition lists */
+  --fs-md: 15px;    /* body */
+  --fs-lg: 16px;    /* card titles, the wordmark */
+  --fs-xl: 18px;    /* section headings */
+  --fs-2xl: 25px;   /* page titles */
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
@@ -106,73 +168,103 @@
   --sp-6: 32px;
   --sp-7: 48px;
   --shell-max: 1440px;
-  --header-h: 60px;
+  --rail-w: 180px;
+  --header-h: 64px;
   --ease: cubic-bezier(0.2, 0, 0.15, 1);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #0b0e14;
-  --bg-accent: #0f141d;
-  --surface: #141a23;
-  --surface-2: #19212c;
-  --surface-3: #202936;
-  --surface-inset: #10151d;
-  --border: #232d3a;
-  --border-strong: #38424f;
+  --bg: #0c0e11;
+  --bg-accent: #131519;
+  --surface: #1b1f27;
+  --surface-2: #161a21;
+  --surface-3: #222834;
+  --surface-inset: #0e1116;
+  --border: #333b47;
+  --border-strong: #3f4a59;
 
-  --text: #e9edf4;
-  --text-muted: #a7b2c1;
-  --text-subtle: #8b96a6;
-  --text-on-accent: #0a0f19;
+  --text: #f1f4f8;
+  --text-muted: #bcc5d1;
+  --text-subtle: #98a2b0;
+  --text-on-accent: #14181e;
 
-  --accent: #8ba4ff;
-  --accent-hover: #a8bcff;
-  --accent-ink: #c5d1ff;
-  --accent-soft: #1a2340;
-  --accent-border: #2c3a63;
-  --focus: #8ba4ff;
-  --focus-halo: #8ba4ff47;
+  --accent: #74aade;
+  --accent-hover: #8cbdec;
+  --accent-ink: #a8cdf0;
+  --accent-soft: #2b3848;
+  --accent-border: #3a5067;
+  --focus: #6ea3d4;
+  --focus-halo: #74aade4d;
 
-  --status-passed: #45c98d;
-  --status-passed-soft: #10291f;
-  --status-failed: #ff7a72;
-  --status-failed-soft: #2d1719;
-  --status-error: #ef4a4a;
-  --status-error-soft: #2a1214;
-  --status-skipped: #e5a83c;
-  --status-skipped-soft: #2a2110;
-  --status-xfailed: #b39bff;
-  --status-xpassed: #f0904c;
-  --status-xfailed-soft: #211d3a;
-  --status-xpassed-soft: #2a1c12;
-  --status-running: #64a8ff;
-  --status-running-soft: #12203a;
-  --status-queued: #97a2b1;
-  --status-queued-soft: #1d242f;
-  --status-cancelled: #97a2b1;
-  --status-cancelled-soft: #1d242f;
-  --status-unknown: #97a2b1;
-  --status-unknown-soft: #1d242f;
-  --status-flaky: #ef8ac9;
-  --status-flaky-soft: #2d1728;
+  /* The marks are the SAME hex as light — pass green, fail coral, skip
+     amber, xfail magenta all hold across the switch, so a bar chart
+     screenshotted in either theme reads identically. Only the ink and the
+     tint alpha move, because those are the two that have to answer to the
+     surface underneath them. */
+  --status-passed: #98cc64;
+  --status-passed-fg: #b7e08a;
+  --status-passed-soft: rgba(152, 204, 100, 0.20);
+  --status-failed: #fc6766;
+  --status-failed-fg: #ff9c9a;
+  --status-failed-soft: rgba(252, 103, 102, 0.20);
+  --status-error: #cf5c57;
+  --status-error-fg: #ef9d7a;
+  --status-error-soft: rgba(214, 88, 86, 0.22);
+  --status-skipped: #ffd050;
+  --status-skipped-fg: #efc468;
+  --status-skipped-soft: rgba(255, 208, 80, 0.18);
+  --status-xfailed: #d35fbf;
+  --status-xfailed-fg: #e7a3d9;
+  --status-xfailed-soft: rgba(211, 95, 191, 0.22);
+  --status-xpassed: #aaaaaa;
+  --status-xpassed-fg: #b0b8c4;
+  --status-xpassed-soft: rgba(170, 178, 190, 0.16);
+  --status-running: #7fb1e0;
+  --status-running-fg: #8cbdec;
+  --status-running-soft: rgba(96, 168, 232, 0.20);
+  --status-queued: #6b7480;
+  --status-queued-fg: #aab3c0;
+  --status-queued-soft: rgba(150, 160, 176, 0.16);
+  --status-cancelled: #6b7480;
+  --status-cancelled-fg: #aab3c0;
+  --status-cancelled-soft: rgba(150, 160, 176, 0.16);
+  --status-unknown: #6b7480;
+  --status-unknown-fg: #aab3c0;
+  --status-unknown-soft: rgba(150, 160, 176, 0.16);
+  --status-flaky: #e6a800;
+  --status-flaky-fg: #e6b855;
+  --status-flaky-soft: rgba(230, 168, 0, 0.20);
 
-  --chart-grid: #222c39;
-  --chart-axis: #7c879a;
-  --chart-line: #8ba4ff;
-  --chart-line-alt: #e5a83c;
-  --chart-fill-top: #8ba4ff45;
-  --chart-fill-bottom: #8ba4ff05;
-  --chart-marker: #141a23;
-  --chart-band: #19212c;
+  --chart-grid: #2b323d;
+  --chart-axis: #b0b8c4;
+  --chart-line: #58a8ec;
+  --chart-line-alt: #f0a95c;
+  --chart-fill-top: #58a8ec38;
+  --chart-fill-bottom: #58a8ec05;
+  --chart-marker: #1b1f27;
+  --chart-band: #0e1116;
 
-  --shadow-1: 0 1px 2px #00000059, 0 1px 3px #0000003d;
-  --shadow-2: 0 12px 34px #00000073, 0 2px 10px #00000052;
-  --overlay: #05070ba3;
-  --skeleton-a: #1a212c;
-  --skeleton-b: #222b38;
-  --live-halo: #64a8ff42;
+  --shadow-1: 0 1px 2px #00000080, 0 1px 3px #0000005c;
+  --shadow-2: 0 12px 34px #000000b3, 0 2px 10px #00000080;
+  --overlay: #000000a8;
+  --skeleton-a: #161a21;
+  --skeleton-b: #242a33;
+  --live-halo: #8cbdec4d;
+
+  /* Lighter than --surface here, not darker: the report this palette comes
+     from lifts its rail out of the page ground in dark mode, and the rail
+     sits on the same blue-grey axis as every surface around it. */
+  --rail-bg: #22262f;
+  --rail-bg-soft: #363c47;
+  --rail-text: #dcdcdc;
+  --rail-muted: #b4b9c2;
+  --rail-label: #8d94a0;
+  --rail-border: #363c47;
+  --rail-active-bg: #515866;
+  --rail-active-text: #ffffff;
+  --rail-active-bar: #8cbdec;
 }
 
 /* ====================================================================== */
@@ -190,16 +282,16 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 14px;
+  font-size: var(--fs-md);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
-h1 { font-size: 22px; }
-h2 { font-size: 16px; }
-h3 { font-size: 14px; }
+h1 { font-size: var(--fs-2xl); }
+h2 { font-size: var(--fs-lg); }
+h3 { font-size: var(--fs-md); }
 p { margin: 0; }
 
 a { color: var(--accent); text-decoration: none; }
@@ -269,7 +361,49 @@ table.sr-only,
 /* Shell                                                                   */
 /* ====================================================================== */
 
-.shell { min-height: 100vh; display: flex; flex-direction: column; }
+.shell { min-height: 100vh; display: flex; }
+
+/* The rail is `sticky` rather than `fixed` so it stays in normal flow: the
+ * content column is a sibling, not a margin-offset overlay, and there is no
+ * width to keep in sync in two places. It scrolls internally on a short
+ * viewport rather than clipping the last route. */
+.sidebar {
+  position: sticky;
+  top: 0;
+  z-index: 45;
+  flex: none;
+  width: var(--rail-w);
+  height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4) var(--sp-2) var(--sp-3);
+  background: var(--rail-bg);
+  color: var(--rail-text);
+  border-right: 1px solid var(--rail-border);
+}
+
+.shell__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+
+/* Pushed to the bottom of the rail by `auto` rather than positioned, so a rail
+ * with more routes in it later still puts this last. */
+.sidebar__foot {
+  margin-top: auto;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--rail-border);
+}
+
+/* The rail is the one dark surface in a light-theme page, so every control
+ * that can appear inside it is re-pointed at the rail's own tokens here. The
+ * switch is built once, in the component kit, and does not know where it was
+ * mounted — this is what tells it. */
+.sidebar .switchrow { color: var(--rail-muted); font-size: var(--fs-sm); padding: 9px 10px; }
+.sidebar .switchrow:hover { background: var(--rail-bg-soft); color: var(--rail-text); }
+.sidebar .switch { background: var(--rail-bg-soft); border-color: var(--rail-border); }
+.sidebar .switch__thumb { background: var(--rail-muted); }
+.sidebar [aria-checked="true"] > .switch { background: var(--rail-active-bar); border-color: var(--rail-active-bar); }
+.sidebar [aria-checked="true"] > .switch > .switch__thumb { background: var(--rail-bg); }
 
 .container {
   width: 100%;
@@ -290,54 +424,130 @@ table.sr-only,
 .topbar__inner {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--sp-4);
   min-height: var(--header-h);
 }
 
 .brand {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
   font-weight: 650;
-  font-size: 15px;
+  font-size: var(--fs-lg);
   letter-spacing: -0.02em;
-  color: var(--text);
+  color: var(--rail-text);
   white-space: nowrap;
 }
-.brand:hover { text-decoration: none; color: var(--text); }
+.brand:hover { text-decoration: none; color: var(--rail-text); }
 .brand__mark {
   width: 22px; height: 22px;
   border-radius: 7px;
   background: var(--accent);
   color: var(--text-on-accent);
   display: grid; place-items: center;
-  font-size: 12px; font-weight: 700;
+  font-size: var(--fs-xs); font-weight: 700;
   flex: none;
 }
+/* In the rail the subtitle drops onto its own line: an export's title is
+ * arbitrary text and the column is 164px wide inside its gutters, so beside
+ * the wordmark it would be cut off. It is still one line, still ellipsised,
+ * but it gets the full width and aligns under the wordmark rather than under
+ * the mark. */
+.brand { flex-wrap: wrap; }
 .brand__sub {
+  width: 100%;
+  min-width: 0;
   font-weight: 450;
-  font-size: 12px;
-  color: var(--text-subtle);
-  padding-left: var(--sp-2);
-  border-left: 1px solid var(--border);
-  margin-left: var(--sp-1);
+  font-size: var(--fs-xs);
+  color: var(--rail-label);
+  padding-left: calc(22px + var(--sp-2));
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+.brand__sub:empty { display: none; }
 
-.nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+/* Nine routes is more than a flat list carries. They are grouped — where you
+ * are, what ran, what it left behind — and each group is labelled, so the rail
+ * is scanned by section rather than read top to bottom every time. */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
 .nav::-webkit-scrollbar { display: none; }
+.nav__group { display: flex; flex-direction: column; gap: 1px; }
+.nav__label {
+  padding: 0 10px var(--sp-1) 20px;
+  font-size: var(--fs-3xs);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--rail-label);
+}
 .nav__link {
-  display: inline-flex;
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: var(--sp-2);
-  padding: 6px 12px;
+  gap: 8px;
+  /* Asymmetric on purpose. The report insets its glyphs 27.8px from the rail's
+     edge — 12px of link padding plus a 10% margin on the icon itself — and
+     that gutter is most of what stops a 180px rail reading as cramped. The
+     sidebar's own 8px makes up the rest of the 28px here; the right side stays
+     tight because nothing is aligned against it. */
+  padding: 8px 10px 8px 20px;
   border-radius: var(--r-sm);
-  color: var(--text-muted);
+  color: var(--rail-muted);
+  /* A step above body text, matching the report's 16px rail. The rail holds
+     nine words total and is read at a glance from the far edge of the screen,
+     so it is the one place in the dashboard that reads larger than the content
+     it points at — not smaller, which is how a nav ends up looking like a
+     footnote. */
+  font-size: var(--fs-lg);
   font-weight: 500;
   white-space: nowrap;
   transition: background 120ms var(--ease), color 120ms var(--ease);
 }
-.nav__link:hover { background: var(--surface-3); color: var(--text); text-decoration: none; }
-.nav__link[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); }
+/* No dimming: the rail's glyphs are solid, and they carry the same weight as
+   the word beside them exactly as they do in the report, where the icon is
+   plain `currentcolor`. Fading a filled shape to 0.75 is what made the old
+   outline icons read as a smudge. */
+.nav__link svg { flex: none; }
+.nav__link:hover { background: var(--rail-bg-soft); color: var(--rail-text); text-decoration: none; }
+.nav__link[aria-current="page"] {
+  background: var(--rail-active-bg);
+  color: var(--rail-active-text);
+}
+/* The current route also gets a bar down its leading edge. Colour alone is
+ * carrying the state otherwise, and against a dark rail the tinted background
+ * is a subtle signal to anyone who does not separate those two blues. */
+.nav__link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--rail-active-bar);
+}
+/* A route with nothing behind it yet is still shown — see the empty states in
+ * 56-view-evidence.js — but it says so before it is clicked. */
+.nav__link[data-empty="true"] { color: var(--rail-label); }
+.nav__count {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--rail-bg-soft);
+  color: var(--rail-muted);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.nav__link[aria-current="page"] .nav__count { color: var(--rail-active-text); }
 
 .topbar__meta {
   margin-left: auto;
@@ -347,7 +557,7 @@ table.sr-only,
 }
 
 .updated {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-subtle);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -362,7 +572,7 @@ table.sr-only,
   border-radius: var(--r-pill);
   border: 1px solid var(--border);
   background: var(--surface-2);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 550;
   color: var(--text-muted);
   white-space: nowrap;
@@ -372,13 +582,13 @@ table.sr-only,
   background: var(--status-unknown);
   flex: none;
 }
-.conn[data-status="live"] { color: var(--status-passed); border-color: var(--status-passed-soft); background: var(--status-passed-soft); }
+.conn[data-status="live"] { color: var(--status-passed-fg); border-color: var(--status-passed-soft); background: var(--status-passed-soft); }
 .conn[data-status="live"] .conn__dot { background: var(--status-passed); animation: pulse 2.4s var(--ease) infinite; }
-.conn[data-status="connecting"] { color: var(--status-running); background: var(--status-running-soft); border-color: var(--status-running-soft); }
+.conn[data-status="connecting"] { color: var(--status-running-fg); background: var(--status-running-soft); border-color: var(--status-running-soft); }
 .conn[data-status="connecting"] .conn__dot { background: var(--status-running); animation: pulse 1.2s var(--ease) infinite; }
-.conn[data-status="reconnecting"] { color: var(--status-skipped); background: var(--status-skipped-soft); border-color: var(--status-skipped-soft); }
+.conn[data-status="reconnecting"] { color: var(--status-skipped-fg); background: var(--status-skipped-soft); border-color: var(--status-skipped-soft); }
 .conn[data-status="reconnecting"] .conn__dot { background: var(--status-skipped); animation: pulse 1.2s var(--ease) infinite; }
-.conn[data-status="offline"] { color: var(--status-failed); background: var(--status-failed-soft); border-color: var(--status-failed-soft); }
+.conn[data-status="offline"] { color: var(--status-failed-fg); background: var(--status-failed-soft); border-color: var(--status-failed-soft); }
 .conn[data-status="offline"] .conn__dot { background: var(--status-failed); }
 .conn[data-status="static"] { color: var(--text-muted); }
 .conn[data-status="static"] .conn__dot { background: var(--text-subtle); }
@@ -388,7 +598,7 @@ table.sr-only,
   50% { opacity: 0.45; transform: scale(0.82); }
 }
 
-/* theme toggle ---------------------------------------------------------- */
+/* icon button ----------------------------------------------------------- */
 .iconbtn {
   display: inline-grid;
   place-items: center;
@@ -403,9 +613,164 @@ table.sr-only,
 }
 .iconbtn:hover { background: var(--surface-3); color: var(--text); border-color: var(--border-strong); }
 .iconbtn svg { width: 16px; height: 16px; display: block; }
-.theme-toggle .theme-toggle__dark { display: none; }
-:root[data-theme="dark"] .theme-toggle .theme-toggle__dark { display: block; }
-:root[data-theme="dark"] .theme-toggle .theme-toggle__light { display: none; }
+
+/* menu ------------------------------------------------------------------- */
+.menu { position: relative; display: inline-flex; }
+.menu__trigger[aria-expanded="true"] {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.menu__panel {
+  position: absolute;
+  top: calc(100% + var(--sp-2));
+  right: 0;
+  z-index: 60;
+  min-width: 244px;
+  padding: var(--sp-2);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  animation: menu-in 120ms var(--ease);
+}
+.menu__section + .menu__section { margin-top: var(--sp-1); }
+.menu__section + .menu__section .menu__label { border-top: 1px solid var(--border); padding-top: var(--sp-3); }
+.menu__label {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.menu__group { display: flex; flex-direction: column; gap: 1px; }
+.menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 7px var(--sp-2);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.menu__item:hover { background: var(--surface-3); color: var(--text); }
+.menu__item-label { flex: 1; }
+
+/* The switch is drawn, not a checkbox: `aria-checked` on the button carries
+ * the state, so the track and thumb only have to follow it. */
+.switchrow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--fs-md);
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.switchrow:hover { background: var(--surface-3); color: var(--text); }
+.switchrow__label { flex: 1; }
+.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 19px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
+}
+.switch__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--text-subtle);
+  transition: transform 140ms var(--ease), background 140ms var(--ease);
+}
+[aria-checked="true"] > .switch {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+[aria-checked="true"] > .switch > .switch__thumb {
+  transform: translateX(15px);
+  background: var(--text-on-accent);
+}
+.menu__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 4px var(--sp-2);
+  font-size: var(--fs-xs);
+}
+.menu__row-key { color: var(--text-subtle); white-space: nowrap; }
+.menu__row-value {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* settings view ---------------------------------------------------------- */
+.formgrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  align-items: flex-end;
+}
+.formgrid .field { flex: 1 1 160px; }
+.field__hint { font-size: var(--fs-2xs); color: var(--text-subtle); line-height: 1.4; }
+.field--check { margin-top: var(--sp-3); }
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  cursor: pointer;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+.check input { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+.formactions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-top: var(--sp-4);
+}
+.notes {
+  margin: var(--sp-3) 0 0;
+  padding-left: var(--sp-4);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu__panel { animation: none; }
+  .switch,
+  .switch__thumb { transition: none; }
+}
 
 /* ====================================================================== */
 /* Page frame                                                              */
@@ -426,7 +791,7 @@ table.sr-only,
 .page-head__sub {
   margin-top: 4px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   display: flex;
   align-items: center;
   gap: var(--sp-2);
@@ -436,7 +801,7 @@ table.sr-only,
 
 .crumbs {
   display: flex; align-items: center; gap: 6px;
-  font-size: 12px; color: var(--text-subtle);
+  font-size: var(--fs-xs); color: var(--text-subtle);
   margin-bottom: var(--sp-2);
 }
 .crumbs__sep { color: var(--border-strong); }
@@ -446,8 +811,8 @@ table.sr-only,
   display: flex; align-items: baseline; justify-content: space-between;
   gap: var(--sp-3); margin-bottom: var(--sp-3);
 }
-.section__title { font-size: 13px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-subtle); }
-.section__aside { font-size: 12px; color: var(--text-subtle); }
+.section__title { font-size: var(--fs-sm); font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-subtle); }
+.section__aside { font-size: var(--fs-xs); color: var(--text-subtle); }
 
 /* ====================================================================== */
 /* Primitives                                                              */
@@ -461,12 +826,17 @@ table.sr-only,
 }
 .card__head {
   display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   border-bottom: 1px solid var(--border);
 }
-.card__title { font-size: 13px; font-weight: 650; }
-.card__hint { font-size: 12px; color: var(--text-subtle); }
+/* A control in a card head is an accessory to the card, not a reason for the
+   card to be wider than the page: it takes the width it is given. */
+.card__head .field--grow { flex: 0 1 220px; }
+/* A card's heading is never smaller than the text inside the card. */
+.card__title { font-size: var(--fs-md); font-weight: 650; }
+.card__hint { font-size: var(--fs-xs); color: var(--text-subtle); }
 .card__body { padding: var(--sp-4); }
 .card__body--flush { padding: 0; }
 /* Controls that belong to a flush card: padded on their own, so the table below
@@ -474,7 +844,7 @@ table.sr-only,
 .card__toolbar { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border); }
 .table-note {
   padding: var(--sp-2) var(--sp-4);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-subtle);
   border-bottom: 1px solid var(--border);
   background: var(--surface-2);
@@ -484,12 +854,12 @@ table.sr-only,
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 7px 13px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 550;
   cursor: pointer;
   white-space: nowrap;
@@ -501,16 +871,29 @@ table.sr-only,
 .btn--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--text-on-accent); }
 .btn--ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
 .btn--ghost:hover { background: var(--surface-3); color: var(--text); }
-.btn--sm { padding: 3px 8px; font-size: 12px; }
+.btn--sm { padding: 4px 9px; font-size: var(--fs-xs); }
+/* Placed after the other variants deliberately: these override `.btn`'s own
+   background at the same specificity, so source order is what decides. */
+.btn--danger {
+  background: var(--status-failed);
+  border-color: var(--status-failed);
+  color: var(--text-on-accent);
+}
+.btn--danger:hover:not(:disabled) {
+  background: var(--status-error);
+  border-color: var(--status-error);
+  color: var(--text-on-accent);
+}
+.btn--danger:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .tag {
   display: inline-flex; align-items: center;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: var(--r-pill);
   background: var(--surface-3);
   border: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 550;
   white-space: nowrap;
 }
@@ -519,14 +902,14 @@ table.sr-only,
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 9px;
+  padding: 3px 10px;
   border-radius: var(--r-pill);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   text-transform: capitalize;
   white-space: nowrap;
   background: var(--status-unknown-soft);
-  color: var(--status-unknown);
+  color: var(--status-unknown-fg);
 }
 .statuspill::before {
   content: "";
@@ -534,26 +917,26 @@ table.sr-only,
   background: currentColor;
   flex: none;
 }
-.statuspill[data-status="passed"] { background: var(--status-passed-soft); color: var(--status-passed); }
-.statuspill[data-status="failed"] { background: var(--status-failed-soft); color: var(--status-failed); }
-.statuspill[data-status="error"] { background: var(--status-error-soft); color: var(--status-error); }
-.statuspill[data-status="skipped"] { background: var(--status-skipped-soft); color: var(--status-skipped); }
-.statuspill[data-status="xfailed"] { background: var(--status-xfailed-soft); color: var(--status-xfailed); }
-.statuspill[data-status="xpassed"] { background: var(--status-xpassed-soft); color: var(--status-xpassed); }
-.statuspill[data-status="running"] { background: var(--status-running-soft); color: var(--status-running); }
-.statuspill[data-status="queued"] { background: var(--status-queued-soft); color: var(--status-queued); }
-.statuspill[data-status="cancelled"] { background: var(--status-cancelled-soft); color: var(--status-cancelled); }
+.statuspill[data-status="passed"] { background: var(--status-passed-soft); color: var(--status-passed-fg); }
+.statuspill[data-status="failed"] { background: var(--status-failed-soft); color: var(--status-failed-fg); }
+.statuspill[data-status="error"] { background: var(--status-error-soft); color: var(--status-error-fg); }
+.statuspill[data-status="skipped"] { background: var(--status-skipped-soft); color: var(--status-skipped-fg); }
+.statuspill[data-status="xfailed"] { background: var(--status-xfailed-soft); color: var(--status-xfailed-fg); }
+.statuspill[data-status="xpassed"] { background: var(--status-xpassed-soft); color: var(--status-xpassed-fg); }
+.statuspill[data-status="running"] { background: var(--status-running-soft); color: var(--status-running-fg); }
+.statuspill[data-status="queued"] { background: var(--status-queued-soft); color: var(--status-queued-fg); }
+.statuspill[data-status="cancelled"] { background: var(--status-cancelled-soft); color: var(--status-cancelled-fg); }
 .statuspill[data-status="running"]::before { animation: pulse 1.6s var(--ease) infinite; }
 
 .livebadge {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 9px 2px 7px;
+  padding: 3px 10px 3px 8px;
   border-radius: var(--r-pill);
   background: var(--status-running-soft);
-  color: var(--status-running);
-  font-size: 11px;
+  color: var(--status-running-fg);
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -575,11 +958,11 @@ table.sr-only,
 }
 
 .delta { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
-.delta[data-dir="up"] { color: var(--status-passed); }
-.delta[data-dir="down"] { color: var(--status-failed); }
+.delta[data-dir="up"] { color: var(--status-passed-fg); }
+.delta[data-dir="down"] { color: var(--status-failed-fg); }
 .delta[data-dir="flat"] { color: var(--text-subtle); }
 
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px var(--sp-4); font-size: 13px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px var(--sp-4); font-size: var(--fs-sm); }
 .kv dt { color: var(--text-subtle); white-space: nowrap; }
 .kv dd { margin: 0; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
 
@@ -590,7 +973,7 @@ table.sr-only,
   border: 1px solid var(--border);
   border-radius: var(--r-md);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   line-height: 1.65;
   color: var(--text);
   overflow-x: auto;
@@ -599,7 +982,7 @@ table.sr-only,
 }
 .pre--wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .pre--fail { border-color: var(--status-failed-soft); background: var(--status-failed-soft); }
-.pre--fail .pre__label { color: var(--status-failed); }
+.pre--fail .pre__label { color: var(--status-failed-fg); }
 
 /* ====================================================================== */
 /* KPI cards                                                               */
@@ -633,7 +1016,7 @@ table.sr-only,
 .kpi[data-status="running"]::before { background: var(--status-running); }
 .kpi[data-status="total"]::before { background: var(--accent); }
 .kpi__label {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -641,13 +1024,13 @@ table.sr-only,
 }
 .kpi__value {
   margin-top: 6px;
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.1;
   font-weight: 640;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
-.kpi__meta { margin-top: 6px; font-size: 12px; color: var(--text-subtle); display: flex; gap: 6px; align-items: center; }
+.kpi__meta { margin-top: 6px; font-size: var(--fs-xs); color: var(--text-subtle); display: flex; gap: 6px; align-items: center; }
 
 .headline {
   display: grid;
@@ -656,13 +1039,13 @@ table.sr-only,
   align-items: center;
 }
 .headline__value {
-  font-size: 40px;
+  font-size: 42px;
   font-weight: 640;
   letter-spacing: -0.03em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.headline__label { font-size: 12px; color: var(--text-subtle); margin-top: 6px; }
+.headline__label { font-size: var(--fs-xs); color: var(--text-subtle); margin-top: 6px; }
 
 /* count bar — a run's composition in one 6px strip -------------------- */
 .countbar {
@@ -685,7 +1068,7 @@ table.sr-only,
 .countbar > span[data-status="cancelled"] { background: var(--status-cancelled); }
 .countbar > span[data-status="unknown"] { background: var(--status-unknown); }
 
-.legend { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: 12px; color: var(--text-muted); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--fs-xs); color: var(--text-muted); }
 .legend__item { display: inline-flex; align-items: center; gap: 6px; }
 .legend__swatch { width: 9px; height: 9px; border-radius: 3px; flex: none; background: var(--status-unknown); }
 .legend__swatch[data-status="passed"] { background: var(--status-passed); }
@@ -697,6 +1080,231 @@ table.sr-only,
 .legend__swatch[data-status="running"] { background: var(--status-running); }
 .legend__swatch[data-status="line"] { background: var(--chart-line); }
 .legend__swatch[data-status="line-alt"] { background: var(--chart-line-alt); }
+
+/* ====================================================================== */
+/* Analytics — tiles, meters, chips, verdicts, streaks                     */
+/* ====================================================================== */
+
+/* A stat tile is a KPI that has to argue for itself: the number, what it
+ * measures, and the sentence that stops it being misread. The rule is on top
+ * rather than down the side so a row of them reads as one instrument panel. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--sp-3);
+}
+.stat {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.stat::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--border-strong);
+}
+.stat[data-tone="passed"]::before { background: var(--status-passed); }
+.stat[data-tone="failed"]::before { background: var(--status-failed); }
+.stat[data-tone="skipped"]::before { background: var(--status-skipped); }
+.stat[data-tone="xpassed"]::before { background: var(--status-xpassed); }
+.stat__value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-size: 32px;
+  line-height: 1.1;
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.stat__label {
+  margin-top: 6px;
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.stat__hint { margin-top: 6px; font-size: var(--fs-xs); color: var(--text-muted); }
+
+/* The meter is a comparison between rows, never the value itself — which is
+ * why it is never the only thing in its cell. */
+.meter {
+  display: inline-block;
+  width: 78px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.meter__fill { display: block; height: 100%; background: var(--accent); }
+.meter__fill[data-status="passed"] { background: var(--status-passed); }
+.meter__fill[data-status="failed"] { background: var(--status-failed); }
+.meter__fill[data-status="error"] { background: var(--status-error); }
+.meter__fill[data-status="skipped"] { background: var(--status-skipped); }
+.meter__fill[data-status="xpassed"] { background: var(--status-xpassed); }
+.meter__fill[data-status="running"] { background: var(--status-running); }
+.cell-metric { justify-content: flex-end; gap: var(--sp-2); }
+/* A name column that cannot push the columns beside it off the card. Two of
+   these tables sit in a half-width card next to three more columns, and a test
+   name is as long as whoever wrote it felt like making it. */
+.cell-name { max-width: 220px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip--link { text-decoration: none; }
+.chip--link:hover { border-color: var(--accent-border); color: var(--accent-ink); background: var(--accent-soft); }
+
+/* Four words, four colours, one meaning each — see `verdictFor` in the
+ * analytics view for what earns which. */
+.verdict {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
+  background: var(--status-unknown-soft);
+  color: var(--status-unknown-fg);
+}
+.verdict[data-verdict="stable"] { background: var(--status-passed-soft); color: var(--status-passed-fg); }
+.verdict[data-verdict="flaky"] { background: var(--status-flaky-soft); color: var(--status-flaky-fg); }
+.verdict[data-verdict="broken"] { background: var(--status-failed-soft); color: var(--status-failed-fg); }
+.verdict[data-verdict="new"] { background: var(--status-failed-soft); color: var(--status-failed-fg); }
+
+/* One cell per run, oldest on the left. */
+.streak { display: inline-flex; gap: 2px; align-items: center; }
+.streak__cell {
+  width: 8px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--status-unknown);
+}
+.streak__cell[data-status="passed"] { background: var(--status-passed); }
+.streak__cell[data-status="failed"] { background: var(--status-failed); }
+.streak__cell[data-status="error"] { background: var(--status-error); }
+.streak__cell[data-status="skipped"] { background: var(--status-skipped); }
+.streak__cell[data-status="xfailed"] { background: var(--status-xfailed); }
+.streak__cell[data-status="xpassed"] { background: var(--status-xpassed); }
+.streak__cell[data-status="running"] { background: var(--status-running); }
+
+/* Failures grouped by what raised them. */
+.taxonomy { display: grid; gap: var(--sp-4); }
+.taxonomy__row { display: grid; gap: 6px; }
+.taxonomy__head { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
+.taxonomy__type { font-weight: 650; font-size: var(--fs-sm); }
+.taxonomy__count { color: var(--status-failed-fg); font-weight: 650; }
+.taxonomy .meter { width: 100%; height: 5px; }
+
+/* The outcome counters under the donut. Every status is drawn, including the
+ * zeroes: "0 failed" is the reassurance people came for. */
+.statstrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-3);
+}
+.statstrip__item {
+  /* Equal shares of whatever is left, down to the width of the longest label:
+     eight counters have to sit on one line in a half-width card, and a counter
+     that wrapped onto its own row would read as a different kind of number. */
+  flex: 1 1 0;
+  min-width: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-2) 4px;
+  border-radius: var(--r-md);
+  text-decoration: none;
+  color: inherit;
+}
+button.statstrip__item {
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+button.statstrip__item:hover { background: var(--surface-2); }
+.statstrip__value {
+  font-size: var(--fs-2xl);
+  font-weight: 640;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--status-unknown-fg);
+}
+.statstrip__item[data-status="passed"] .statstrip__value { color: var(--status-passed-fg); }
+.statstrip__item[data-status="failed"] .statstrip__value { color: var(--status-failed-fg); }
+.statstrip__item[data-status="error"] .statstrip__value { color: var(--status-error-fg); }
+.statstrip__item[data-status="skipped"] .statstrip__value { color: var(--status-skipped-fg); }
+.statstrip__item[data-status="xfailed"] .statstrip__value { color: var(--status-xfailed-fg); }
+.statstrip__item[data-status="xpassed"] .statstrip__value { color: var(--status-xpassed-fg); }
+.statstrip__item[data-status="running"] .statstrip__value { color: var(--status-running-fg); }
+.statstrip__label {
+  font-size: var(--fs-3xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* The hero: the run's headline number, its donut and its counters, in the
+ * proportions the eye reads first — number, shape, detail. */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-5); align-items: center; }
+.hero__figure { display: grid; gap: 4px; }
+.hero__value {
+  font-size: 54px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.hero__label {
+  font-size: var(--fs-2xs);
+  font-weight: 650;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.hero__meta { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.hero__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.card__icon { display: inline-flex; color: var(--text-subtle); }
 
 /* ====================================================================== */
 /* Grids                                                                   */
@@ -726,7 +1334,7 @@ table.sr-only,
 }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field__label {
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -734,14 +1342,14 @@ table.sr-only,
 }
 .select, .input {
   appearance: none;
-  min-width: 132px;
+  min-width: 140px;
   max-width: 100%;
-  padding: 6px 10px;
+  padding: 8px 11px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1.4;
 }
 .select { padding-right: 26px; cursor: pointer; }
@@ -761,7 +1369,7 @@ table.sr-only,
   background: var(--accent-soft);
   border: 1px solid var(--accent-border);
   color: var(--accent-ink);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 550;
 }
 .chip__remove {
@@ -772,7 +1380,7 @@ table.sr-only,
   background: transparent;
   color: inherit;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   line-height: 1;
 }
 .chip__remove:hover { background: var(--accent-border); }
@@ -790,7 +1398,7 @@ table.sr-only,
   border: 0;
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   padding: 4px 10px;
   border-radius: 5px;
@@ -813,10 +1421,10 @@ table.sr-only,
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 .table th, .table td {
-  padding: 10px var(--sp-4);
+  padding: 11px var(--sp-4);
   text-align: left;
   vertical-align: middle;
   border-bottom: 1px solid var(--border);
@@ -826,7 +1434,7 @@ table.sr-only,
   top: 0;
   z-index: 1;
   background: var(--surface-2);
-  font-size: 11px;
+  font-size: var(--fs-2xs);
   font-weight: 650;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -839,7 +1447,7 @@ table.sr-only,
 .table tbody tr:last-child td { border-bottom: 0; }
 .table td.num, .table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table .cell-main { font-weight: 550; color: var(--text); }
-.table .cell-sub { font-size: 12px; color: var(--text-subtle); margin-top: 2px; }
+.table .cell-sub { font-size: var(--fs-xs); color: var(--text-subtle); margin-top: 2px; }
 .table--rows tbody tr { cursor: pointer; }
 .table__sort {
   display: inline-flex; align-items: center; gap: 4px;
@@ -848,7 +1456,7 @@ table.sr-only,
   cursor: pointer;
 }
 .table__sort:hover { color: var(--text); }
-.table__sort::after { content: "\2195"; opacity: 0.35; font-size: 11px; }
+.table__sort::after { content: "\2195"; opacity: 0.35; font-size: var(--fs-2xs); }
 th[aria-sort="ascending"] .table__sort::after { content: "\2191"; opacity: 1; }
 th[aria-sort="descending"] .table__sort::after { content: "\2193"; opacity: 1; }
 th[aria-sort] .table__sort { color: var(--text); }
@@ -858,7 +1466,7 @@ th[aria-sort] .table__sort { color: var(--text); }
   gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-muted);
 }
 .pager__buttons { display: flex; gap: var(--sp-2); }
@@ -875,7 +1483,7 @@ th[aria-sort] .table__sort { color: var(--text); }
   align-items: center;
   gap: var(--sp-3);
   width: 100%;
-  padding: 10px var(--sp-4);
+  padding: 11px var(--sp-4);
   border: 0;
   background: none;
   text-align: left;
@@ -890,14 +1498,14 @@ th[aria-sort] .table__sort { color: var(--text); }
   transition: transform 140ms var(--ease);
 }
 .tree__row[aria-expanded="true"] .tree__chevron { transform: rotate(90deg); }
-.tree__name { flex: 1 1 auto; min-width: 0; font-weight: 550; font-size: 13px; }
-.tree__path { font-size: 12px; color: var(--text-subtle); font-family: var(--font-mono); }
+.tree__name { flex: 1 1 auto; min-width: 0; font-weight: 550; font-size: var(--fs-sm); }
+.tree__path { font-size: var(--fs-xs); color: var(--text-subtle); font-family: var(--font-mono); }
 .tree__meta { display: flex; align-items: center; gap: var(--sp-3); flex: none; }
 .tree__children { list-style: none; margin: 0; padding: 0 0 var(--sp-2) 0; background: var(--surface-2); }
 .tree__leaf {
   display: flex; align-items: center; gap: var(--sp-3);
   padding: 6px var(--sp-4) 6px 42px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 .tree__leaf a { flex: 1 1 auto; min-width: 0; }
 
@@ -911,7 +1519,7 @@ th[aria-sort] .table__sort { color: var(--text); }
   display: grid; place-items: center;
   min-height: 120px;
   color: var(--text-subtle);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 .sparkline { display: inline-block; width: 96px; height: 24px; vertical-align: middle; }
 .sparkline svg { display: block; width: 100%; height: 100%; }
@@ -947,19 +1555,19 @@ th[aria-sort] .table__sort { color: var(--text); }
   color: var(--text-muted);
 }
 .empty__icon, .errorbox__icon {
-  width: 40px; height: 40px;
+  width: 44px; height: 44px;
   display: grid; place-items: center;
   border-radius: 50%;
   background: var(--surface-3);
   color: var(--text-subtle);
   margin-bottom: var(--sp-1);
 }
-.errorbox__icon { background: var(--status-failed-soft); color: var(--status-failed); }
-.empty__title, .errorbox__title { font-size: 14px; font-weight: 600; color: var(--text); }
-.empty__hint, .errorbox__hint { font-size: 13px; max-width: 46ch; color: var(--text-muted); }
+.errorbox__icon { background: var(--status-failed-soft); color: var(--status-failed-fg); }
+.empty__title, .errorbox__title { font-size: var(--fs-md); font-weight: 600; color: var(--text); }
+.empty__hint, .errorbox__hint { font-size: var(--fs-sm); max-width: 46ch; color: var(--text-muted); }
 .errorbox__detail {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-subtle);
   max-width: 70ch;
   overflow-wrap: anywhere;
@@ -969,19 +1577,23 @@ th[aria-sort] .table__sort { color: var(--text); }
   display: flex;
   align-items: flex-start;
   gap: var(--sp-3);
-  padding: 10px var(--sp-4);
+  padding: 11px var(--sp-4);
   border-radius: var(--r-md);
   border: 1px solid var(--border);
   background: var(--surface-2);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text-muted);
   margin-bottom: var(--sp-4);
 }
 .banner__title { font-weight: 600; color: var(--text); }
+/* A note, not a warning: these say what a page cannot show, which is
+   information the reader needs and not a problem they have to act on. */
+.banner--info { background: var(--accent-soft); border-color: var(--accent-border); }
+.banner--info .banner__title { color: var(--accent-ink); }
 .banner--warn { background: var(--status-skipped-soft); border-color: var(--status-skipped-soft); }
-.banner--warn .banner__title { color: var(--status-skipped); }
+.banner--warn .banner__title { color: var(--status-skipped-fg); }
 .banner--error { background: var(--status-failed-soft); border-color: var(--status-failed-soft); }
-.banner--error .banner__title { color: var(--status-failed); }
+.banner--error .banner__title { color: var(--status-failed-fg); }
 .banner__actions { margin-left: auto; display: flex; gap: var(--sp-2); }
 
 /* ====================================================================== */
@@ -995,22 +1607,22 @@ th[aria-sort] .table__sort { color: var(--text); }
 }
 .metagrid__item { min-width: 0; }
 .metagrid__label {
-  font-size: 11px; font-weight: 650; letter-spacing: 0.05em;
+  font-size: var(--fs-2xs); font-weight: 650; letter-spacing: 0.05em;
   text-transform: uppercase; color: var(--text-subtle);
 }
-.metagrid__value { margin-top: 2px; font-size: 13px; overflow-wrap: anywhere; }
+.metagrid__value { margin-top: 2px; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 
 .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--sp-4); }
 .compare__item { min-width: 0; }
-.compare__value { font-size: 20px; font-weight: 640; font-variant-numeric: tabular-nums; }
-.compare__label { font-size: 12px; color: var(--text-subtle); margin-top: 2px; }
+.compare__value { font-size: var(--fs-xl); font-weight: 640; font-variant-numeric: tabular-nums; }
+.compare__label { font-size: var(--fs-xs); color: var(--text-subtle); margin-top: 2px; }
 
 .attempt { border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
 .attempt + .attempt { margin-top: var(--sp-3); }
 .attempt__head {
   display: flex; align-items: center; gap: var(--sp-3);
   width: 100%;
-  padding: 10px var(--sp-4);
+  padding: 11px var(--sp-4);
   background: var(--surface-2);
   border: 0;
   cursor: pointer;
@@ -1018,7 +1630,7 @@ th[aria-sort] .table__sort { color: var(--text); }
   color: var(--text);
 }
 .attempt__head:hover { background: var(--surface-3); }
-.attempt__n { font-weight: 650; font-size: 13px; }
+.attempt__n { font-weight: 650; font-size: var(--fs-sm); }
 .attempt__body { padding: var(--sp-4); display: grid; gap: var(--sp-4); }
 .attempt__spacer { flex: 1 1 auto; }
 
@@ -1043,19 +1655,124 @@ th[aria-sort] .table__sort { color: var(--text); }
   display: flex; align-items: center; gap: var(--sp-3);
   padding: 8px var(--sp-4);
   border-bottom: 1px solid var(--border);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 .artifact-list li:last-child { border-bottom: 0; }
 
+/* ====================================================================== */
+/* Evidence — the gallery, disclosures and step lists                      */
+/* ====================================================================== */
+
+/* A button that has to look like the link it behaves like: it opens a panel on
+ * this page rather than navigating, so it must not be an <a href="#">. */
+.linkbtn {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+.linkbtn:hover { text-decoration: underline; }
+
+/* The screenshot gallery. `auto-fill` rather than a fixed column count: the
+ * same page carries four captures and four hundred, and neither should be
+ * stretched or crushed to fit a number chosen here. */
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-4);
+}
+.shot { margin: 0; display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.shot__open { display: block; border-radius: var(--r-md); }
+.shot__open:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.shot__frame {
+  display: grid;
+  place-items: center;
+  /* Fixed height, object-fit inside: a gallery whose rows jump around as each
+   * image decodes is unreadable while it loads, and screenshots arrive in every
+   * aspect ratio a CI runner can produce. */
+  height: 150px;
+  overflow: hidden;
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.shot__img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+.shot__fallback {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  color: var(--text-subtle);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+.shot__title { font-weight: 550; font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.shot__meta { font-size: var(--fs-xs); color: var(--text-subtle); gap: var(--sp-2); }
+
+/* Native <details>: the open/closed state is the browser's to keep, so there is
+ * no view state here to lose on a live update. */
+.disclosure {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.disclosure__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  list-style: none;
+  min-width: 0;
+}
+.disclosure__summary::-webkit-details-marker { display: none; }
+.disclosure__summary:hover { background: var(--surface-3); border-radius: var(--r-md); }
+.disclosure__summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.disclosure[open] > .disclosure__summary {
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+.disclosure__body { display: grid; gap: var(--sp-3); padding: var(--sp-3); min-width: 0; }
+.disclosure__body > * { min-width: 0; }
+
+/* Published steps. Numbered by the list itself — the numbers are the sequence,
+ * which is the only thing a step list is for. */
+.steps { margin: 0; padding-left: var(--sp-5); display: grid; gap: var(--sp-1); }
+.steps__item { padding: 4px 0; }
+.steps__item::marker { color: var(--text-subtle); font-variant-numeric: tabular-nums; }
+.steps__name { margin-right: var(--sp-2); overflow-wrap: anywhere; }
+
+/* `min-width: 0` on the children, or none of the internal scrollers below ever
+ * scroll. A grid item's automatic minimum size is its MIN-CONTENT width, so a
+ * card holding a nine-column table refuses to be narrower than that table, the
+ * card pushes the grid, the grid pushes the page, and `.table-wrap { overflow-x:
+ * auto }` never gets the chance to do its job. Every wide thing in this
+ * stylesheet — tables, <pre> blocks, the nav bar on a phone — depends on this
+ * one line to stay inside its own box.
+ *
+ * It applies to every grid that holds content of a width nobody controls: a
+ * stack of cards, a row of tiles, a failure taxonomy whose rows are named after
+ * whatever exception the framework raised. */
+.grid > *,
+.kpis > *,
+.stats > *,
+.taxonomy > *,
+.taxonomy__row > * { min-width: 0; }
 .stack { display: grid; gap: var(--sp-4); }
+.stack > * { min-width: 0; }
 .stack--sm { gap: var(--sp-3); }
+.stack--sm > * { min-width: 0; }
+.card { min-width: 0; }
 .row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 .row--tight { gap: var(--sp-2); }
 
 .footer {
   border-top: 1px solid var(--border);
   padding: var(--sp-4) 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   color: var(--text-subtle);
   background: var(--surface);
 }
@@ -1073,20 +1790,85 @@ th[aria-sort] .table__sort { color: var(--text); }
   .container { padding: 0 var(--sp-4); }
   .grid--2 { grid-template-columns: minmax(0, 1fr); }
   .topbar__inner { flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); padding: var(--sp-2) 0; }
-  .nav { order: 3; width: 100%; padding-bottom: 2px; }
   .topbar__meta { margin-left: auto; }
   .brand__sub { display: none; }
+
+  /* Under 860px the rail is a header again: a permanent column would cost a
+   * quarter of the viewport to show two links. */
+  .shell { display: block; }
+  .sidebar {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    flex-direction: row;
+    align-items: center;
+    /* Two rows, not one. Nine links squeezed into whatever is left beside the
+       brand is a 150px window onto a 1000px strip — technically scrollable and
+       useless in practice. Wrapping gives the nav the full width of the phone
+       and keeps the brand and the theme switch on the row above it. */
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
+    padding: var(--sp-2) var(--sp-4);
+    border-right: 0;
+    border-bottom: 1px solid var(--rail-border);
+  }
+  .sidebar .brand { flex: none; }
+  .nav { order: 3; flex: 1 0 100%; }
+  /* The groups collapse into one scrolling row of links. Their labels go: in a
+   * horizontal bar a heading sits beside what it heads rather than above it,
+   * which reads as another link. The grouping survives as the gap between
+   * runs of links, which is what it was doing visually anyway. */
+  /* `min-width: 0` again: the bar is a flex row, and without it the nav sizes
+     itself to all nine links and takes the page with it instead of scrolling. */
+  .nav { flex-direction: row; overflow-x: auto; gap: var(--sp-3); min-width: 0; }
+  .nav__group { flex-direction: row; gap: 1px; }
+  .nav__label { display: none; }
+  /* The 16px rail size belongs to the vertical column, where nine words have
+     a 180px lane to themselves. In the bar they compete for one row that
+     already scrolls, so they drop back to body size. */
+  .nav__link { padding: 6px 12px; font-size: var(--fs-md); }
+  .nav__link[aria-current="page"]::before {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 0;
+    width: auto;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+  }
+  /* In the bar there is no bottom to sit at: the switch goes to the far end. */
+  .sidebar__foot { margin-top: 0; margin-left: auto; padding-top: 0; border-top: 0; }
+  .switchrow { width: auto; }
+  /* The rail lets the brand wrap so an export's title can sit under it; in the
+   * bar there is no second line to wrap onto. */
+  .brand { flex: none; flex-wrap: nowrap; padding-left: 0; }
+  /* Two stacked bands on a phone: the rail's row and the status row. The
+   * second one carries three controls, so it does not need a full header's
+   * height as well. */
+  .topbar__inner { min-height: 44px; }
   .headline { grid-template-columns: minmax(0, 1fr); }
+  .hero { grid-template-columns: minmax(0, 1fr); justify-items: start; }
 }
 
 @media (max-width: 640px) {
-  body { font-size: 14px; }
+  body { font-size: var(--fs-md); }
   .container { padding: 0 var(--sp-3); }
   .main { padding: var(--sp-4) 0 var(--sp-6); }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
   .kpi { padding: var(--sp-3); }
-  .kpi__value { font-size: 22px; }
+  .kpi__value { font-size: var(--fs-2xl); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+  .stat { padding: var(--sp-3); }
+  .stat__value { font-size: 26px; }
+  .hero__value { font-size: 42px; }
+  /* The meter is the first thing to go when a cell has to become a line of
+   * text: the number it annotates is still there. */
+  .meter { display: none; }
   .updated { display: none; }
+  /* Four controls in one bar at 400px: the switch keeps its icon and track,
+   * and `aria-label` carries the name the text was giving it. */
+  .switchrow__label { display: none; }
   .filters__row { gap: var(--sp-2); }
   .field { flex: 1 1 140px; }
   .select, .input { min-width: 0; width: 100%; }
@@ -1113,7 +1895,7 @@ th[aria-sort] .table__sort { color: var(--text); }
   .table--cards td::before {
     content: attr(data-label);
     flex: none;
-    font-size: 11px;
+    font-size: var(--fs-2xs);
     font-weight: 650;
     letter-spacing: 0.05em;
     text-transform: uppercase;
@@ -1135,11 +1917,11 @@ th[aria-sort] .table__sort { color: var(--text); }
   .attempt__spacer { display: none; }
   .pager { flex-wrap: wrap; }
   .page-head__actions { width: 100%; }
-  .compare__value { font-size: 17px; }
+  .compare__value { font-size: var(--fs-xl); }
 }
 
 @media (max-width: 380px) {
-  .kpis { grid-template-columns: minmax(0, 1fr); }
+  .kpis, .stats { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ====================================================================== */
@@ -1158,6 +1940,6 @@ th[aria-sort] .table__sort { color: var(--text); }
 }
 
 @media print {
-  .topbar, .filters, .pager { display: none; }
+  .topbar, .sidebar, .filters, .pager { display: none; }
   .card { box-shadow: none; }
 }

@@ -160,8 +160,8 @@
     };
 
     var node = frame(spec, width, height);
-    var gridColor = color('--chart-grid', '#e6ebf2');
-    var axisColor = color('--chart-axis', '#646f7e');
+    var gridColor = color('--chart-grid', '#f0f2f6');
+    var axisColor = color('--chart-axis', '#666666');
     var markerColor = color('--chart-marker', '#ffffff');
     var formatY = spec.formatY || function (value) { return String(Math.round(value)); };
 
@@ -176,7 +176,7 @@
       }));
       node.appendChild(svg('text', {
         x: padding.left - 8, y: y + 3.5, 'text-anchor': 'end',
-        fill: axisColor, 'font-size': 10.5
+        fill: axisColor, 'font-size': 11.5
       }, formatY(value)));
     }
 
@@ -187,13 +187,13 @@
       node.appendChild(svg('text', {
         x: xFor(p), y: height - 8,
         'text-anchor': p === 0 ? 'start' : (p === points.length - 1 ? 'end' : 'middle'),
-        fill: axisColor, 'font-size': 10.5
+        fill: axisColor, 'font-size': 11.5
       }, points[p].label));
     }
 
     for (s = 0; s < series.length; s++) {
       var line = series[s];
-      var stroke = color(line.color, '#2f4fd8');
+      var stroke = color(line.color, '#36a2eb');
       var segments = [];
       var current = [];
       for (p = 0; p < points.length; p++) {
@@ -213,8 +213,8 @@
         var gradient = svg('linearGradient', {
           id: gradientId, x1: 0, y1: 0, x2: 0, y2: 1
         }, [
-          svg('stop', { offset: '0%', 'stop-color': color('--chart-fill-top', '#2f4fd842') }),
-          svg('stop', { offset: '100%', 'stop-color': color('--chart-fill-bottom', '#2f4fd805') })
+          svg('stop', { offset: '0%', 'stop-color': color('--chart-fill-top', '#36a2eb33') }),
+          svg('stop', { offset: '100%', 'stop-color': color('--chart-fill-bottom', '#36a2eb05') })
         ]);
         node.appendChild(svg('defs', {}, gradient));
       }
@@ -295,8 +295,8 @@
     var max = Math.max.apply(null, totals.concat([1]));
 
     var node = frame(spec, width, height);
-    var gridColor = color('--chart-grid', '#e6ebf2');
-    var axisColor = color('--chart-axis', '#646f7e');
+    var gridColor = color('--chart-grid', '#f0f2f6');
+    var axisColor = color('--chart-axis', '#666666');
     var ticks = 3;
     var t;
     for (t = 0; t <= ticks; t++) {
@@ -307,7 +307,7 @@
         stroke: gridColor, 'stroke-width': 1, 'shape-rendering': 'crispEdges'
       }));
       node.appendChild(svg('text', {
-        x: padding.left - 8, y: y + 3.5, 'text-anchor': 'end', fill: axisColor, 'font-size': 10.5
+        x: padding.left - 8, y: y + 3.5, 'text-anchor': 'end', fill: axisColor, 'font-size': 11.5
       }, util.formatNumber(Math.round(value))));
     }
 
@@ -328,7 +328,7 @@
         cursor -= segmentHeight;
         var rect = svg('rect', {
           x: round1(x), y: round1(cursor), width: round1(barWidth), height: round1(segmentHeight),
-          fill: color(keys[k].color, '#545e6c'), rx: 1.5
+          fill: color(keys[k].color, '#cfd6e0'), rx: 1.5
         });
         rect.appendChild(svg('title', {}, bucket.label + ' · ' + keys[k].label + ': ' +
           util.formatNumber(amount)));
@@ -343,7 +343,7 @@
       if (b % step === 0 || b === buckets.length - 1) {
         node.appendChild(svg('text', {
           x: round1(x + barWidth / 2), y: height - 8, 'text-anchor': 'middle',
-          fill: axisColor, 'font-size': 10.5
+          fill: axisColor, 'font-size': 11.5
         }, bucket.label));
       }
     }
@@ -376,7 +376,7 @@
     var node = frame(spec, size, size);
     var track = svg('circle', {
       cx: size / 2, cy: size / 2, r: radius, fill: 'none',
-      stroke: color('--surface-3', '#eef1f6'), 'stroke-width': thickness
+      stroke: color('--surface-3', '#eef3f9'), 'stroke-width': thickness
     });
     node.appendChild(track);
 
@@ -387,7 +387,7 @@
         var length = fraction * circumference;
         var arc = svg('circle', {
           cx: size / 2, cy: size / 2, r: radius, fill: 'none',
-          stroke: color(segments[i].color, '#545e6c'),
+          stroke: color(segments[i].color, '#cfd6e0'),
           'stroke-width': thickness,
           'stroke-dasharray': round1(length) + ' ' + round1(circumference - length),
           'stroke-dashoffset': round1(-offset),
@@ -403,14 +403,14 @@
     if (spec.centerValue !== undefined && spec.centerValue !== null) {
       node.appendChild(svg('text', {
         x: size / 2, y: size / 2 + (spec.centerLabel ? 0 : 6), 'text-anchor': 'middle',
-        fill: color('--text', '#111621'), 'font-size': spec.centerFontSize || 22,
+        fill: color('--text', '#2f3742'), 'font-size': spec.centerFontSize || 24,
         'font-weight': 640
       }, String(spec.centerValue)));
     }
     if (spec.centerLabel) {
       node.appendChild(svg('text', {
         x: size / 2, y: size / 2 + 18, 'text-anchor': 'middle',
-        fill: color('--text-subtle', '#66707f'), 'font-size': 11
+        fill: color('--text-subtle', '#7b8390'), 'font-size': 12
       }, spec.centerLabel));
     }
 
@@ -442,7 +442,7 @@
     var min = Math.min.apply(null, values);
     var max = Math.max.apply(null, values);
     if (max === min) { max = min + 1; }
-    var stroke = color(spec.color || '--chart-line', '#2f4fd8');
+    var stroke = color(spec.color || '--chart-line', '#36a2eb');
 
     var node = svg('svg', {
       width: width, height: height, viewBox: '0 0 ' + width + ' ' + height,

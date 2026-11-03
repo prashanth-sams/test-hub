@@ -3,7 +3,7 @@
 This module is the single implementation of the definitions written down in
 ``docs/metrics.md``. Nothing else in the codebase is allowed to compute a pass
 rate, a flake rate or a percentile — if a view needs one, it calls in here, so
-the number in the snapshot and the number in the live API can never disagree.
+two parts of the product can never disagree about the same number.
 
 Definitions, in short:
 

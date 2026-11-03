@@ -52,6 +52,18 @@
     }
   }
 
+  /* `/healthz` is outside the versioned API, so it cannot go through
+   * `request()`. Resolving it *relative to the API base* rather than hard-coding
+   * "/healthz" is what keeps it correct behind a reverse-proxy prefix: from
+   * `/hub/api/v1/` this lands on `/hub/healthz`, which is where it actually is. */
+  function healthUrlFrom(base) {
+    try {
+      return new window.URL('../../healthz', base).toString();
+    } catch (err) {
+      return '/healthz';
+    }
+  }
+
   function joinUrl(base, path) {
     var left = String(base).replace(/\/+$/, '');
     var right = String(path).replace(/^\/+/, '');
@@ -89,14 +101,31 @@
 
     self.meta = { apiBase: apiBase, streamUrl: streamUrl };
 
+    // Resolves once the server has said which version it is. Null until
+    // `start()`.
+    self.serverInfo = null;
+
     /* ------------------------------------------------------------- fetch */
 
-    function request(path, params) {
+    function post(path, body) {
+      return request(path, null, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(body || {})
+      });
+    }
+
+    function request(path, params, overrides) {
       var query = util.buildQuery(params || {});
       var url = joinUrl(apiBase, path) + (query ? '?' + query : '');
       var controller = null;
       var timer = null;
       var init = { method: 'GET', headers: { Accept: 'application/json' }, credentials: 'same-origin' };
+      if (overrides) {
+        for (var key in overrides) {
+          if (Object.prototype.hasOwnProperty.call(overrides, key)) { init[key] = overrides[key]; }
+        }
+      }
       if (window.AbortController) {
         controller = new window.AbortController();
         init.signal = controller.signal;
@@ -147,8 +176,8 @@
         if (clean[key] !== undefined) { params[key] = clean[key]; }
       }
       // The query API spells the test-type facet `type` (it is an alias in
-      // api.routes.queries.build_filter) while the URL, the snapshot and every
-      // model field spell it `test_type`. Sending both is free — a server reads
+      // api.routes.queries.build_filter) while the URL and every model field
+      // spell it `test_type`. Sending both is free — a server reads
       // the one it declared and ignores the other — and means the filter works
       // whichever spelling this build settled on.
       if (params.test_type !== undefined) { params.type = params.test_type; }
@@ -187,8 +216,8 @@
      * ``window_days``; the facet parameters ride along in case a build honours
      * them, but this client cannot assume they were applied. Rather than show
      * portfolio-wide totals under an active filter — which would be a lie the
-     * user cannot see — the matching runs are fetched and folded with the same
-     * arithmetic the snapshot provider uses, and the result says so.
+     * user cannot see — the matching runs are fetched and folded with the
+     * shared arithmetic in 10-provider.js, and the result says so.
      */
     function narrowOverview(base, clean) {
       var params = facetParams(clean);
@@ -256,8 +285,8 @@
       // reports an honest total; one that ignores them costs nothing, because
       // the same predicate runs again below.
       if (clean.status) { params.status = clean.status; }
-      // `search` is what api.routes.queries calls it; `q` is what the URL and
-      // the snapshot provider call it. Both go, for the same reason as `type`.
+      // `search` is what api.routes.queries calls it; `q` is what the URL
+      // calls it. Both go, for the same reason as `type`.
       if (clean.q) { params.q = clean.q; params.search = clean.q; }
 
       return request('runs', params).then(function (payload) {
@@ -304,7 +333,7 @@
     //: The order `GET /runs` already returns. Asking for it costs no re-sort.
     var DEFAULT_SORT = 'started_at';
 
-    /** Shared with the snapshot provider in spirit: counts live one level down. */
+    /** Sort keys, for the rows this client had to refine itself. */
     function sortKey(name) {
       if (name === 'pass_rate') {
         return function (summary) { return summary.counts.pass_rate; };
@@ -334,6 +363,25 @@
      * server that predates that endpoint, and `/projects` fills the project
      * list on a workspace whose runs have all aged out of the window.
      */
+    /* ------------------------------------------------------- retention */
+
+    /* Destructive, and behind the admin scope server-side. It still belongs on
+     * the provider rather than in the view: ADR-0001 D1 says views never call
+     * `fetch`, and a view that built its own DELETE would be a view no test
+     * could exercise without a server to point it at. */
+
+    self.getRetention = function () {
+      return request('retention');
+    };
+
+    self.previewPrune = function (body) {
+      return post('retention/preview', body);
+    };
+
+    self.runPrune = function (body) {
+      return post('retention/prune', body);
+    };
+
     self.getFacets = function () {
       var projectsPromise = request('projects').then(function (payload) {
         return (payload.projects || []).map(function (project) { return project.key; });
@@ -556,8 +604,35 @@
       self._setStatus('offline', 'The browser reports no network.');
     });
 
+    /* The live provider knows what server it is talking to but not what
+     * *version* that server is — every payload under /api/v1 is data, not
+     * provenance. `/healthz` carries both numbers, so one call at startup is
+     * what lets the footer and the settings menu name the version they are
+     * talking to.
+     *
+     * Deliberately fire-and-forget: a dashboard that cannot reach /healthz —
+     * reads behind auth, a proxy that only forwards /api — is missing a version
+     * string, not broken, and must not fail to start over it. */
+    function loadServerInfo() {
+      return window.fetch(healthUrlFrom(apiBase), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin'
+      }).then(function (response) {
+        return response.ok ? response.json() : null;
+      }).then(function (payload) {
+        if (!payload) { return null; }
+        if (payload.version) { self.meta.generator_version = payload.version; }
+        if (payload.schema_version) { self.meta.schema_version = payload.schema_version; }
+        return self.meta;
+      })['catch'](function () {
+        return null;
+      });
+    }
+
     self.start = function () {
       closed = false;
+      self.serverInfo = loadServerInfo();
       connect();
       startWatchdog();
       return self;

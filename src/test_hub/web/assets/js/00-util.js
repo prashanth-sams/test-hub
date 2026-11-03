@@ -11,9 +11,9 @@
  *    for `prefers-color-scheme` to resolve, because 20-charts.js reads its
  *    palette back with getComputedStyle and an SVG cannot inherit a media
  *    query. Explicit attribute in, explicit colours out.
- *  - Every localStorage access is wrapped. Over file:// — which is exactly how
- *    the exported snapshot is opened — reading localStorage throws outright in
- *    some browsers, and a thrown exception here would leave the page unthemed
+ *  - Every localStorage access is wrapped. Storage can be blocked outright —
+ *    a browser configured to refuse site data throws on read rather than
+ *    returning null — and a thrown exception here would leave the page unthemed
  *    and the rest of the app unloaded.
  *
  * Everything that turns data into DOM goes through `el()` or `textContent`.
@@ -125,20 +125,43 @@
     }
   })();
 
+  function followSystem() {
+    storageRemove(THEME_KEY);
+    applyTheme(systemTheme());
+    notifyTheme(currentTheme());
+  }
+
+  // The *preference* — three states — as opposed to `current()`, which is the
+  // two-state colour actually painted. 'system' is the absence of a stored
+  // choice, so it is a real state rather than a third value in storage: there
+  // is nothing to migrate if the OS switches, and clearing site data returns a
+  // reader to following their OS rather than to whatever we last wrote.
+  function themeMode() {
+    return storedTheme() || 'system';
+  }
+
+  function setThemeMode(mode) {
+    if (mode === 'system') {
+      followSystem();
+      return 'system';
+    }
+    setTheme(mode);
+    return currentTheme();
+  }
+
   var theme = {
     KEY: THEME_KEY,
+    MODES: ['system', 'light', 'dark'],
     current: currentTheme,
     system: systemTheme,
     stored: storedTheme,
+    mode: themeMode,
+    setMode: setThemeMode,
     set: setTheme,
     toggle: function () {
       return setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
     },
-    followSystem: function () {
-      storageRemove(THEME_KEY);
-      applyTheme(systemTheme());
-      notifyTheme(currentTheme());
-    },
+    followSystem: followSystem,
     onChange: function (fn) {
       themeListeners.push(fn);
       return function () {
@@ -341,6 +364,24 @@
     if (value instanceof Date) { return isNaN(value.getTime()) ? null : value; }
     var parsed = new Date(value);
     return isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function formatDate(value) {
+    var date = toDate(value);
+    if (!date) { return '—'; }
+    return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  /** Bytes in the largest unit that keeps the number readable. */
+  function formatBytes(count) {
+    var size = Number(count) || 0;
+    var units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+    var index = 0;
+    while (size >= 1024 && index < units.length - 1) {
+      size /= 1024;
+      index += 1;
+    }
+    return (index === 0 ? size.toFixed(0) : size.toFixed(1)) + ' ' + units[index];
   }
 
   function formatDateTime(value) {
@@ -553,8 +594,8 @@
   /* --------------------------------------------------------------- routes */
 
   /**
-   * Hash routing so that every view is linkable and reloadable, including from
-   * a file:// snapshot where there is no server to answer a real path.
+   * Hash routing, so the dashboard is one document the server hands over
+   * whatever the path, and every view is still linkable and reloadable.
    *
    *   #/overview?team=payments   #/runs?status=failed&page=2
    *   #/runs/<uuid>              #/tests/<uuid>
@@ -636,6 +677,8 @@
     formatDelta: formatDelta,
     deltaDirection: deltaDirection,
     formatDuration: formatDuration,
+    formatBytes: formatBytes,
+    formatDate: formatDate,
     formatDateTime: formatDateTime,
     formatTime: formatTime,
     formatDay: formatDay,
