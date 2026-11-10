@@ -10,13 +10,15 @@
  * only skipped is not a 0% suite, and showing it in red trains people to
  * ignore red.
  *
- * The row under the KPIs is "what is on fire right now", project by project:
- * every project's newest run as one bar, wherever it ran — CI or a laptop —
- * and still moving while a run is in flight. It is the one part of this page
- * that is never rebuilt. The rest of the page is re-rendered from state on
- * every update; the status row is created once and patched, so its bars grow
- * into their new widths as results stream in instead of blinking every second
- * of a live run, and the link under a keyboard user's focus stays put.
+ * The two rows under the KPIs are "what is on fire right now". The timeline is
+ * every run as it happens — a bar that pops up at the right-hand edge when a
+ * run starts, grows while its results arrive, and slides left with the clock.
+ * The status row is the same question asked project by project: each one's
+ * newest run as one bar, wherever it ran, CI or a laptop. They are the parts
+ * of this page that are never rebuilt. Everything else is re-rendered from
+ * state on every update; these two are created once and patched, so their
+ * bars move into their new places instead of blinking every second of a live
+ * run, and the link under a keyboard user's focus stays put.
  */
 (function (window) {
   'use strict';
@@ -137,6 +139,65 @@
     return { el: card, update: update };
   }
 
+  /**
+   * The timeline row: every run in the span as a bar on a moving clock — see
+   * 42-timeline.js. Like the status row it is created once and patched, and
+   * unlike it it is redrawn on its own store section, so a live event moves
+   * its bars without the rest of the page re-rendering around it.
+   */
+  function timelineRow(store) {
+    var spans = store.TIMELINE_SPANS;
+    var chart = ui.timeline({ label: 'Test runs over time, across every project' });
+    var control = ui.segmented({
+      label: 'Timeline span',
+      bare: true,
+      options: Object.keys(spans).map(function (key) { return { value: key, label: key }; }),
+      value: store.DEFAULT_TIMELINE_SPAN,
+      onChange: function (value) {
+        util.navigate(store.hashWith({
+          span: value === store.DEFAULT_TIMELINE_SPAN ? null : value
+        }));
+      }
+    });
+    var badge = el('span');
+    var hint = el('span', { className: 'card__hint' });
+    var card = ui.card({
+      title: 'Test execution timeline',
+      badge: badge,
+      actions: [hint, control.el],
+      body: chart.el
+    });
+    var wasLive = false;
+
+    function update(state) {
+      var span = store.timelineSpan();
+      var timeline = state.timeline;
+      var runs = timeline ? timeline.runs : [];
+      control.sync(span.key);
+      chart.update({ runs: runs, span: span, error: state.errors.timeline });
+
+      var cutoff = Date.now() - span.ms;
+      var count = 0;
+      var live = false;
+      for (var i = 0; i < runs.length; i++) {
+        var started = util.toDate(runs[i].started_at);
+        if (!started || started.getTime() < cutoff) { continue; }
+        count += 1;
+        live = live || !!runs[i].is_live;
+      }
+      if (live !== wasLive) {
+        util.replace(badge, live ? ui.liveBadge() : null);
+        wasLive = live;
+      }
+      var text = util.formatNumber(count) + ' ' + util.pluralize(count, 'run') +
+        ' in the last ' + span.label +
+        (timeline && timeline.truncated ? ' — the newest ' + util.formatNumber(runs.length) : '');
+      if (hint.textContent !== text) { hint.textContent = text; }
+    }
+
+    return { el: card, update: update, destroy: chart.destroy };
+  }
+
   function create(ctx) {
     var store = ctx.store;
     var pending = [];
@@ -153,19 +214,22 @@
       }
     });
 
-    // Three slots rather than one container: the status row sits between two
-    // stretches of the page that are rebuilt on every update, and it must not
-    // be detached and re-inserted with them — that alone drops focus and
-    // restarts every transition in it. Plain divs, so `hidden` really hides
-    // them, and a hidden slot leaves no gap in the stack.
+    // Slots rather than one container: the timeline and the status row sit
+    // between two stretches of the page that are rebuilt on every update, and
+    // they must not be detached and re-inserted with them — that alone drops
+    // focus and restarts every transition in them. Plain divs, so `hidden`
+    // really hides them, and a hidden slot leaves no gap in the stack.
+    var liveTimeline = timelineRow(store);
     var projectStatus = statusRow();
     var head = el('div');
+    var timelineSlot = el('div', {}, liveTimeline.el);
     var statusSlot = el('div', {}, projectStatus.el);
     var rest = el('div');
-    // Until the first overview lands there is nothing true to say in either.
+    // Until the first overview lands there is nothing true to say in any.
+    timelineSlot.hidden = true;
     statusSlot.hidden = true;
     rest.hidden = true;
-    var content = el('div', { className: 'stack' }, [head, statusSlot, rest]);
+    var content = el('div', { className: 'stack' }, [head, timelineSlot, statusSlot, rest]);
     var root = el('div', {}, [
       el('div', { className: 'page-head' }, [
         el('div', { className: 'page-head__titles' }, [
@@ -192,6 +256,7 @@
     /** Everything but the head slot goes, for the states with no data in them. */
     function showOnly(node) {
       util.replace(head, node);
+      timelineSlot.hidden = true;
       statusSlot.hidden = true;
       util.clear(rest);
       rest.hidden = true;
@@ -237,6 +302,10 @@
       lead.push(kpiRow(counts, overview));
 
       util.replace(head, el('div', { className: 'stack' }, lead));
+      // Shown before it is drawn: the chart measures its own width, and a
+      // hidden slot has none.
+      timelineSlot.hidden = false;
+      liveTimeline.update(state);
       projectStatus.update(overview);
       statusSlot.hidden = false;
       util.replace(rest, el('div', { className: 'stack' }, [
@@ -647,9 +716,18 @@
       update: function (state, section) {
         panel.sync(state.filters, state.facets || {});
         if (section === 'facets' || section === 'status') { return; }
+        if (section === 'timeline') {
+          // Its own section, drawn on its own: a live event moves the
+          // timeline's bars and nothing else on the page should flicker for it.
+          if (state.overview && !state.errors.overview) { liveTimeline.update(state); }
+          return;
+        }
         render(state);
       },
       destroy: function () {
+        // The timeline's clock is an interval and two window listeners; none
+        // of them leaves with the element.
+        liveTimeline.destroy();
         charts.forget(content);
       }
     };

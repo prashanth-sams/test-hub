@@ -52,6 +52,27 @@ lets a selection carry from one to the other.</p>
 pass rate with nothing executed renders as an em dash rather than 0%. A suite that only
 skipped is not a 0% suite, and showing it in red trains people to ignore red.</p>
 
+<h3 id="overview-timeline">Test execution timeline</h3>
+
+<p>A full-width chart directly under the KPI tiles, and the one on the page that never
+stops moving. Time runs along the bottom, with <em>now</em> at the right-hand edge. The
+moment a run starts — any project, from CI or from a laptop — a bar pops up at that edge,
+stacked by status, and grows while the run's results arrive: what has finished at the
+bottom, the tests still running in blue on top, with a pulsing dot above while the run is
+live. Then the whole chart glides left with the clock, once a second, so a run you saw
+start a minute ago is a minute's width further along.</p>
+
+<p>Each bar is a slot of time — fifteen seconds, a minute, five minutes or half an hour,
+depending on the span — and every run that started in that slot stacks into it, so six
+jobs fanned out by one pipeline are one taller bar rather than six drawn on top of each
+other. The height counts tests. Hover a bar, or tab to it, for the runs inside and every
+status with its count and share; click it, or press Enter, to open the newest of them.</p>
+
+<p>The buttons in the card choose the span: <b>15m</b>, <b>1h</b> (the default),
+<b>6h</b> or <b>24h</b>. The choice rides in the URL as <code>span</code>, so a timeline
+left on a wall screen survives a reload. The page's filters narrow it like everything
+else; its window is the span, not the window selector above.</p>
+
 <h3 id="overview-status-by-project">Test status by project</h3>
 
 <p>One full-width row, one bar per project: each project's <em>newest run</em> in the window,

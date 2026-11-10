@@ -299,6 +299,10 @@
       // `search` is what api.routes.queries calls it; `q` is what the URL
       // calls it. Both go, for the same reason as `type`.
       if (clean.q) { params.q = clean.q; params.search = clean.q; }
+      // When a run started — the live timeline's window. ISO with an offset:
+      // the API refuses a bare local time rather than guessing at it.
+      if (clean.since) { params.since = clean.since; }
+      if (clean.until) { params.until = clean.until; }
 
       return request('runs', params).then(function (payload) {
         var runs = (payload.runs || []).map(provider.normalizeSummary);

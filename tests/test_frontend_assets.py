@@ -697,3 +697,90 @@ def test_a_projects_latest_run_reaches_the_view_normalized() -> None:
     interface = (WEB / "assets/js/10-provider.js").read_text(encoding="utf-8")
     assert "last_run: latest" in interface
     assert "last_run" in overview_source()
+
+
+# --------------------------------------------------------------- live timeline
+
+
+def timeline_source() -> str:
+    return (WEB / "assets" / "js" / "42-timeline.js").read_text(encoding="utf-8")
+
+
+def test_the_timeline_is_shipped_after_the_component_kit() -> None:
+    """It builds on `ui.statusBarClasses` and friends, so it has to load after
+    40-components.js and before the overview that mounts it."""
+    order = MANIFEST["js"]
+    assert order.index("assets/js/40-components.js") < order.index("assets/js/42-timeline.js")
+    assert order.index("assets/js/42-timeline.js") < order.index("assets/js/50-view-overview.js")
+    assert "ui.timeline = create;" in timeline_source()
+
+
+def test_the_timeline_clock_stops_when_the_overview_goes() -> None:
+    """The clock is an interval and two window listeners. A view that drops the
+    element without stopping them leaks a ticking timer per visit."""
+    source = timeline_source()
+    destroy = source[source.index("destroy: function ()") :]
+    destroy = destroy[: destroy.index("}")]
+    assert "stop()" in destroy
+    assert "removeEventListener('visibilitychange'" in destroy
+    assert "removeEventListener('resize'" in destroy
+    assert "clearInterval" in source
+
+    overview = overview_source()
+    view_destroy = overview[overview.rindex("destroy: function ()") :]
+    assert "liveTimeline.destroy()" in view_destroy
+
+
+def test_the_timeline_pauses_while_the_tab_is_hidden() -> None:
+    source = timeline_source()
+    body = source[source.index("function onVisibility") :]
+    body = body[: body.index("\n    }\n")]
+    assert "document.hidden" in body and "stop()" in body
+
+
+def test_the_timeline_moves_by_transform_not_by_redrawing() -> None:
+    """The clock writes a transform once a second and the compositor glides it;
+    rebuilding the bars each second would blink them and drop focus."""
+    source = timeline_source()
+    assert "translateX(" in source
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert re.search(r"\.tl__col,[^{]*\{\s*transition: transform 1s linear", css), (
+        "the timeline's columns do not glide between ticks"
+    )
+    layout = source[source.index("function layout(") : source.index("function currentBin")]
+    assert "createBin(" not in layout, "a tick must reposition bars, never create them"
+
+
+def test_the_timeline_is_loaded_with_the_overview_and_on_every_live_event() -> None:
+    store = store_source()
+    route = store[store.index("function applyRoute") : store.index("function hashWith")]
+    assert "loadTimeline()" in route
+    live = store[store.index("function onProviderMessage") :]
+    live = live[: live.index("var store = {")]
+    assert "loadTimeline()" in live, "a run that starts must reach the timeline"
+
+
+def test_the_timeline_asks_the_api_for_its_window() -> None:
+    """`since` goes to `GET /runs` — the API refuses one without an offset, and
+    `toISOString()` always carries one."""
+    store = store_source()
+    body = store[store.index("function loadTimeline") : store.index("function loadRuns")]
+    assert "filters.since = new Date(" in body and ".toISOString()" in body
+    live = (WEB / "assets/js/12-live-provider.js").read_text(encoding="utf-8")
+    assert "params.since = clean.since" in live
+
+
+def test_every_timeline_span_is_offered_and_has_a_default() -> None:
+    store = store_source()
+    spans = re.findall(r"'(\w+)': \{ key: '(\w+)'", store)
+    assert spans, "no timeline spans"
+    assert all(key == inner for key, inner in spans)
+    default = re.search(r"var DEFAULT_TIMELINE_SPAN = '(\w+)';", store)
+    assert default and default.group(1) in {key for key, _ in spans}
+
+
+def test_the_timeline_table_cannot_widen_a_phone() -> None:
+    """Regression: a hidden table is at least as wide as its caption, and the
+    timeline's caption is a sentence — 380px on its own."""
+    source = timeline_source()
+    assert "el('div', { className: 'sr-only' }, el('table'" in source

@@ -21,6 +21,21 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Added
 
+- **A live test execution timeline on the overview.** A full-width chart under
+  the KPI tiles with time along the bottom and *now* at the right-hand edge.
+  The moment a run starts — any project, CI or not — a bar pops up at that
+  edge, stacked by status, grows while the results arrive, and then glides left
+  with the clock once a second. Each bar is a slot (15 s, 1 min, 5 min or 30 min
+  for the 15m, 1h, 6h and 24h spans), so a pipeline's fan-out stacks into one
+  bar; hovering or tabbing to a bar lists its runs and statuses, and clicking
+  opens the newest. The span rides in the URL as `span`. The clock is one
+  transform per bar per second with a linear transition — nothing is redrawn to
+  move it — and it stops while the tab is hidden and when the page is left. See
+  the [dashboard tour](https://prashanth-sams.github.io/test-hub/docs/dashboard-tour.html#overview-timeline).
+- **`since` and `until` on `GET /api/v1/runs`**: runs that started at or after
+  / at or before an instant. The timestamp must carry an offset (`Z`,
+  `+05:30`); one without is a 422 rather than a guess at UTC. The storage layer
+  has supported both for a while; the REST layer now passes them through.
 - **Test status by project — a live bar for every project on the overview.** A
   full-width row under the KPI tiles: each project's newest run in the window,
   stacked to 100% by status, with its pass rate and test count and where it came

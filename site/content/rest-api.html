@@ -279,6 +279,7 @@ comma-separated list: <code>?project=a&amp;project=b</code> and
     <tr><td><code>tag</code></td><td>User-defined tags.</td></tr>
     <tr><td><code>search</code></td><td>Free text over run name, branch, commit and tags.</td></tr>
     <tr><td><code>live</code></td><td><code>true</code> for runs that are queued or running.</td></tr>
+    <tr><td><code>since</code>, <code>until</code></td><td>Runs that started at or after / at or before an instant — ISO 8601 <em>with an offset</em> (<code>Z</code>, <code>+05:30</code>); a timestamp without one is a 422 rather than a guess. <code>/runs</code> only.</td></tr>
     <tr><td><code>limit</code>, <code>offset</code></td><td>Paging. <code>limit</code> is 1–500, default 50.</td></tr>
   </tbody>
 </table>

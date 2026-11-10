@@ -679,7 +679,10 @@
     sync(spec.value);
 
     return {
-      el: el('div', { className: 'field' }, [
+      // `bare` is for a card header, where the card's own title already says
+      // what the buttons choose and a second, uppercase label above them is
+      // noise. The group keeps the label as its accessible name either way.
+      el: spec.bare ? group : el('div', { className: 'field' }, [
         el('span', { className: 'field__label', text: spec.label }),
         group
       ]),
@@ -1440,6 +1443,11 @@
     portfolioFields: portfolioFields,
     searchField: searchField,
     segmented: segmented,
-    statusBars: statusBars
+    statusBars: statusBars,
+    // The live timeline (42-timeline.js) stacks the same classes in the same
+    // order, so the two charts never disagree about what a colour means.
+    statusBarClasses: STATUS_BAR_CLASSES,
+    statusBarTally: statusBarTally,
+    statusBarSentence: statusBarSentence
   };
 })(window, document);

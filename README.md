@@ -44,7 +44,7 @@ The dashboard follows your operating-system theme and remembers a switch, so
 every screenshot below comes in both — GitHub shows whichever matches the theme
 you are reading in.
 
-**Overview** — the portfolio: totals, every project's latest run as a live status bar, trends, project health and what is running right now.
+**Overview** — the portfolio: totals, a live timeline where every run pops up as it starts and slides left with the clock, every project's latest run as a status bar, trends, project health and what is running right now.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.png">

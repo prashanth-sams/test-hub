@@ -1690,6 +1690,148 @@ th[aria-sort] .table__sort { color: var(--text); }
 .sbars__tip-label { color: var(--text-muted); }
 .sbars__tip-share { color: var(--text-subtle); text-align: right; font-variant-numeric: tabular-nums; }
 
+/* live timeline — every run as a bar on a clock that keeps moving ---------
+ * A y-axis column and a plot side by side; the time labels sit under the plot
+ * in a strip of the same width. Everything that moves is positioned by a
+ * transform the script writes once a second, with a one-second linear
+ * transition, so the motion is the compositor's work and not a redraw. */
+.tl {
+  --tl-height: 220px;
+  --tl-yaxis: 36px;
+  --tl-gap: var(--sp-2);
+  display: grid;
+  gap: var(--sp-2);
+}
+.tl [hidden] { display: none !important; }
+
+.tl__frame {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--tl-yaxis) minmax(0, 1fr);
+  column-gap: var(--tl-gap);
+}
+.tl__yaxis {
+  position: relative;
+  height: var(--tl-height);
+  font-size: var(--fs-2xs);
+  color: var(--chart-axis);
+  font-variant-numeric: tabular-nums;
+}
+.tl__yaxis > span { position: absolute; right: 0; transform: translateY(50%); line-height: 1; }
+.tl__yaxis > span:first-child { transform: none; }
+
+/* Clipped: bars enter at the right edge and leave at the left one. */
+.tl__plot {
+  position: relative;
+  height: var(--tl-height);
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-strong);
+}
+.tl__hgrid > span,
+.tl__vgrid > span { position: absolute; background: var(--chart-grid); }
+.tl__hgrid > span { left: 0; right: 0; height: 1px; }
+.tl__vgrid > span { top: 0; bottom: 0; left: 0; width: 1px; }
+/* Positioned and later in the source, so the columns paint over the grid. */
+.tl__cols { position: absolute; inset: 0; }
+
+/* One slot: the full height is the hover target, the bar sits at its foot. */
+.tl__col {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+}
+.tl__col:hover,
+.tl__col:focus-visible { background: var(--surface-3); }
+.tl__col:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+/* A thin mark, square at the baseline and rounded at the data end; the 2px
+   between statuses is the surface showing through, not a drawn border. */
+.tl__bar {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  flex: none;
+  overflow: hidden;
+  border-radius: 3px 3px 0 0;
+  background: var(--surface);
+}
+.tl__seg { flex: 0 1 0; min-height: 1px; }
+.tl__seg[data-status="passed"] { background: var(--status-passed); }
+.tl__seg[data-status="failed"] { background: var(--status-failed); }
+.tl__seg[data-status="skipped"] { background: var(--status-skipped); }
+.tl__seg[data-status="error"] { background: var(--status-error); }
+.tl__seg[data-status="xpassed"] { background: var(--status-xpassed); }
+.tl__seg[data-status="xfailed"] { background: var(--status-xfailed); }
+.tl__seg[data-status="other"] { background: var(--status-unknown); }
+.tl__seg[data-status="running"] { background: var(--status-running); }
+
+/* A slot with a run still going carries a pulsing dot above its bar. */
+.tl__dot { display: none; flex: none; width: 6px; height: 6px; border-radius: 50%; }
+.tl__col--live .tl__dot {
+  display: block;
+  background: var(--status-running);
+  box-shadow: 0 0 0 0 var(--live-halo);
+  animation: livepulse 2s var(--ease) infinite;
+}
+
+.tl__col,
+.tl__vgrid > span,
+.tl__xaxis > span,
+.tl__now { transition: transform 1s linear; }
+.tl__bar { transition: height 500ms var(--ease); }
+/* The first draw, and the one after a hidden tab or a resize, jumps. */
+.tl--still .tl__col,
+.tl--still .tl__vgrid > span,
+.tl--still .tl__xaxis > span,
+.tl--still .tl__now { transition: none; }
+
+.tl__now { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: var(--border-strong); }
+.tl__now-label {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  font-size: var(--fs-3xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.tl__msg {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 var(--sp-4);
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--text-subtle);
+  pointer-events: none;
+}
+
+.tl__xaxis {
+  position: relative;
+  height: 16px;
+  margin-left: calc(var(--tl-yaxis) + var(--tl-gap));
+  overflow: hidden;
+  font-size: var(--fs-2xs);
+  color: var(--chart-axis);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tl__xaxis > span { position: absolute; top: 0; left: 0; }
+
+.tl__tip-runs { display: grid; gap: 2px; margin-top: var(--sp-2); }
+.tl__tip-run { color: var(--text-muted); overflow-wrap: anywhere; }
+
 /* ====================================================================== */
 /* States: loading, empty, error, banner                                   */
 /* ====================================================================== */
@@ -2040,6 +2182,7 @@ th[aria-sort] .table__sort { color: var(--text); }
   .sbars__caption { grid-column: 2; }
   .sbars__label { grid-column: 1 / -1; }
   .sbars__grid, .sbars__axis { display: none; }
+  .tl { --tl-height: 170px; --tl-yaxis: 28px; }
   .updated { display: none; }
   /* Four controls in one bar at 400px: the switch keeps its icon and track,
    * and `aria-label` carries the name the text was giving it. */
