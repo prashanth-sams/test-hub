@@ -245,6 +245,7 @@ Every list parameter accepts both repetition and a comma-separated list —
 | `tag` | list | Run tag. |
 | `search` | string, ≤ 200 chars | Substring of run name, project key, branch, commit SHA, commit message or pipeline id. Case-sensitive `LIKE`, with `%` and `_` escaped. |
 | `live` | bool | `true` restricts to runs that are queued or running. |
+| `since` / `until` | ISO 8601 timestamp **with an offset** | Runs that started at or after / at or before that instant (a run that never started is placed at when it was created). `/runs` only. A timestamp without an offset — `2026-11-10T08:00:00` — is a 422 rather than being guessed at as UTC; send `Z` or `+05:30`. This is how the overview's live timeline asks for the runs in its span. |
 | `limit` / `offset` | int | Paging, `/runs` only. |
 
 Real results against the demo data set:

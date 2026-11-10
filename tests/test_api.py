@@ -245,6 +245,45 @@ def test_filters_are_applied(client: Any) -> None:
     assert client.get("/api/v1/runs?project=nonexistent").json()["total"] == 0
 
 
+def test_runs_can_be_windowed_by_when_they_started(client: Any, context: Any) -> None:
+    """`since` and `until` are what the overview's live timeline asks with: the
+    runs that started inside its span, and nothing older."""
+    from datetime import timedelta
+
+    from test_hub.domain.models import utcnow
+    from tests.conftest import EventFactory
+
+    def run_started(hours_ago: float) -> str:
+        run = EventFactory(context.workspace_id, project_key="windowed")
+        run.start = utcnow() - timedelta(hours=hours_ago)
+        with context.uow_factory() as uow:
+            uow.events.apply_events([run.queued(), run.started(), run.suite(), run.test("t")])
+            uow.commit()
+        return str(run.run_id)
+
+    old = run_started(3)
+    recent = run_started(0.2)
+    hour_ago = (utcnow() - timedelta(hours=1)).isoformat()
+
+    since = client.get("/api/v1/runs", params={"since": hour_ago}).json()
+    assert [run["id"] for run in since["runs"]] == [recent]
+    assert since["total"] == 1
+
+    until = client.get("/api/v1/runs", params={"until": hour_ago}).json()
+    assert [run["id"] for run in until["runs"]] == [old]
+
+
+def test_a_window_without_an_offset_is_refused(client: Any) -> None:
+    """A naive timestamp would be read as UTC, which is hours from what a caller
+    writing local time meant. Better a 422 than a quietly wrong window."""
+    response = client.get("/api/v1/runs", params={"since": "2026-11-10T08:00:00"})
+    assert response.status_code == 422
+    assert client.get("/api/v1/runs", params={"since": "2026-11-10T08:00:00Z"}).status_code == 200
+    assert (
+        client.get("/api/v1/runs", params={"since": "2026-11-10T13:30:00+05:30"}).status_code == 200
+    )
+
+
 def test_facets_list_what_can_be_filtered_on(client: Any) -> None:
     upload(client, team="payments", environment="staging")
     facets = client.get("/api/v1/facets").json()

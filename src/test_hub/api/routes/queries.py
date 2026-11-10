@@ -17,6 +17,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response, StreamingResponse
+from pydantic import AwareDatetime
 
 from test_hub.api.deps import Context, require_read
 from test_hub.api.schemas import ArtifactListResponse, ProjectListResponse, RunListResponse
@@ -56,6 +57,17 @@ def build_filter(
     tag: Annotated[list[str] | None, Query(description=_CSV)] = None,
     search: Annotated[str | None, Query(max_length=200)] = None,
     live: Annotated[bool, Query(description="Only runs that are queued or running.")] = False,
+    # Aware only: a timestamp with no offset would be read as UTC, and a caller
+    # writing local time would get a window hours away from the one they meant
+    # without any sign of it. A 422 that says so is the kinder answer.
+    since: Annotated[
+        AwareDatetime | None,
+        Query(description="Runs that started at or after this instant. ISO 8601 with an offset."),
+    ] = None,
+    until: Annotated[
+        AwareDatetime | None,
+        Query(description="Runs that started at or before this instant. ISO 8601 with an offset."),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> RunFilter:
@@ -71,6 +83,8 @@ def build_filter(
         statuses=tuple(status or ()),
         tags=_split(tag),
         search=search,
+        since=since,
+        until=until,
         live_only=live,
         limit=limit,
         offset=offset,
