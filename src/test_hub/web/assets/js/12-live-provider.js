@@ -187,6 +187,17 @@
 
     /* ---------------------------------------------------------- read API */
 
+    /** A project's latest run goes through the same normalization as every
+     * other summary, so its counts carry their derived rates — and a server
+     * that predates `last_run` reads as null rather than as undefined. */
+    function shapeProject(raw) {
+      var project = {};
+      var keys = Object.keys(raw || {});
+      for (var i = 0; i < keys.length; i++) { project[keys[i]] = raw[keys[i]]; }
+      project.last_run = raw && raw.last_run ? provider.normalizeSummary(raw.last_run) : null;
+      return project;
+    }
+
     function shapeOverview(payload) {
       var overview = {};
       var keys = Object.keys(payload);
@@ -195,7 +206,7 @@
       overview.live_runs = (payload.live_runs || []).map(provider.normalizeSummary);
       overview.recent_runs = (payload.recent_runs || []).map(provider.normalizeSummary);
       overview.trend = payload.trend || [];
-      overview.projects = payload.projects || [];
+      overview.projects = (payload.projects || []).map(shapeProject);
       overview.top_failing_tests = payload.top_failing_tests || [];
       overview.flakiest_tests = payload.flakiest_tests || [];
       overview.filters = payload.filters || {};

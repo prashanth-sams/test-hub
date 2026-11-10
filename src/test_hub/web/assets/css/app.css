@@ -1524,6 +1524,172 @@ th[aria-sort] .table__sort { color: var(--text); }
 .sparkline { display: inline-block; width: 96px; height: 24px; vertical-align: middle; }
 .sparkline svg { display: block; width: 100%; height: 100%; }
 
+/* status bars — one row per project, its latest run stacked to 100% -------
+ * Three columns shared by every row, the legend row above them and the axis
+ * below: label, bar, figure. The gridlines are one layer behind all the rows
+ * rather than a background on each, so they run unbroken between the bars. */
+.sbars {
+  /* Wide enough for a live badge and "Pull request · started 12 min ago". */
+  --sbars-label: 240px;
+  --sbars-figure: 76px;
+  --sbars-gap: var(--sp-4);
+  display: grid;
+  gap: var(--sp-2);
+}
+/* The parts of this chart that come and go are given a display below, and an
+   author `display` beats the browser's own `[hidden]` rule. */
+.sbars [hidden] { display: none !important; }
+
+.sbars__top,
+.sbars__row {
+  display: grid;
+  grid-template-columns: var(--sbars-label) minmax(0, 1fr) var(--sbars-figure);
+  column-gap: var(--sbars-gap);
+  align-items: center;
+}
+.sbars__legend { grid-column: 1 / 3; }
+.sbars__caption {
+  grid-column: 3;
+  justify-self: end;
+  font-size: var(--fs-2xs);
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.sbars__plot { position: relative; }
+.sbars__grid {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--sbars-label) + var(--sbars-gap));
+  right: calc(var(--sbars-figure) + var(--sbars-gap));
+  pointer-events: none;
+}
+.sbars__grid > span { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: var(--chart-grid); }
+.sbars__grid > span:nth-child(2) { left: 25%; }
+.sbars__grid > span:nth-child(3) { left: 50%; }
+.sbars__grid > span:nth-child(4) { left: 75%; }
+.sbars__grid > span:nth-child(5) { left: auto; right: 0; }
+
+/* Positioned, so it paints over the gridline layer before it in the source. */
+.sbars__rows { position: relative; list-style: none; margin: 0; padding: 0; }
+.sbars__row {
+  /* The hover wash reaches a little past the text on both sides; the negative
+     margin keeps the columns themselves where the grid and axis expect them. */
+  margin: 0 calc(-1 * var(--sp-2));
+  padding: 7px var(--sp-2);
+  border-radius: var(--r-sm);
+  transition: background 100ms var(--ease);
+}
+.sbars__row:hover,
+.sbars__row:focus-within { background: var(--surface-2); }
+
+.sbars__label { display: grid; gap: 2px; min-width: 0; }
+.sbars__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+.sbars__sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-2xs);
+  color: var(--text-subtle);
+}
+.sbars__meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sbars__badge { display: inline-flex; flex: none; }
+.sbars__badge:empty { display: none; }
+.sbars__badge .livebadge { padding: 1px 7px 1px 6px; font-size: var(--fs-3xs); }
+
+/* A thin mark: 14px, square at the baseline, rounded at the data end. The
+   2px between segments is the surface showing through, not a drawn border. */
+.sbars__bar {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 0 4px 4px 0;
+  background: var(--surface);
+}
+.sbars__bar--empty { background: var(--surface-3); }
+/* flex-grow carries the count; 2px is the least a status may be drawn, so a
+   single failure among thousands of passes is still a visible red mark. */
+.sbars__seg { flex: 0 1 0; min-width: 2px; transition: flex-grow 600ms var(--ease); }
+.sbars__seg[data-status="passed"], .sbars__key[data-status="passed"] { background: var(--status-passed); }
+.sbars__seg[data-status="failed"], .sbars__key[data-status="failed"] { background: var(--status-failed); }
+.sbars__seg[data-status="skipped"], .sbars__key[data-status="skipped"] { background: var(--status-skipped); }
+.sbars__seg[data-status="error"], .sbars__key[data-status="error"] { background: var(--status-error); }
+.sbars__seg[data-status="xpassed"], .sbars__key[data-status="xpassed"] { background: var(--status-xpassed); }
+.sbars__seg[data-status="xfailed"], .sbars__key[data-status="xfailed"] { background: var(--status-xfailed); }
+.sbars__seg[data-status="other"], .sbars__key[data-status="other"] { background: var(--status-unknown); }
+.sbars__seg[data-status="running"], .sbars__key[data-status="running"] { background: var(--status-running); }
+
+.sbars__figure {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sbars__rate { font-size: var(--fs-sm); font-weight: 650; color: var(--text); }
+.sbars__total { font-size: var(--fs-2xs); color: var(--text-subtle); }
+
+.sbars__axis {
+  position: relative;
+  height: 16px;
+  margin-left: calc(var(--sbars-label) + var(--sbars-gap));
+  margin-right: calc(var(--sbars-figure) + var(--sbars-gap));
+  font-size: var(--fs-2xs);
+  color: var(--chart-axis);
+  font-variant-numeric: tabular-nums;
+}
+.sbars__axis > span { position: absolute; top: 0; transform: translateX(-50%); }
+.sbars__axis > span:nth-child(1) { left: 0; transform: none; }
+.sbars__axis > span:nth-child(2) { left: 25%; }
+.sbars__axis > span:nth-child(3) { left: 50%; }
+.sbars__axis > span:nth-child(4) { left: 75%; }
+.sbars__axis > span:nth-child(5) { left: 100%; transform: translateX(-100%); }
+
+/* The readout. Never a target itself, or reaching for it would end the hover
+   that opened it. */
+.sbars__tip {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  min-width: 200px;
+  max-width: 300px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  font-size: var(--fs-xs);
+  color: var(--text);
+  pointer-events: none;
+}
+.sbars__tip-title { font-size: var(--fs-sm); font-weight: 650; overflow-wrap: anywhere; }
+.sbars__tip-sub { margin-top: 2px; color: var(--text-subtle); overflow-wrap: anywhere; }
+.sbars__tip-grid {
+  display: grid;
+  grid-template-columns: 12px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px var(--sp-2);
+  margin-top: var(--sp-2);
+}
+/* A line key, not a box: at this density a filled square is a mark doing a
+   label's job. */
+.sbars__key { height: 3px; border-radius: 2px; }
+.sbars__tip-value { font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+.sbars__tip-label { color: var(--text-muted); }
+.sbars__tip-share { color: var(--text-subtle); text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ====================================================================== */
 /* States: loading, empty, error, banner                                   */
 /* ====================================================================== */
@@ -1784,6 +1950,7 @@ th[aria-sort] .table__sort { color: var(--text); }
 
 @media (max-width: 1080px) {
   .grid--sidebar, .grid--3 { grid-template-columns: minmax(0, 1fr); }
+  .sbars { --sbars-label: 180px; }
 }
 
 @media (max-width: 860px) {
@@ -1865,6 +2032,14 @@ th[aria-sort] .table__sort { color: var(--text); }
   /* The meter is the first thing to go when a cell has to become a line of
    * text: the number it annotates is still there. */
   .meter { display: none; }
+  /* A status bar's name goes above its bar instead of beside it, so the bar
+   * keeps the phone's full width. The gridlines and the axis go: on a share
+   * scale every bar spans the width anyway, and the figure says the rest. */
+  .sbars__top, .sbars__row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+  .sbars__legend { grid-column: 1; }
+  .sbars__caption { grid-column: 2; }
+  .sbars__label { grid-column: 1 / -1; }
+  .sbars__grid, .sbars__axis { display: none; }
   .updated { display: none; }
   /* Four controls in one bar at 400px: the switch keeps its icon and track,
    * and `aria-label` carries the name the text was giving it. */

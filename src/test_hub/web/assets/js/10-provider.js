@@ -320,7 +320,9 @@
         pass_rate: project.counts.pass_rate,
         pass_rate_delta: delta,
         flaky_tests: flakyByProject[project.key] || 0,
-        live_runs: project.live
+        live_runs: project.live,
+        // ProjectHealth.last_run: the same summary the server would send.
+        last_run: latest || null
       });
     }
     return util.sortBy(rows, function (row) { return row.last_run_at; }, 'desc');

@@ -1050,6 +1050,358 @@
     ]);
   }
 
+  /* --------------------------------------------------------- status bars */
+
+  /* The classes a status bar stacks, from the baseline out.
+   *
+   * Not quite the dashboard's status order, on purpose. Failed and error sit
+   * side by side everywhere else, and in the dark theme their two reds are too
+   * close to tell apart as touching segments (ΔE ≈ 9 in OKLab, where 15 is the
+   * floor even for full colour vision), so skipped goes between them; this
+   * order keeps every neighbouring pair above that floor in both themes.
+   * Running and queued are one class — neither is finished — and it is always
+   * last, so a run still going reads as a bar filling up from the left: what
+   * is done, then what is not done yet. Cancelled and unknown share a colour,
+   * and two segments nobody can tell apart are one segment. */
+  var STATUS_BAR_CLASSES = [
+    { key: 'passed', label: 'Passed', statuses: ['passed'] },
+    { key: 'failed', label: 'Failed', statuses: ['failed'] },
+    { key: 'skipped', label: 'Skipped', statuses: ['skipped'] },
+    { key: 'error', label: 'Error', statuses: ['error'] },
+    { key: 'xpassed', label: 'xpassed', statuses: ['xpassed'] },
+    { key: 'xfailed', label: 'xfailed', statuses: ['xfailed'] },
+    { key: 'other', label: 'Cancelled or unknown', statuses: ['cancelled', 'unknown'] },
+    { key: 'running', label: 'In progress', statuses: ['running', 'queued'] }
+  ];
+
+  //: The share axis. Fixed, so it never rescales under a reader while a live
+  //: run grows — the gridlines and their labels are drawn by CSS from these.
+  var STATUS_BAR_TICKS = [0, 25, 50, 75, 100];
+
+  /** A counts block folded into the bar's classes, and their sum. */
+  function statusBarTally(counts) {
+    var values = {};
+    var total = 0;
+    for (var i = 0; i < STATUS_BAR_CLASSES.length; i++) {
+      var cls = STATUS_BAR_CLASSES[i];
+      var value = 0;
+      for (var s = 0; s < cls.statuses.length; s++) {
+        var count = counts ? counts[cls.statuses[s]] : 0;
+        if (typeof count === 'number' && isFinite(count) && count > 0) { value += count; }
+      }
+      values[cls.key] = value;
+      total += value;
+    }
+    return { values: values, total: total };
+  }
+
+  function statusBarSentence(tally) {
+    var parts = [];
+    for (var i = 0; i < STATUS_BAR_CLASSES.length; i++) {
+      var cls = STATUS_BAR_CLASSES[i];
+      if (tally.values[cls.key]) {
+        parts.push(util.formatNumber(tally.values[cls.key]) + ' ' + cls.label.toLowerCase());
+      }
+    }
+    return parts.length ? parts.join(', ') : 'no results reported yet';
+  }
+
+  /* Write only what changed. Every update runs over every row, and a node that
+   * is rewritten with what it already says is a node a screen reader may
+   * announce again for nothing. */
+  function setText(node, text) {
+    if (node.textContent !== text) { node.textContent = text; }
+  }
+
+  function setAttr(node, name, value) {
+    if (value === null || value === undefined || value === '') {
+      if (node.hasAttribute(name)) { node.removeAttribute(name); }
+      return;
+    }
+    if (node.getAttribute(name) !== String(value)) { node.setAttribute(name, String(value)); }
+  }
+
+  /**
+   * One horizontal bar per row, each stacked to 100% by status: "what does
+   * each of these look like right now", read straight down a column.
+   *
+   * HTML rather than one more SVG shape in 20-charts.js, for the three things
+   * that set it apart from those:
+   *
+   *  - It is redrawn on every live event while a run is in flight. Rows are
+   *    keyed and patched in place, so a bar that changes grows into its new
+   *    width instead of blinking, and the link a keyboard user is standing on
+   *    is still there after the update.
+   *  - Each row's label is a link with a badge beside it — layout, truncation
+   *    and focus that HTML provides and SVG does not.
+   *  - Its colours are the status tokens, applied by CSS, so a theme switch
+   *    repaints it without a redraw.
+   *
+   * Share, not count, is the scale. A 30-test suite stays as legible as the
+   * 3,000-test suite beside it, and the axis cannot rescale while a live run
+   * grows; the count is printed beside every bar instead, with the pass rate.
+   *
+   *   spec     {label, emptyTitle, emptyHint}
+   *   update   [{key, title, href, meta, detail, live, counts}]
+   *
+   * Returns `{el, update}`. The element is meant to be created once and kept:
+   * dropping it and building another on each update throws away exactly what
+   * the in-place patching exists to keep.
+   */
+  function statusBars(spec) {
+    var opts = spec || {};
+    // Keyed by whatever the caller keys rows by — project keys here — and
+    // `constructor` is a perfectly good project key. No prototype to collide
+    // with.
+    var rows = Object.create(null);
+    var hovered = null;
+    var focused = null;
+    var pointerX = null;
+    var i;
+
+    var legendItems = {};
+    var legend = el('div', { className: 'legend sbars__legend' });
+    for (i = 0; i < STATUS_BAR_CLASSES.length; i++) {
+      var item = el('span', { className: 'legend__item' }, [
+        el('span', { className: 'legend__swatch', dataset: { status: STATUS_BAR_CLASSES[i].key } }),
+        el('span', { text: STATUS_BAR_CLASSES[i].label })
+      ]);
+      item.hidden = true;
+      legendItems[STATUS_BAR_CLASSES[i].key] = item;
+      legend.appendChild(item);
+    }
+    var top = el('div', { className: 'sbars__top' }, [
+      legend,
+      el('span', { className: 'sbars__caption', text: 'Pass rate', attrs: { 'aria-hidden': 'true' } })
+    ]);
+
+    var list = el('ul', {
+      className: 'sbars__rows',
+      attrs: { role: 'list', 'aria-label': opts.label || null }
+    });
+    // Visual only: every number it shows is also in the row's own text and in
+    // the bar's accessible name, so it is hidden from assistive technology
+    // rather than announced a second time.
+    var tip = el('div', { className: 'sbars__tip', attrs: { 'aria-hidden': 'true' } });
+    tip.hidden = true;
+    var plot = el('div', { className: 'sbars__plot' }, [
+      el('div', { className: 'sbars__grid', attrs: { 'aria-hidden': 'true' } },
+        STATUS_BAR_TICKS.map(function () { return el('span'); })),
+      list,
+      tip
+    ]);
+    var axis = el('div', { className: 'sbars__axis', attrs: { 'aria-hidden': 'true' } },
+      STATUS_BAR_TICKS.map(function (tick) { return el('span', { text: tick + '%' }); }));
+    var empty = emptyState({ title: opts.emptyTitle, hint: opts.emptyHint, icon: 'chart' });
+    var root = el('div', { className: 'sbars' }, [top, plot, axis, empty]);
+
+    function createRow(key) {
+      var segments = {};
+      var bar = el('div', { className: 'sbars__bar', attrs: { role: 'img' } });
+      for (var k = 0; k < STATUS_BAR_CLASSES.length; k++) {
+        var segment = el('span', {
+          className: 'sbars__seg',
+          dataset: { status: STATUS_BAR_CLASSES[k].key }
+        });
+        segment.hidden = true;
+        segments[STATUS_BAR_CLASSES[k].key] = segment;
+        bar.appendChild(segment);
+      }
+      var row = {
+        key: key,
+        name: el('a', { className: 'sbars__name' }),
+        badge: el('span', { className: 'sbars__badge' }),
+        meta: el('span', { className: 'sbars__meta' }),
+        bar: bar,
+        segments: segments,
+        rate: el('span', { className: 'sbars__rate' }),
+        total: el('span', { className: 'sbars__total' }),
+        item: null,
+        tally: null
+      };
+      row.node = el('li', { className: 'sbars__row' }, [
+        el('div', { className: 'sbars__label' }, [
+          row.name,
+          el('div', { className: 'sbars__sub' }, [row.badge, row.meta])
+        ]),
+        bar,
+        el('div', { className: 'sbars__figure' }, [
+          // The column's caption is drawn once, above the rows, and hidden
+          // from assistive technology; each figure names itself instead.
+          el('span', { className: 'sr-only', text: 'Pass rate ' }),
+          row.rate,
+          row.total
+        ])
+      ]);
+      // Hover and keyboard focus show the same readout. The whole row is the
+      // target, so a 2px segment never has to be hit dead-centre.
+      row.node.addEventListener('pointerenter', function (event) {
+        hovered = key;
+        pointerX = event.clientX;
+        showTip();
+      });
+      row.node.addEventListener('pointermove', function (event) {
+        if (hovered !== key) { return; }
+        pointerX = event.clientX;
+        placeTip(row);
+      });
+      row.node.addEventListener('pointerleave', function () {
+        if (hovered === key) { hovered = null; showTip(); }
+      });
+      row.node.addEventListener('focusin', function () { focused = key; showTip(); });
+      row.node.addEventListener('focusout', function () {
+        if (focused === key) { focused = null; showTip(); }
+      });
+      return row;
+    }
+
+    function patchRow(row, entry) {
+      var tally = statusBarTally(entry.counts);
+      row.item = entry;
+      row.tally = tally;
+
+      setText(row.name, entry.title || entry.key);
+      setAttr(row.name, 'href', entry.href);
+      // The column truncates long names; the full one stays a hover away.
+      setAttr(row.name, 'title', entry.title);
+      if (entry.live && !row.badge.firstChild) {
+        row.badge.appendChild(liveBadge());
+      } else if (!entry.live && row.badge.firstChild) {
+        util.clear(row.badge);
+      }
+      setText(row.meta, entry.meta || '');
+      setAttr(row.meta, 'title', entry.meta);
+
+      for (var k = 0; k < STATUS_BAR_CLASSES.length; k++) {
+        var key = STATUS_BAR_CLASSES[k].key;
+        var value = tally.values[key];
+        var segment = row.segments[key];
+        if (segment.hidden !== !value) { segment.hidden = !value; }
+        // Each segment grows in proportion to its count: flexbox shares the
+        // width left after the gaps out exactly, and flex-grow animates.
+        segment.style.flexGrow = String(value);
+      }
+      row.bar.classList.toggle('sbars__bar--empty', !tally.total);
+      setAttr(row.bar, 'aria-label', statusBarSentence(tally));
+      setText(row.rate, util.formatPercent(entry.counts ? entry.counts.pass_rate : null, 1));
+      setText(row.total, util.formatNumber(tally.total) + ' ' + util.pluralize(tally.total, 'test'));
+    }
+
+    function showTip() {
+      var row = (hovered !== null && rows[hovered]) || (focused !== null && rows[focused]) || null;
+      if (!row) {
+        tip.hidden = true;
+        return;
+      }
+      var cells = [];
+      for (var k = 0; k < STATUS_BAR_CLASSES.length; k++) {
+        var cls = STATUS_BAR_CLASSES[k];
+        var value = row.tally.values[cls.key];
+        if (!value) { continue; }
+        // Values lead and the status follows: the reader already knows which
+        // row they are on and has come for the numbers.
+        cells.push(
+          el('span', { className: 'sbars__key', dataset: { status: cls.key } }),
+          el('span', { className: 'sbars__tip-value', text: util.formatNumber(value) }),
+          el('span', { className: 'sbars__tip-label', text: cls.label }),
+          el('span', {
+            className: 'sbars__tip-share',
+            text: util.formatPercent((value / row.tally.total) * 100, 1)
+          })
+        );
+      }
+      util.replace(tip, [
+        el('div', { className: 'sbars__tip-title', text: row.item.title || row.key }),
+        row.item.detail ? el('div', { className: 'sbars__tip-sub', text: row.item.detail }) : null,
+        cells.length
+          ? el('div', { className: 'sbars__tip-grid' }, cells)
+          : el('div', { className: 'sbars__tip-sub', text: 'No results reported yet' })
+      ]);
+      tip.hidden = false;
+      placeTip(row);
+    }
+
+    /* Above the row, under the pointer when there is one and at the start of
+     * the bar when the row was reached by keyboard; below the row when above
+     * would leave the viewport. */
+    function placeTip(row) {
+      if (tip.hidden) { return; }
+      var plotBox = plot.getBoundingClientRect();
+      var rowBox = row.node.getBoundingClientRect();
+      var barBox = row.bar.getBoundingClientRect();
+      var width = tip.offsetWidth;
+      var height = tip.offsetHeight;
+      var left = hovered === row.key && pointerX !== null
+        ? pointerX - plotBox.left - width / 2
+        : barBox.left - plotBox.left;
+      left = Math.max(0, Math.min(left, plotBox.width - width));
+      var above = rowBox.top - height - 6;
+      var y = above >= 0
+        ? above - plotBox.top
+        : rowBox.bottom - plotBox.top + 6;
+      tip.style.left = Math.round(left) + 'px';
+      tip.style.top = Math.round(y) + 'px';
+    }
+
+    function update(entries) {
+      var wanted = entries || [];
+      var seen = Object.create(null);
+      var present = {};
+      var k;
+      for (var n = 0; n < wanted.length; n++) {
+        var entry = wanted[n];
+        var row = rows[entry.key];
+        if (!row) {
+          row = createRow(entry.key);
+          rows[entry.key] = row;
+        }
+        patchRow(row, entry);
+        seen[entry.key] = true;
+        for (k = 0; k < STATUS_BAR_CLASSES.length; k++) {
+          if (row.tally.values[STATUS_BAR_CLASSES[k].key]) { present[STATUS_BAR_CLASSES[k].key] = true; }
+        }
+      }
+
+      var keys = Object.keys(rows);
+      for (k = 0; k < keys.length; k++) {
+        if (seen[keys[k]]) { continue; }
+        var stale = rows[keys[k]];
+        if (stale.node.parentNode) { stale.node.parentNode.removeChild(stale.node); }
+        delete rows[keys[k]];
+        if (hovered === keys[k]) { hovered = null; }
+        if (focused === keys[k]) { focused = null; }
+      }
+
+      // Put rows in order by moving only the ones that are out of place: a
+      // moved node drops keyboard focus, and with a stable order none moves.
+      var next = list.firstChild;
+      for (k = 0; k < wanted.length; k++) {
+        var node = rows[wanted[k].key].node;
+        if (node === next) {
+          next = next.nextSibling;
+        } else {
+          list.insertBefore(node, next);
+        }
+      }
+
+      // The legend names what is on screen: a status no row has is noise.
+      for (k = 0; k < STATUS_BAR_CLASSES.length; k++) {
+        var legendItem = legendItems[STATUS_BAR_CLASSES[k].key];
+        var hide = !present[STATUS_BAR_CLASSES[k].key];
+        if (legendItem.hidden !== hide) { legendItem.hidden = hide; }
+      }
+      var hasRows = wanted.length > 0;
+      top.hidden = !hasRows;
+      plot.hidden = !hasRows;
+      axis.hidden = !hasRows;
+      empty.hidden = hasRows;
+      showTip();
+    }
+
+    update([]);
+    return { el: root, update: update };
+  }
+
   TestHub.ui = {
     icon: icon,
     railIcon: railIcon,
@@ -1087,6 +1439,7 @@
     filterPanel: filterPanel,
     portfolioFields: portfolioFields,
     searchField: searchField,
-    segmented: segmented
+    segmented: segmented,
+    statusBars: statusBars
   };
 })(window, document);

@@ -9,6 +9,14 @@
  * rate deliberately renders an em dash when nothing executed — a suite that
  * only skipped is not a 0% suite, and showing it in red trains people to
  * ignore red.
+ *
+ * The row under the KPIs is "what is on fire right now", project by project:
+ * every project's newest run as one bar, wherever it ran — CI or a laptop —
+ * and still moving while a run is in flight. It is the one part of this page
+ * that is never rebuilt. The rest of the page is re-rendered from state on
+ * every update; the status row is created once and patched, so its bars grow
+ * into their new widths as results stream in instead of blinking every second
+ * of a live run, and the link under a keyboard user's focus stays put.
  */
 (function (window) {
   'use strict';
@@ -24,6 +32,110 @@
   //: The seven dimensions the portfolio slices by, shared with the analytics
   //: page — see `ui.portfolioFields`.
   var FIELDS = ui.portfolioFields();
+
+  //: How a run's trigger reads under its project's name. Anything not listed
+  //: is title-cased as sent.
+  var TRIGGER_LABELS = {
+    push: 'Push', pull_request: 'Pull request', schedule: 'Schedule', retry: 'Retry',
+    manual: 'Manual', local: 'Local', api: 'API'
+  };
+
+  /** Where a run came from and when: the line under each project's name. */
+  function runMeta(run) {
+    var parts = [];
+    // The trigger is what tells a CI run from one started on a laptop. It is
+    // shown as the publisher reported it rather than sorted into "CI" and
+    // "not CI" here — that line would be drawn in the wrong place for somebody.
+    if (run.trigger && run.trigger !== 'unknown') {
+      parts.push(TRIGGER_LABELS[run.trigger] || util.titleCase(run.trigger));
+    }
+    if (run.status === 'queued') {
+      parts.push('queued');
+    } else if (run.is_live) {
+      parts.push('started ' + util.timeAgo(run.started_at));
+    } else {
+      parts.push(util.timeAgo(run.finished_at || run.started_at));
+    }
+    return parts.join(' · ');
+  }
+
+  /** Which run a bar is, for the readout: name, type, branch, environment. */
+  function runDetail(run) {
+    var parts = [];
+    if (run.name) { parts.push(run.name); }
+    if (run.test_type && run.test_type !== 'other') { parts.push(run.test_type); }
+    if (run.branch) { parts.push(run.branch); }
+    if (run.environment) { parts.push(run.environment); }
+    return parts.join(' · ');
+  }
+
+  /**
+   * The status row: every project's newest run in the window, one bar each.
+   *
+   * Created once per mount and updated in place — see the header. Its rows
+   * are `ProjectHealth.last_run`, so a run that is still going *is* its
+   * project's status until it finishes, and a project with nothing inside the
+   * window has no bar rather than an empty one: the hint counts them instead.
+   * The filters reach it like everything else on the page, which is how it
+   * answers "and only the e2e runs" or "only staging".
+   */
+  function statusRow() {
+    var chart = ui.statusBars({
+      label: 'Latest run of each project',
+      emptyTitle: 'No runs in this window',
+      emptyHint: 'Widen the window or clear a filter. A project appears here as soon as a run ' +
+        'reports — from CI or from anywhere else — and its bar moves while the results arrive.'
+    });
+    var badge = el('span');
+    var hint = el('span', { className: 'card__hint' });
+    var card = ui.card({
+      title: 'Test status by project',
+      badge: badge,
+      actions: [hint],
+      body: chart.el
+    });
+    var wasLive = false;
+
+    function update(overview) {
+      var projects = overview.projects || [];
+      var entries = [];
+      var live = false;
+      for (var i = 0; i < projects.length; i++) {
+        var run = projects[i].last_run;
+        if (!run) { continue; }
+        live = live || !!run.is_live;
+        entries.push({
+          key: projects[i].project_key,
+          title: projects[i].name || projects[i].project_key,
+          href: util.buildHash(['runs', run.id]),
+          meta: runMeta(run),
+          detail: runDetail(run),
+          live: !!run.is_live,
+          counts: run.counts
+        });
+      }
+      // By name, never by what the bars say: rows that re-sort whenever a
+      // live result lands are rows nobody can keep an eye on.
+      entries.sort(function (a, b) {
+        return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }) ||
+          (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0));
+      });
+      chart.update(entries);
+
+      // Replaced only when it changes: a new badge restarts its pulse.
+      if (live !== wasLive) {
+        util.replace(badge, live ? ui.liveBadge() : null);
+        wasLive = live;
+      }
+      var idle = projects.length - entries.length;
+      var text = 'Newest run per project' + (idle > 0
+        ? ' · ' + util.formatNumber(idle) + ' without a run in ' + overview.window_days + ' days'
+        : '');
+      if (hint.textContent !== text) { hint.textContent = text; }
+    }
+
+    return { el: card, update: update };
+  }
 
   function create(ctx) {
     var store = ctx.store;
@@ -41,7 +153,19 @@
       }
     });
 
-    var content = el('div', { className: 'stack' });
+    // Three slots rather than one container: the status row sits between two
+    // stretches of the page that are rebuilt on every update, and it must not
+    // be detached and re-inserted with them — that alone drops focus and
+    // restarts every transition in it. Plain divs, so `hidden` really hides
+    // them, and a hidden slot leaves no gap in the stack.
+    var projectStatus = statusRow();
+    var head = el('div');
+    var statusSlot = el('div', {}, projectStatus.el);
+    var rest = el('div');
+    // Until the first overview lands there is nothing true to say in either.
+    statusSlot.hidden = true;
+    rest.hidden = true;
+    var content = el('div', { className: 'stack' }, [head, statusSlot, rest]);
     var root = el('div', {}, [
       el('div', { className: 'page-head' }, [
         el('div', { className: 'page-head__titles' }, [
@@ -65,12 +189,20 @@
       return holder;
     }
 
+    /** Everything but the head slot goes, for the states with no data in them. */
+    function showOnly(node) {
+      util.replace(head, node);
+      statusSlot.hidden = true;
+      util.clear(rest);
+      rest.hidden = true;
+    }
+
     function render(state) {
       pending = [];
       var overview = state.overview;
 
       if (state.errors.overview) {
-        util.replace(content, ui.card({
+        showOnly(ui.card({
           title: 'Overview',
           body: ui.errorState({
             title: 'The overview did not load',
@@ -82,7 +214,7 @@
       }
 
       if (!overview) {
-        util.replace(content, el('div', { className: 'stack' }, [
+        showOnly(el('div', { className: 'stack' }, [
           el('div', { className: 'kpis' }, [0, 1, 2, 3, 4, 5].map(function () {
             return el('div', { className: 'kpi' }, ui.skeleton('card', 1));
           })),
@@ -92,25 +224,29 @@
       }
 
       var counts = overview.counts;
-      var nodes = [];
+      var lead = [];
 
       if (overview.derived) {
-        nodes.push(ui.banner({
+        lead.push(ui.banner({
           tone: null,
           title: 'Recomputed in your browser',
           text: overview.derived_note ||
             'These totals were recalculated in the browser from the runs that match the filters.'
         }));
       }
+      lead.push(kpiRow(counts, overview));
 
-      nodes.push(kpiRow(counts, overview));
-      nodes.push(headlineRow(overview));
-      nodes.push(trendRow(overview));
-      nodes.push(liveRow(overview));
-      nodes.push(projectsCard(overview));
-      nodes.push(testListsRow(overview));
-
-      util.replace(content, el('div', { className: 'stack' }, nodes));
+      util.replace(head, el('div', { className: 'stack' }, lead));
+      projectStatus.update(overview);
+      statusSlot.hidden = false;
+      util.replace(rest, el('div', { className: 'stack' }, [
+        headlineRow(overview),
+        trendRow(overview),
+        liveRow(overview),
+        projectsCard(overview),
+        testListsRow(overview)
+      ]));
+      rest.hidden = false;
       for (var i = 0; i < pending.length; i++) { pending[i](); }
       pending = [];
     }

@@ -739,6 +739,25 @@ Keys: `schema_version`, `generated_at`, `window_days`, `counts`, `total_runs`,
 `total_runs_all_time`, `live_runs[]`, `recent_runs[]` (20), `projects[]`,
 `trend[]`, `top_failing_tests[]`, `flakiest_tests[]`, `filters`.
 
+Each entry in `projects[]` carries `last_run`: that project's newest run inside
+the window as a full run summary — counts, trigger, branch, `is_live` — finished
+or still going, or `null` if it has not run in the window. It is what the
+dashboard's *Test status by project* row draws, and it is the cheap way to ask
+"what does every project look like right now" from a script:
+
+```shell
+$ curl -s "$HUB/api/v1/overview" | jq -r '.projects[] | select(.last_run)
+    | "\(.project_key) \(.last_run.trigger) \(.last_run.status) \(.last_run.counts.pass_rate)"'
+identity-service pull_request failed 83.33
+ledger-worker push passed 100.0
+notification-gateway schedule passed 100.0
+payments-api schedule running 100.0
+storefront-web push failed 80.0
+```
+
+That is `test-hub demo`, whose payments-api run is the one it leaves going —
+which is why its status is `running`: a run in flight is its project's latest.
+
 ```json
 {
   "window_days": 14,
@@ -751,7 +770,7 @@ Keys: `schema_version`, `generated_at`, `window_days`, `counts`, `total_runs`,
     {"project_key": "checkout-service", "name": "checkout-service", "team": null,
      "runs_24h": 0, "last_run_id": null, "last_run_at": null,
      "last_status": "unknown", "pass_rate": null, "pass_rate_delta": null,
-     "flaky_tests": 0, "live_runs": 0}
+     "flaky_tests": 0, "live_runs": 0, "last_run": null}
   ],
   "trend": [
     {"bucket": "2026-08-25", "runs": 0, "pass_rate": null, "failure_rate": null,

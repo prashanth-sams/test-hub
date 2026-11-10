@@ -621,3 +621,79 @@ def test_the_danger_button_is_styled_after_the_base_button() -> None:
     so source order is the only thing that decides which wins."""
     css = CSS_FILES[0].read_text(encoding="utf-8")
     assert css.index(".btn--danger") > css.index(".btn--primary")
+
+
+# ------------------------------------------------------- status by project
+
+
+def overview_source() -> str:
+    return (WEB / "assets" / "js" / "50-view-overview.js").read_text(encoding="utf-8")
+
+
+def status_bar_classes() -> dict[str, list[str]]:
+    """``STATUS_BAR_CLASSES`` from the component kit: class key -> statuses."""
+    source = components_source()
+    block = source[source.index("var STATUS_BAR_CLASSES") :]
+    block = block[: block.index("];")]
+    return {
+        key: re.findall(r"'([a-z]+)'", statuses)
+        for key, statuses in re.findall(r"key: '(\w+)'.*?statuses: \[([^\]]*)\]", block)
+    }
+
+
+def test_every_status_lands_in_exactly_one_bar_class() -> None:
+    """A status no class claims would drop out of every bar, and the bars would
+    stop adding up to the runs they draw — silently, for whoever has one."""
+    util = JS_FILES[0].read_text(encoding="utf-8")
+    order = util[util.index("var STATUS_ORDER = [") :]
+    statuses = re.findall(r"'([a-z]+)'", order[: order.index("];")])
+    assert len(statuses) == 10, statuses
+
+    claimed = [status for members in status_bar_classes().values() for status in members]
+    assert sorted(claimed) == sorted(statuses), "a status is in no bar class, or in two"
+
+
+def test_every_status_bar_class_has_a_colour() -> None:
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    for key in status_bar_classes():
+        assert f'.sbars__seg[data-status="{key}"]' in css, f"the {key} segment has no colour"
+        assert f'.sbars__key[data-status="{key}"]' in css, f"the {key} readout key has no colour"
+
+
+def test_in_progress_is_always_the_end_of_the_bar() -> None:
+    """So a run still going reads as a bar filling up from the left."""
+    assert list(status_bar_classes())[-1] == "running"
+    assert status_bar_classes()["running"] == ["running", "queued"]
+
+
+def test_the_status_row_is_built_once_and_patched_in_place() -> None:
+    """Rebuilding it on each update would blink every bar on every live event
+    and drop the keyboard focus of whoever is reading it."""
+    source = overview_source()
+    assert source.count("ui.statusBars(") == 1
+    render = source[source.index("    function render(state)") :]
+    render = render[: render.index("\n    }\n")]
+    assert "projectStatus.update(overview)" in render
+    assert "statusRow(" not in render, "the status row is rebuilt on every render"
+    assert "statusSlot" in render, "the status row is not kept out of the rebuilt slots"
+
+
+def test_the_status_row_never_sorts_by_its_own_numbers() -> None:
+    """Rows that re-sort when a live result lands are rows nobody can follow."""
+    source = overview_source()
+    body = source[source.index("function statusRow") : source.index("function create(ctx)")]
+    assert "entries.sort(" in body
+    sort = body[body.index("entries.sort(") :]
+    sort = sort[: sort.index("});")]
+    assert "counts" not in sort and "pass_rate" not in sort
+
+
+def test_a_projects_latest_run_reaches_the_view_normalized() -> None:
+    """The row draws `ProjectHealth.last_run`, from the server or from the
+    browser-side recomputation a filter triggers — both must carry it, and
+    with its derived rates."""
+    live = (WEB / "assets/js/12-live-provider.js").read_text(encoding="utf-8")
+    assert "provider.normalizeSummary(raw.last_run)" in live
+    interface = (WEB / "assets/js/10-provider.js").read_text(encoding="utf-8")
+    assert "last_run: latest" in interface
+    assert "last_run" in overview_source()

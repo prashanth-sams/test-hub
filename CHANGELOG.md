@@ -21,6 +21,26 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Added
 
+- **Test status by project — a live bar for every project on the overview.** A
+  full-width row under the KPI tiles: each project's newest run in the window,
+  stacked to 100% by status, with its pass rate and test count and where it came
+  from — `Push`, `Pull request`, `Schedule`, `Local`, `Manual` — so runs from CI
+  and runs from a laptop sit side by side. A run still in flight is its project's
+  status: it is marked live, its unfinished tests fill the end of the bar, and
+  each result redraws it within a couple of seconds of arriving. The row is
+  patched in place rather than rebuilt, so bars grow into their new widths and
+  keyboard focus survives the updates; rows are sorted by name, so nothing jumps
+  mid-run; hovering or focusing a row gives every status with its count and
+  share. The portfolio filters apply, so "only e2e" or "only staging" shows each
+  pipeline's newest run. See the
+  [dashboard tour](https://prashanth-sams.github.io/test-hub/docs/dashboard-tour.html#overview-status-by-project).
+- **`ProjectHealth.last_run`** on `GET /api/v1/overview`: each project's newest
+  run inside the window as a full run summary — counts, trigger, branch,
+  `is_live` — or `null` when it has not run. One response answers "what does
+  every project look like right now", and it costs no query per project: the
+  runs the overview already loads cover the common case, and the rest arrive in
+  one. An optional field, so `SCHEMA_VERSION` does not move;
+  see [the API reference](docs/api.md#get-apiv1overview).
 - **PostgreSQL, as a choice beside SQLite.** SQLite is still the default and
   still needs nothing installed. Set `TEST_HUB_DATABASE_URL=postgresql://…`
   (after `pip install "test-hub[postgres]"`; the Docker image already has the
