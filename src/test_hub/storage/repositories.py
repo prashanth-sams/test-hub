@@ -945,7 +945,7 @@ class SqlRunRepository:
             total_runs_all_time=self.count_runs(RunFilter(workspace_id=workspace_id)),
             live_runs=live,
             recent_runs=recent,
-            projects=self._project_health(workspace_id, current, previous, now, live),
+            projects=self._project_health(workspace_id, current, previous, now, live, recent),
             trend=self._trend(current, since, window),
             top_failing_tests=self._top_failing(workspace_id, since),
             flakiest_tests=self._flakiest(workspace_id, since),
@@ -959,11 +959,24 @@ class SqlRunRepository:
         previous: Sequence[Any],
         now: datetime,
         live: Sequence[RunSummary],
+        recent: Sequence[RunSummary],
     ) -> list[ProjectHealth]:
         day_ago = now - timedelta(days=1)
         by_project: dict[str, list[Any]] = defaultdict(list)
         for row in current:
             by_project[row.project_key].append(row)
+        # Newest first, so a project's latest run is always its first row.
+        for project_rows in by_project.values():
+            project_rows.sort(key=lambda row: row.started_at or row.created_at, reverse=True)
+        # Each project's latest run in full, so the response can say what every
+        # project looks like right now. The live and recent lists were loaded for
+        # this same response and usually hold all of them already; the rest come
+        # back in one query — never one per project, or this endpoint stops being
+        # cheap enough to poll.
+        latest = self._summaries_by_id(
+            [project_rows[0].id for project_rows in by_project.values()],
+            known=(*live, *recent),
+        )
         previous_by_project: dict[str, list[Any]] = defaultdict(list)
         for row in previous:
             previous_by_project[row.project_key].append(row)
@@ -986,11 +999,7 @@ class SqlRunRepository:
 
         health: list[ProjectHealth] = []
         for project in self.list_projects(workspace_id):
-            runs = sorted(
-                by_project.get(project.key, ()),
-                key=lambda row: row.started_at or row.created_at,
-                reverse=True,
-            )
+            runs = by_project.get(project.key, [])
             merged = RunCounts()
             for row in runs:
                 merged = merged.merge(_counts_from_json(row.counts))
@@ -1018,9 +1027,28 @@ class SqlRunRepository:
                     pass_rate_delta=delta,
                     flaky_tests=int(flaky_counts.get(project.key, 0)),
                     live_runs=live_by_project.get(project.key, 0),
+                    last_run=latest.get(newest.id) if newest else None,
                 )
             )
         return health
+
+    def _summaries_by_id(
+        self, run_ids: Iterable[uuid.UUID], *, known: Iterable[RunSummary] = ()
+    ) -> dict[uuid.UUID, RunSummary]:
+        """A summary for each of ``run_ids``, loading only those ``known`` lacks.
+
+        Chunked like every other ``IN`` list in this file, so a workspace with
+        thousands of projects stays inside SQLite's bound-parameter limit.
+        """
+        wanted = set(run_ids)
+        found = {summary.id: summary for summary in known if summary.id in wanted}
+        missing = sorted(wanted - found.keys())
+        for start in range(0, len(missing), 400):
+            chunk = missing[start : start + 400]
+            rows = self._session.execute(select(RunRow).where(RunRow.id.in_(chunk))).scalars()
+            for row in rows:
+                found[row.id] = _run_to_summary(row)
+        return found
 
     #: The trend line never returns more buckets than this, whatever the window.
     #: A year of daily points is 366 objects in every overview response for a

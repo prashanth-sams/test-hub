@@ -654,6 +654,14 @@ class ProjectHealth(_Base):
     pass_rate_delta: float | None = None
     flaky_tests: int = 0
     live_runs: int = 0
+    last_run: RunSummary | None = Field(
+        default=None,
+        description="The run `last_run_id` names, in full: its counts, trigger, branch and "
+        "whether it is still going. It is what lets a dashboard draw every project's current "
+        "status — a run still in flight included — from this one response, rather than "
+        "asking for each project's newest run separately. Null when the project has not run "
+        "inside the window.",
+    )
 
 
 class OverviewSnapshot(_VersionedBase):
