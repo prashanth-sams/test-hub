@@ -38,6 +38,12 @@
   var WATCHDOG_MS = 5000;
   var BACKOFF_MS = [1000, 2000, 4000, 8000, 15000, 30000];
   var OFFLINE_AFTER_FAILURES = 3;
+  //: How long a hidden tab keeps its live connection. A browser allows six
+  //: connections per server over HTTP/1.1 and every open stream holds one for
+  //: good, so six Test Hub tabs left open were six streams and no room for a
+  //: single request: every page timed out the next time results arrived. Long
+  //: enough that flicking to another tab and back costs nothing.
+  var HIDDEN_RELEASE_MS = 10000;
 
   function resolveApiBase() {
     if (window.TEST_HUB_API_BASE) { return String(window.TEST_HUB_API_BASE); }
@@ -98,6 +104,11 @@
     var pendingReason = 'events';
     var facetCache = null;
     var closed = false;
+    // A tab out of sight gives its stream back (see HIDDEN_RELEASE_MS); one
+    // that comes back reconnects, and reloads once for whatever it missed.
+    var paused = false;
+    var hiddenTimer = null;
+    var resyncOnOpen = false;
 
     self.meta = { apiBase: apiBase, streamUrl: streamUrl };
 
@@ -187,6 +198,17 @@
 
     /* ---------------------------------------------------------- read API */
 
+    /** A project's latest run goes through the same normalization as every
+     * other summary, so its counts carry their derived rates — and a server
+     * that predates `last_run` reads as null rather than as undefined. */
+    function shapeProject(raw) {
+      var project = {};
+      var keys = Object.keys(raw || {});
+      for (var i = 0; i < keys.length; i++) { project[keys[i]] = raw[keys[i]]; }
+      project.last_run = raw && raw.last_run ? provider.normalizeSummary(raw.last_run) : null;
+      return project;
+    }
+
     function shapeOverview(payload) {
       var overview = {};
       var keys = Object.keys(payload);
@@ -195,7 +217,7 @@
       overview.live_runs = (payload.live_runs || []).map(provider.normalizeSummary);
       overview.recent_runs = (payload.recent_runs || []).map(provider.normalizeSummary);
       overview.trend = payload.trend || [];
-      overview.projects = payload.projects || [];
+      overview.projects = (payload.projects || []).map(shapeProject);
       overview.top_failing_tests = payload.top_failing_tests || [];
       overview.flakiest_tests = payload.flakiest_tests || [];
       overview.filters = payload.filters || {};
@@ -269,7 +291,15 @@
 
     self.getOverview = function (filters) {
       var clean = provider.cleanFilters(filters);
-      return request('overview', facetParams(clean)).then(function (payload) {
+      var params = facetParams(clean);
+      // The newest change this tab has heard about. Every open dashboard asks
+      // for the overview the moment a result lands; saying which change this
+      // one needs to include lets the server answer all of them with a single
+      // computation (test_hub.service.coalesce) rather than one each.
+      if (lastEventId !== null && /^\d+$/.test(String(lastEventId))) {
+        params.after = lastEventId;
+      }
+      return request('overview', params).then(function (payload) {
         var overview = shapeOverview(payload);
         if (!provider.hasFacetFilter(clean)) { return overview; }
         return narrowOverview(overview, clean);
@@ -288,6 +318,10 @@
       // `search` is what api.routes.queries calls it; `q` is what the URL
       // calls it. Both go, for the same reason as `type`.
       if (clean.q) { params.q = clean.q; params.search = clean.q; }
+      // When a run started — the live timeline's window. ISO with an offset:
+      // the API refuses a bare local time rather than guessing at it.
+      if (clean.since) { params.since = clean.since; }
+      if (clean.until) { params.until = clean.until; }
 
       return request('runs', params).then(function (payload) {
         var runs = (payload.runs || []).map(provider.normalizeSummary);
@@ -472,6 +506,9 @@
     }
 
     function connect() {
+      // A paused tab connects when it is looked at again, not before — not on
+      // a backoff timer, not on the browser's `online`.
+      if (paused) { return; }
       if (closed || !window.EventSource) {
         if (!window.EventSource) { self._setStatus('offline', 'This browser has no EventSource.'); }
         return;
@@ -496,9 +533,13 @@
         failures = 0;
         attempt = 0;
         self._setStatus('live');
-        // Anything could have happened while we were away, and the bus only
-        // replays what its ring still holds.
-        if (wasDown) { markChanged(null, null, 'resync'); }
+        // Anything could have happened while we were away — disconnected, or
+        // paused in the background — and the bus only replays what its ring
+        // still holds.
+        if (wasDown || resyncOnOpen) {
+          resyncOnOpen = false;
+          markChanged(null, null, 'resync');
+        }
       });
 
       source.addEventListener('hello', function (event) {
@@ -596,9 +637,42 @@
       connect();
     }
 
+    /** Out of sight long enough: give the stream back until the tab is seen. */
+    function pause() {
+      hiddenTimer = null;
+      if (closed || paused || !document.hidden) { return; }
+      paused = true;
+      resyncOnOpen = true;
+      disconnect();
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+    }
+
+    function resume() {
+      paused = false;
+      attempt = 0;
+      connect();
+    }
+
     window.addEventListener('online', wakeUp);
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { wakeUp(); }
+      if (document.hidden) {
+        if (!hiddenTimer && !paused && !closed) {
+          hiddenTimer = window.setTimeout(pause, HIDDEN_RELEASE_MS);
+        }
+        return;
+      }
+      if (hiddenTimer) {
+        window.clearTimeout(hiddenTimer);
+        hiddenTimer = null;
+      }
+      if (paused) {
+        resume();
+      } else {
+        wakeUp();
+      }
     });
     window.addEventListener('offline', function () {
       self._setStatus('offline', 'The browser reports no network.');
@@ -633,6 +707,12 @@
     self.start = function () {
       closed = false;
       self.serverInfo = loadServerInfo();
+      // A tab opened in the background — a middle-click on a run — draws its
+      // page but takes no stream until somebody looks at it.
+      if (document.hidden) {
+        paused = true;
+        resyncOnOpen = true;
+      }
       connect();
       startWatchdog();
       return self;
@@ -643,6 +723,7 @@
       disconnect();
       if (reconnectTimer) { window.clearTimeout(reconnectTimer); reconnectTimer = null; }
       if (watchdogTimer) { window.clearInterval(watchdogTimer); watchdogTimer = null; }
+      if (hiddenTimer) { window.clearTimeout(hiddenTimer); hiddenTimer = null; }
     };
 
     self.reconnect = function () {

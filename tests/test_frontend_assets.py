@@ -621,3 +621,212 @@ def test_the_danger_button_is_styled_after_the_base_button() -> None:
     so source order is the only thing that decides which wins."""
     css = CSS_FILES[0].read_text(encoding="utf-8")
     assert css.index(".btn--danger") > css.index(".btn--primary")
+
+
+# ------------------------------------------------------- status by project
+
+
+def overview_source() -> str:
+    return (WEB / "assets" / "js" / "50-view-overview.js").read_text(encoding="utf-8")
+
+
+def status_bar_classes() -> dict[str, list[str]]:
+    """``STATUS_BAR_CLASSES`` from the component kit: class key -> statuses."""
+    source = components_source()
+    block = source[source.index("var STATUS_BAR_CLASSES") :]
+    block = block[: block.index("];")]
+    return {
+        key: re.findall(r"'([a-z]+)'", statuses)
+        for key, statuses in re.findall(r"key: '(\w+)'.*?statuses: \[([^\]]*)\]", block)
+    }
+
+
+def test_every_status_lands_in_exactly_one_bar_class() -> None:
+    """A status no class claims would drop out of every bar, and the bars would
+    stop adding up to the runs they draw — silently, for whoever has one."""
+    util = JS_FILES[0].read_text(encoding="utf-8")
+    order = util[util.index("var STATUS_ORDER = [") :]
+    statuses = re.findall(r"'([a-z]+)'", order[: order.index("];")])
+    assert len(statuses) == 10, statuses
+
+    claimed = [status for members in status_bar_classes().values() for status in members]
+    assert sorted(claimed) == sorted(statuses), "a status is in no bar class, or in two"
+
+
+def test_every_status_bar_class_has_a_colour() -> None:
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    for key in status_bar_classes():
+        assert f'.sbars__seg[data-status="{key}"]' in css, f"the {key} segment has no colour"
+        assert f'.sbars__key[data-status="{key}"]' in css, f"the {key} readout key has no colour"
+
+
+def test_in_progress_is_always_the_end_of_the_bar() -> None:
+    """So a run still going reads as a bar filling up from the left."""
+    assert list(status_bar_classes())[-1] == "running"
+    assert status_bar_classes()["running"] == ["running", "queued"]
+
+
+def test_the_status_row_is_built_once_and_patched_in_place() -> None:
+    """Rebuilding it on each update would blink every bar on every live event
+    and drop the keyboard focus of whoever is reading it."""
+    source = overview_source()
+    assert source.count("ui.statusBars(") == 1
+    render = source[source.index("    function render(state)") :]
+    render = render[: render.index("\n    }\n")]
+    assert "projectStatus.update(overview)" in render
+    assert "statusRow(" not in render, "the status row is rebuilt on every render"
+    assert "statusSlot" in render, "the status row is not kept out of the rebuilt slots"
+
+
+def test_the_status_row_never_sorts_by_its_own_numbers() -> None:
+    """Rows that re-sort when a live result lands are rows nobody can follow."""
+    source = overview_source()
+    body = source[source.index("function statusRow") : source.index("function create(ctx)")]
+    assert "entries.sort(" in body
+    sort = body[body.index("entries.sort(") :]
+    sort = sort[: sort.index("});")]
+    assert "counts" not in sort and "pass_rate" not in sort
+
+
+def test_a_projects_latest_run_reaches_the_view_normalized() -> None:
+    """The row draws `ProjectHealth.last_run`, from the server or from the
+    browser-side recomputation a filter triggers — both must carry it, and
+    with its derived rates."""
+    live = (WEB / "assets/js/12-live-provider.js").read_text(encoding="utf-8")
+    assert "provider.normalizeSummary(raw.last_run)" in live
+    interface = (WEB / "assets/js/10-provider.js").read_text(encoding="utf-8")
+    assert "last_run: latest" in interface
+    assert "last_run" in overview_source()
+
+
+# --------------------------------------------------------------- live timeline
+
+
+def timeline_source() -> str:
+    return (WEB / "assets" / "js" / "42-timeline.js").read_text(encoding="utf-8")
+
+
+def test_the_timeline_is_shipped_after_the_component_kit() -> None:
+    """It builds on `ui.statusBarClasses` and friends, so it has to load after
+    40-components.js and before the overview that mounts it."""
+    order = MANIFEST["js"]
+    assert order.index("assets/js/40-components.js") < order.index("assets/js/42-timeline.js")
+    assert order.index("assets/js/42-timeline.js") < order.index("assets/js/50-view-overview.js")
+    assert "ui.timeline = create;" in timeline_source()
+
+
+def test_the_timeline_clock_stops_when_the_overview_goes() -> None:
+    """The clock is an interval and two window listeners. A view that drops the
+    element without stopping them leaks a ticking timer per visit."""
+    source = timeline_source()
+    destroy = source[source.index("destroy: function ()") :]
+    destroy = destroy[: destroy.index("}")]
+    assert "stop()" in destroy
+    assert "removeEventListener('visibilitychange'" in destroy
+    assert "removeEventListener('resize'" in destroy
+    assert "clearInterval" in source
+
+    overview = overview_source()
+    view_destroy = overview[overview.rindex("destroy: function ()") :]
+    assert "liveTimeline.destroy()" in view_destroy
+
+
+def test_the_timeline_pauses_while_the_tab_is_hidden() -> None:
+    source = timeline_source()
+    body = source[source.index("function onVisibility") :]
+    body = body[: body.index("\n    }\n")]
+    assert "document.hidden" in body and "stop()" in body
+
+
+def test_the_timeline_moves_by_transform_not_by_redrawing() -> None:
+    """The clock writes a transform once a second and the compositor glides it;
+    rebuilding the bars each second would blink them and drop focus."""
+    source = timeline_source()
+    assert "translateX(" in source
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert re.search(r"\.tl__col,[^{]*\{\s*transition: transform 1s linear", css), (
+        "the timeline's columns do not glide between ticks"
+    )
+    layout = source[source.index("function layout(") : source.index("function currentBin")]
+    assert "createBin(" not in layout, "a tick must reposition bars, never create them"
+
+
+def test_the_timeline_is_loaded_with_the_overview_and_on_every_live_event() -> None:
+    store = store_source()
+    route = store[store.index("function applyRoute") : store.index("function hashWith")]
+    assert "loadTimeline()" in route
+    live = store[store.index("function onProviderMessage") :]
+    live = live[: live.index("var store = {")]
+    assert "refresh('timeline')" in live, "a run that starts must reach the timeline"
+    assert "timeline: function () { return loadTimeline(); }" in store
+
+
+def test_the_timeline_asks_the_api_for_its_window() -> None:
+    """`since` goes to `GET /runs` — the API refuses one without an offset, and
+    `toISOString()` always carries one."""
+    store = store_source()
+    body = store[store.index("function loadTimeline") : store.index("function loadRuns")]
+    assert "filters.since = new Date(" in body and ".toISOString()" in body
+    live = (WEB / "assets/js/12-live-provider.js").read_text(encoding="utf-8")
+    assert "params.since = clean.since" in live
+
+
+def test_every_timeline_span_is_offered_and_has_a_default() -> None:
+    store = store_source()
+    spans = re.findall(r"'(\w+)': \{ key: '(\w+)'", store)
+    assert spans, "no timeline spans"
+    assert all(key == inner for key, inner in spans)
+    default = re.search(r"var DEFAULT_TIMELINE_SPAN = '(\w+)';", store)
+    assert default and default.group(1) in {key for key, _ in spans}
+
+
+def test_the_timeline_table_cannot_widen_a_phone() -> None:
+    """Regression: a hidden table is at least as wide as its caption, and the
+    timeline's caption is a sentence — 380px on its own."""
+    source = timeline_source()
+    assert "el('div', { className: 'sr-only' }, el('table'" in source
+
+
+# ------------------------------------------------------ live load under bursts
+
+
+def live_provider_source() -> str:
+    return (WEB / "assets" / "js" / "12-live-provider.js").read_text(encoding="utf-8")
+
+
+def test_live_reloads_are_one_at_a_time_per_section() -> None:
+    """Regression: every live change fired fresh requests whether or not the
+    last ones had come back. Under a burst of results they piled up until the
+    server's workers and the browser's queue were full, and the overview
+    reported a 20-second timeout."""
+    store = store_source()
+    live = store[store.index("function onProviderMessage") :]
+    live = live[: live.index("var store = {")]
+    for direct in ("loadOverview()", "loadTimeline()", "loadRunDetails()", "loadRuns()"):
+        assert direct not in live, f"a live change calls {direct} past the single-flight guard"
+    refresh = store[store.index("function refresh(section)") :]
+    refresh = refresh[: refresh.index("function onProviderMessage")]
+    assert "if (inFlight[section])" in refresh and "queued[section] = true" in refresh
+    assert "liveSections(state.route)" in refresh, "a queued reload must re-check the page"
+
+
+def test_a_background_tab_gives_its_stream_back() -> None:
+    """Regression: a browser allows six connections per server over HTTP/1.1
+    and each open stream holds one, so six Test Hub tabs left no room for any
+    request and every one of them timed out."""
+    source = live_provider_source()
+    assert re.search(r"var HIDDEN_RELEASE_MS = \d+;", source)
+    pause = source[source.index("function pause()") : source.index("function resume()")]
+    assert "disconnect()" in pause and "resyncOnOpen = true" in pause
+    connect = source[source.index("function connect()") :]
+    assert "if (paused) { return; }" in connect[: connect.index("disconnect();")]
+    start = source[source.index("self.start = function") :]
+    assert "document.hidden" in start[: start.index("};")], "a tab opened hidden still connects"
+
+
+def test_the_overview_says_which_change_it_needs() -> None:
+    """`after` is what lets every dashboard's refetch share one computation."""
+    source = live_provider_source()
+    body = source[source.index("self.getOverview = function") :]
+    body = body[: body.index("self.listRuns")]
+    assert "params.after = lastEventId" in body

@@ -272,6 +272,17 @@ class InMemoryEventBus:
             if message.cursor > cursor:
                 subscription.offer(message)
 
+    def latest_cursor(self, workspace_id: uuid.UUID) -> int:
+        """The cursor of the newest event published for this workspace; 0 if none.
+
+        It doubles as a data version: an event is published only after the
+        write that produced it has committed, so anything that starts reading
+        after this value was taken sees every change up to it. That is what
+        lets concurrent overview requests share one computation safely — see
+        :mod:`test_hub.service.coalesce`.
+        """
+        return self._latest_cursor(workspace_id)
+
     def _latest_cursor(self, workspace_id: uuid.UUID) -> int:
         buffer = self._buffers.get(workspace_id)
         return buffer[-1].cursor if buffer else 0

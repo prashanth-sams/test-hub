@@ -21,6 +21,41 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Added
 
+- **A live test execution timeline on the overview.** A full-width chart under
+  the KPI tiles with time along the bottom and *now* at the right-hand edge.
+  The moment a run starts — any project, CI or not — a bar pops up at that
+  edge, stacked by status, grows while the results arrive, and then glides left
+  with the clock once a second. Each bar is a slot (15 s, 1 min, 5 min or 30 min
+  for the 15m, 1h, 6h and 24h spans), so a pipeline's fan-out stacks into one
+  bar; hovering or tabbing to a bar lists its runs and statuses, and clicking
+  opens the newest. The span rides in the URL as `span`. The clock is one
+  transform per bar per second with a linear transition — nothing is redrawn to
+  move it — and it stops while the tab is hidden and when the page is left. See
+  the [dashboard tour](https://prashanth-sams.github.io/test-hub/docs/dashboard-tour.html#overview-timeline).
+- **`since` and `until` on `GET /api/v1/runs`**: runs that started at or after
+  / at or before an instant. The timestamp must carry an offset (`Z`,
+  `+05:30`); one without is a 422 rather than a guess at UTC. The storage layer
+  has supported both for a while; the REST layer now passes them through.
+- **Test status by project — a live bar for every project on the overview.** A
+  full-width row under the KPI tiles: each project's newest run in the window,
+  stacked to 100% by status, with its pass rate and test count and where it came
+  from — `Push`, `Pull request`, `Schedule`, `Local`, `Manual` — so runs from CI
+  and runs from a laptop sit side by side. A run still in flight is its project's
+  status: it is marked live, its unfinished tests fill the end of the bar, and
+  each result redraws it within a couple of seconds of arriving. The row is
+  patched in place rather than rebuilt, so bars grow into their new widths and
+  keyboard focus survives the updates; rows are sorted by name, so nothing jumps
+  mid-run; hovering or focusing a row gives every status with its count and
+  share. The portfolio filters apply, so "only e2e" or "only staging" shows each
+  pipeline's newest run. See the
+  [dashboard tour](https://prashanth-sams.github.io/test-hub/docs/dashboard-tour.html#overview-status-by-project).
+- **`ProjectHealth.last_run`** on `GET /api/v1/overview`: each project's newest
+  run inside the window as a full run summary — counts, trigger, branch,
+  `is_live` — or `null` when it has not run. One response answers "what does
+  every project look like right now", and it costs no query per project: the
+  runs the overview already loads cover the common case, and the rest arrive in
+  one. An optional field, so `SCHEMA_VERSION` does not move;
+  see [the API reference](docs/api.md#get-apiv1overview).
 - **PostgreSQL, as a choice beside SQLite.** SQLite is still the default and
   still needs nothing installed. Set `TEST_HUB_DATABASE_URL=postgresql://…`
   (after `pip install "test-hub[postgres]"`; the Docker image already has the
@@ -127,6 +162,27 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Fixed
 
+- **"The overview did not load — the request timed out after 20 s" while tests
+  were running.** Three causes, each reproduced and measured
+  ([scaling](docs/scaling.md#dashboards-under-a-burst-of-results)):
+  - Every live event fired fresh requests whether or not the last ones had come
+    back, so under a burst of results they piled up faster than they finished.
+    With 60 publishers the server stalled outright: every worker thread and
+    every pooled connection held by queued overviews, `/healthz` unanswered.
+    Live reloads are now one request per section at a time.
+  - Every open dashboard computed its own overview on every event. Concurrent
+    `/overview` requests now share one computation, and `?after=<cursor>` lets
+    a dashboard be handed one already running — never one older than the
+    newest change it has heard about.
+  - A browser allows six connections per server over HTTP/1.1, and each open
+    event stream holds one: six Test Hub tabs left no room for any request, and
+    every tab timed out. A tab hidden for ten seconds now gives its stream back
+    and reconnects, reloading once, when it is looked at again.
+- **A burst of publishers could get dropped connections.** SQLite's
+  `database is locked` escaped as an unhandled exception — a 500 or a reset
+  connection, and a traceback in the log. It is now `503 storage_busy` with
+  `Retry-After`, which the SDK already retries; any other database error is a
+  JSON 500 rather than a dropped connection.
 - **`serve --reload` ignored `--data-dir`.** The reloader starts the app in a
   fresh process that only sees the environment; the flag (and the new
   `--database-url`) is now passed through it.

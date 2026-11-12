@@ -18,6 +18,7 @@ __all__ = [
     "ConflictError",
     "NotFoundError",
     "PayloadTooLargeError",
+    "StorageBusyError",
     "TestHubError",
     "UnknownFormatError",
     "ValidationError",
@@ -109,6 +110,22 @@ class PayloadTooLargeError(TestHubError):
     code = "payload_too_large"
     http_status = 413
     exit_code = 6
+
+
+class StorageBusyError(TestHubError):
+    """Other writers held the database for longer than this one would wait.
+
+    Not a failure of the request: nothing was written, and the same request
+    sent again a moment later succeeds. Hence a 503 with ``Retry-After`` — which
+    the SDK, and most CI HTTP clients, already back off on and retry — rather
+    than the 500 or the dropped connection it used to be.
+    """
+
+    code = "storage_busy"
+    http_status = 503
+    exit_code = 75  # EX_TEMPFAIL: "try again later", to a supervisor
+    #: Seconds a client should wait before sending the request again.
+    retry_after = 2
 
 
 class ConfigurationError(TestHubError):

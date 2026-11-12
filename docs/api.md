@@ -135,6 +135,7 @@ $ curl -s http://127.0.0.1:8123/api/v1/runs/00000000-0000-0000-0000-000000000000
 | `unauthorized` | 401 | 5 | Missing, malformed or wrong token. |
 | `forbidden` | 403 | 5 | Reserved; the first release has authentication but no per-user authorization. |
 | `payload_too_large` | 413 | 6 | The upload exceeded `TEST_HUB_MAX_REPORT_BYTES` or `TEST_HUB_MAX_ARTIFACT_BYTES`. |
+| `storage_busy` | 503 | 75 | Other writers held the database for longer than this request would wait — on SQLite, under a burst of publishers. Nothing was written: send the same request again after the `Retry-After` seconds. The SDK does this by itself. 75 is `EX_TEMPFAIL`. |
 | `configuration_error` | 500 | 78 | The server was asked to start in a state that is not coherent or not safe. 78 is `EX_CONFIG`, so a supervisor can tell it apart from a crash. |
 
 The exit-code column is what `test-hub ingest` returns for the same condition —
@@ -245,6 +246,7 @@ Every list parameter accepts both repetition and a comma-separated list —
 | `tag` | list | Run tag. |
 | `search` | string, ≤ 200 chars | Substring of run name, project key, branch, commit SHA, commit message or pipeline id. Case-sensitive `LIKE`, with `%` and `_` escaped. |
 | `live` | bool | `true` restricts to runs that are queued or running. |
+| `since` / `until` | ISO 8601 timestamp **with an offset** | Runs that started at or after / at or before that instant (a run that never started is placed at when it was created). `/runs` only. A timestamp without an offset — `2026-11-10T08:00:00` — is a 422 rather than being guessed at as UTC; send `Z` or `+05:30`. This is how the overview's live timeline asks for the runs in its span. |
 | `limit` / `offset` | int | Paging, `/runs` only. |
 
 Real results against the demo data set:
@@ -735,9 +737,35 @@ different machine — see [Adapters § Identity](adapters.md#identity).
 The portfolio altitude: totals, trend, project health, live runs and the worst
 offenders. `?window_days=N` (1–365, default 30).
 
+`?after=N` is for clients on the event stream: `N` is the cursor (the SSE `id:`)
+of the newest change the caller has seen, and the answer includes it and every
+change before it. Every open dashboard asks for the overview the moment a result
+lands, and saying which change it needs is what lets the server answer all of
+them with one computation instead of one each. Without `after`, the answer is as
+new as the request.
+
 Keys: `schema_version`, `generated_at`, `window_days`, `counts`, `total_runs`,
 `total_runs_all_time`, `live_runs[]`, `recent_runs[]` (20), `projects[]`,
 `trend[]`, `top_failing_tests[]`, `flakiest_tests[]`, `filters`.
+
+Each entry in `projects[]` carries `last_run`: that project's newest run inside
+the window as a full run summary — counts, trigger, branch, `is_live` — finished
+or still going, or `null` if it has not run in the window. It is what the
+dashboard's *Test status by project* row draws, and it is the cheap way to ask
+"what does every project look like right now" from a script:
+
+```shell
+$ curl -s "$HUB/api/v1/overview" | jq -r '.projects[] | select(.last_run)
+    | "\(.project_key) \(.last_run.trigger) \(.last_run.status) \(.last_run.counts.pass_rate)"'
+identity-service pull_request failed 83.33
+ledger-worker push passed 100.0
+notification-gateway schedule passed 100.0
+payments-api schedule running 100.0
+storefront-web push failed 80.0
+```
+
+That is `test-hub demo`, whose payments-api run is the one it leaves going —
+which is why its status is `running`: a run in flight is its project's latest.
 
 ```json
 {
@@ -751,7 +779,7 @@ Keys: `schema_version`, `generated_at`, `window_days`, `counts`, `total_runs`,
     {"project_key": "checkout-service", "name": "checkout-service", "team": null,
      "runs_24h": 0, "last_run_id": null, "last_run_at": null,
      "last_status": "unknown", "pass_rate": null, "pass_rate_delta": null,
-     "flaky_tests": 0, "live_runs": 0}
+     "flaky_tests": 0, "live_runs": 0, "last_run": null}
   ],
   "trend": [
     {"bucket": "2026-08-25", "runs": 0, "pass_rate": null, "failure_rate": null,

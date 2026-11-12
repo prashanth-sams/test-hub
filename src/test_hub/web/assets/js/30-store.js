@@ -34,6 +34,21 @@
   var DEFAULT_WINDOW_DAYS = 30;
   var DEFAULT_PAGE_SIZE = 25;
 
+  /* The overview's live timeline looks back over one of these. Each is about
+   * sixty slots wide — `bin` is one slot, the time a bar stands for — and
+   * `tick` is how far apart the clock labels sit. The span rides in the URL as
+   * `span`, like a filter, so a timeline left on a wall screen survives a
+   * reload; unlike a filter it narrows only the timeline. */
+  var TIMELINE_SPANS = {
+    '15m': { key: '15m', label: '15 minutes', ms: 15 * 60000, bin: 15000, tick: 3 * 60000 },
+    '1h': { key: '1h', label: 'hour', ms: 3600000, bin: 60000, tick: 10 * 60000 },
+    '6h': { key: '6h', label: '6 hours', ms: 6 * 3600000, bin: 5 * 60000, tick: 3600000 },
+    '24h': { key: '24h', label: '24 hours', ms: 24 * 3600000, bin: 30 * 60000, tick: 3 * 3600000 }
+  };
+  var DEFAULT_TIMELINE_SPAN = '1h';
+  //: The most runs one timeline load asks for — the API's own page ceiling.
+  var TIMELINE_LIMIT = 500;
+
   /* The routes that read the same thing: the portfolio overview plus the most
    * recent finished runs, in full. Analytics asks that dataset why the suite
    * fails; suites, metrics, screenshots, logs and coverage ask it what ran,
@@ -55,7 +70,7 @@
 
   function create(provider) {
     var bus = util.emitter();
-    var tokens = { overview: 0, runs: 0, run: 0, test: 0, analytics: 0, facets: 0 };
+    var tokens = { overview: 0, runs: 0, run: 0, test: 0, analytics: 0, facets: 0, timeline: 0 };
 
     var state = {
       providerKind: provider.kind,
@@ -71,9 +86,12 @@
       run: null,
       test: null,
       analytics: null,
+      timeline: null,
       lastUpdated: null,
-      loading: { overview: false, runs: false, run: false, test: false, analytics: false },
-      errors: { overview: null, runs: null, run: null, test: null, analytics: null }
+      loading: {
+        overview: false, runs: false, run: false, test: false, analytics: false, timeline: false
+      },
+      errors: { overview: null, runs: null, run: null, test: null, analytics: null, timeline: null }
     };
 
     function emit(section) {
@@ -134,6 +152,7 @@
 
       if (route.name === 'overview') {
         loadOverview();
+        loadTimeline();
       } else if (DETAIL_ROUTES[route.name]) {
         loadRunDetails();
       } else if (route.name === 'runs') {
@@ -221,6 +240,46 @@
         settle('overview', token, null);
       }, function (error) {
         settle('overview', token, error);
+      });
+    }
+
+    function timelineSpan() {
+      var key = state.route.query && state.route.query.span;
+      return TIMELINE_SPANS[key] || TIMELINE_SPANS[DEFAULT_TIMELINE_SPAN];
+    }
+
+    /**
+     * The runs the overview's live timeline draws: every run that started
+     * inside its span, under the same facet filters as the rest of the page.
+     *
+     * Its own section rather than part of the overview, for two reasons. The
+     * overview has to stay cheap enough to poll, and a day of runs is not.
+     * And the timeline is redrawn without the rest of the page: a live event
+     * moves its bars, and nothing else on the page should flicker for it.
+     */
+    function loadTimeline() {
+      var token = begin('timeline');
+      var span = timelineSpan();
+      var filters = {};
+      var keys = Object.keys(state.filters);
+      for (var i = 0; i < keys.length; i++) { filters[keys[i]] = state.filters[keys[i]]; }
+      // The span is the timeline's window; the page's `window_days` is not.
+      delete filters.window_days;
+      // One slot of slack at the far end, so the bar sliding off the left edge
+      // is still drawn while it goes.
+      filters.since = new Date(Date.now() - span.ms - span.bin).toISOString();
+      filters.limit = TIMELINE_LIMIT;
+      return provider.listRuns(filters).then(function (result) {
+        if (token !== tokens.timeline) { return; }
+        var runs = result.runs || [];
+        state.timeline = {
+          span: span.key,
+          runs: runs,
+          truncated: typeof result.total === 'number' && result.total > runs.length
+        };
+        settle('timeline', token, null);
+      }, function (error) {
+        settle('timeline', token, error);
       });
     }
 
@@ -385,7 +444,7 @@
 
     function reloadCurrent() {
       var route = state.route;
-      if (route.name === 'overview') { return loadOverview(); }
+      if (route.name === 'overview') { return Promise.all([loadOverview(), loadTimeline()]); }
       if (DETAIL_ROUTES[route.name]) { return loadRunDetails(); }
       if (route.name === 'runs') { return loadRuns(); }
       if (route.name === 'run') { return loadRun(route.params.runId, { keepPrevious: true }); }
@@ -394,6 +453,58 @@
     }
 
     /* ------------------------------------------------------- live updates */
+
+    /* A live change reloads what is on screen — one request per section at a
+     * time. While results stream in, changes arrive every second or two, and a
+     * load is not guaranteed to finish in that time: firing a fresh one per
+     * change piled requests up faster than they completed, until the browser's
+     * queue and the server's workers were both full and the page reported a
+     * 20-second timeout. Now a change that lands mid-load queues exactly one
+     * more load, read from the page as it is when that load starts. */
+    var inFlight = {};
+    var queued = {};
+
+    var LIVE_LOADERS = {
+      overview: function () { return loadOverview(); },
+      timeline: function () { return loadTimeline(); },
+      analytics: function () { return loadRunDetails(); },
+      runs: function () { return loadRuns(); },
+      run: function () { return loadRun(state.route.params.runId, { keepPrevious: true }); },
+      test: function () { return loadTest(state.route.params.testId, { keepPrevious: true }); }
+    };
+
+    /** The sections a live change reloads on this route. */
+    function liveSections(route) {
+      if (route.name === 'overview') { return ['overview', 'timeline']; }
+      if (DETAIL_ROUTES[route.name]) { return ['analytics']; }
+      if (route.name === 'runs' || route.name === 'run' || route.name === 'test') {
+        return [route.name];
+      }
+      return [];
+    }
+
+    function refresh(section) {
+      if (inFlight[section]) {
+        queued[section] = true;
+        return;
+      }
+      inFlight[section] = true;
+      var done = function () {
+        inFlight[section] = false;
+        if (!queued[section]) { return; }
+        queued[section] = false;
+        // Only if the page still shows it: a change that arrived while the
+        // overview loaded means nothing to a reader who has since opened a run.
+        if (liveSections(state.route).indexOf(section) >= 0) { refresh(section); }
+      };
+      var pending = null;
+      try {
+        pending = LIVE_LOADERS[section]();
+      } catch (err) {
+        util.reportError('live reload of ' + section + ' failed', err);
+      }
+      Promise.resolve(pending).then(done, done);
+    }
 
     function onProviderMessage(message) {
       if (message.type === 'status') {
@@ -406,20 +517,23 @@
       var route = state.route;
       var resync = message.reason === 'resync';
       if (route.name === 'overview') {
-        loadOverview();
+        refresh('overview');
+        // The timeline is the part of this page a live event is *for*: a run
+        // that just started is a new bar, a result that just landed a taller one.
+        refresh('timeline');
       } else if (DETAIL_ROUTES[route.name]) {
         // Cheap to repeat: the overview is one request and the finished runs it
         // names are already cached, so a live update costs a run payload only
         // when a run this page has never drawn appears.
         if (resync) { analyticsCache = {}; }
-        loadRunDetails();
+        refresh('analytics');
       } else if (route.name === 'runs') {
-        loadRuns();
+        refresh('runs');
       } else if (route.name === 'run') {
         var touched = (message.runIds || []).indexOf(String(route.params.runId)) >= 0;
-        if (touched || resync) { loadRun(route.params.runId, { keepPrevious: true }); }
+        if (touched || resync) { refresh('run'); }
       } else if (route.name === 'test') {
-        loadTest(route.params.testId, { keepPrevious: true });
+        refresh('test');
       }
       if (resync) { loadFacets(); }
     }
@@ -429,6 +543,9 @@
       FILTER_KEYS: FILTER_KEYS,
       DEFAULT_WINDOW_DAYS: DEFAULT_WINDOW_DAYS,
       DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
+      TIMELINE_SPANS: TIMELINE_SPANS,
+      DEFAULT_TIMELINE_SPAN: DEFAULT_TIMELINE_SPAN,
+      timelineSpan: timelineSpan,
       on: function (fn) { return bus.on('update', fn); },
       applyRoute: applyRoute,
       parseRoute: parseRoute,
@@ -449,5 +566,10 @@
     return store;
   }
 
-  TestHub.store = { create: create, FILTER_KEYS: FILTER_KEYS, DETAIL_ROUTES: DETAIL_ROUTES };
+  TestHub.store = {
+    create: create,
+    FILTER_KEYS: FILTER_KEYS,
+    DETAIL_ROUTES: DETAIL_ROUTES,
+    TIMELINE_SPANS: TIMELINE_SPANS
+  };
 })(window);

@@ -52,6 +52,49 @@ lets a selection carry from one to the other.</p>
 pass rate with nothing executed renders as an em dash rather than 0%. A suite that only
 skipped is not a 0% suite, and showing it in red trains people to ignore red.</p>
 
+<h3 id="overview-timeline">Test execution timeline</h3>
+
+<p>A full-width chart directly under the KPI tiles, and the one on the page that never
+stops moving. Time runs along the bottom, with <em>now</em> at the right-hand edge. The
+moment a run starts — any project, from CI or from a laptop — a bar pops up at that edge,
+stacked by status, and grows while the run's results arrive: what has finished at the
+bottom, the tests still running in blue on top, with a pulsing dot above while the run is
+live. Then the whole chart glides left with the clock, once a second, so a run you saw
+start a minute ago is a minute's width further along.</p>
+
+<p>Each bar is a slot of time — fifteen seconds, a minute, five minutes or half an hour,
+depending on the span — and every run that started in that slot stacks into it, so six
+jobs fanned out by one pipeline are one taller bar rather than six drawn on top of each
+other. The height counts tests. Hover a bar, or tab to it, for the runs inside and every
+status with its count and share; click it, or press Enter, to open the newest of them.</p>
+
+<p>The buttons in the card choose the span: <b>15m</b>, <b>1h</b> (the default),
+<b>6h</b> or <b>24h</b>. The choice rides in the URL as <code>span</code>, so a timeline
+left on a wall screen survives a reload. The page's filters narrow it like everything
+else; its window is the span, not the window selector above.</p>
+
+<h3 id="overview-status-by-project">Test status by project</h3>
+
+<p>One full-width row, one bar per project: each project's <em>newest run</em> in the window,
+stacked to 100% by status, with its pass rate and test count at the end of the bar. A run from
+CI and a run from a laptop count the same — the line under the project's name says which it
+was (<code>Push</code>, <code>Pull request</code>, <code>Schedule</code>, <code>Local</code>,
+<code>Manual</code>…) and how long ago. Hover a bar, or tab to its project, for every status
+with its count and share; the name links to the run.</p>
+
+<p>It moves while a run is in flight. A run that is still going <em>is</em> its project's
+status: it is marked <b>Live</b>, the tests not yet finished are drawn last, in blue, so the
+bar fills up from the left, and each result that arrives redraws it within a couple of
+seconds, without a refresh. Bars grow into their new widths instead of blinking, and the rows
+hold still — sorted by name, never by what the bars say, so nothing jumps under your eye
+mid-run.</p>
+
+<p>The scale is a share rather than a count, so a 30-test suite reads as clearly as the
+3,000-test suite beside it and the axis never rescales while a run grows. The filters apply
+here as they do everywhere: choose a test type, environment or branch and each bar becomes
+that pipeline's newest run. A project with no run inside the window has no bar; the card's
+hint counts those instead.</p>
+
 <h3 id="overview-charts">Outcomes, health, volume, trend and duration</h3>
 
 <ul>
@@ -67,9 +110,11 @@ skipped is not a 0% suite, and showing it in red trains people to ignore red.</p
   takes eleven minutes.</li>
 </ul>
 
-<p>Every chart is inline SVG, drawn by the dashboard itself, reading its palette back out of
-the CSS custom properties. That is why they re-colour correctly the instant you switch
-theme, and why there is no charting library in the wheel.</p>
+<p>These charts are inline SVG, drawn by the dashboard itself, reading their palette back out
+of the CSS custom properties. That is why they re-colour correctly the instant you switch
+theme, and why there is no charting library in the wheel. (The status row above is plain
+HTML for the same reason in reverse: it is patched in place on every live update rather than
+redrawn, and its colours are the same custom properties, applied by the stylesheet.)</p>
 
 <h3 id="overview-live-and-projects">Active runs and project health</h3>
 

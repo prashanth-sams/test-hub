@@ -157,6 +157,7 @@ parser:</p>
     <tr><td>413</td><td><code>payload_too_large</code></td><td>Over a configured size limit.</td></tr>
     <tr><td>415</td><td><code>unknown_format</code></td><td>No adapter recognised the input. <code>detail</code> lists every installed one.</td></tr>
     <tr><td>422</td><td><code>validation_error</code>, <code>adapter_error</code></td><td>The body did not match the schema, or the format was recognised but unparseable.</td></tr>
+    <tr><td>503</td><td><code>storage_busy</code></td><td>Other writers held the database longer than this request would wait. Nothing was written; send it again after the <code>Retry-After</code> seconds. The SDK does this by itself.</td></tr>
   </tbody>
 </table>
 </div>
@@ -340,10 +341,21 @@ enough to poll.</p>
 <pre><code>curl -s "localhost:8000/api/v1/overview?window_days=30&amp;team=payments"</code></pre>
 </div>
 
+<p><code>after</code> is for clients on the event stream: the cursor (SSE <code>id:</code>)
+of the newest change the caller has seen. The answer includes it, and the server may
+answer every dashboard that asks for the same with one computation.</p>
+
 <p><code>window_days</code> accepts 1–365. Note <code>total_runs</code> (inside the
 window) and <code>total_runs_all_time</code>: when the first is zero and the second is
 not, every run is older than the window, and the dashboard says so rather than showing an
 empty state that looks like an empty installation.</p>
+
+<p>Each entry in <code>projects</code> carries <code>last_run</code>: the project's newest
+run inside the window as a full run summary — counts, trigger, branch,
+<code>is_live</code> — whether it has finished or is still going, or <code>null</code> when
+the project has not run in the window. It is what the dashboard's <em>Test status by
+project</em> row draws, and the cheap way to ask what every project looks like right now
+without a request per project.</p>
 
 <h2 id="runs-list">GET /api/v1/runs</h2>
 
@@ -380,6 +392,7 @@ comma-separated list: <code>?project=a&amp;project=b</code> and
     <tr><td><code>tag</code></td><td>User-defined tags.</td></tr>
     <tr><td><code>search</code></td><td>Free text over run name, branch, commit and tags.</td></tr>
     <tr><td><code>live</code></td><td><code>true</code> for runs that are queued or running.</td></tr>
+    <tr><td><code>since</code>, <code>until</code></td><td>Runs that started at or after / at or before an instant — ISO 8601 <em>with an offset</em> (<code>Z</code>, <code>+05:30</code>); a timestamp without one is a 422 rather than a guess. <code>/runs</code> only.</td></tr>
     <tr><td><code>limit</code>, <code>offset</code></td><td>Paging. <code>limit</code> is 1–500, default 50.</td></tr>
   </tbody>
 </table>

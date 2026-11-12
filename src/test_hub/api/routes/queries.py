@@ -17,6 +17,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response, StreamingResponse
+from pydantic import AwareDatetime
 
 from test_hub.api.deps import Context, require_read
 from test_hub.api.schemas import ArtifactListResponse, ProjectListResponse, RunListResponse
@@ -56,6 +57,17 @@ def build_filter(
     tag: Annotated[list[str] | None, Query(description=_CSV)] = None,
     search: Annotated[str | None, Query(max_length=200)] = None,
     live: Annotated[bool, Query(description="Only runs that are queued or running.")] = False,
+    # Aware only: a timestamp with no offset would be read as UTC, and a caller
+    # writing local time would get a window hours away from the one they meant
+    # without any sign of it. A 422 that says so is the kinder answer.
+    since: Annotated[
+        AwareDatetime | None,
+        Query(description="Runs that started at or after this instant. ISO 8601 with an offset."),
+    ] = None,
+    until: Annotated[
+        AwareDatetime | None,
+        Query(description="Runs that started at or before this instant. ISO 8601 with an offset."),
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> RunFilter:
@@ -71,6 +83,8 @@ def build_filter(
         statuses=tuple(status or ()),
         tags=_split(tag),
         search=search,
+        since=since,
+        until=until,
         live_only=live,
         limit=limit,
         offset=offset,
@@ -84,10 +98,36 @@ Filter = Annotated[RunFilter, Depends(build_filter)]
 def get_overview(
     context: Context,
     window_days: Annotated[int, Query(ge=1, le=365)] = 30,
+    after: Annotated[
+        int | None,
+        Query(
+            ge=0,
+            description="The cursor (SSE `id:`) of the newest change the caller has seen. The "
+            "answer includes it and every change before it — and may be shared with other "
+            "callers asking for the same. Without it, the answer is as new as the request.",
+        ),
+    ] = None,
 ) -> OverviewSnapshot:
     """Totals, trends, project health, live runs and the worst offenders."""
-    with context.uow_factory(read_only=True) as uow:
-        return uow.runs.overview(context.workspace_id, window_days=window_days)
+
+    def compute() -> OverviewSnapshot:
+        with context.uow_factory(read_only=True) as uow:
+            return uow.runs.overview(context.workspace_id, window_days=window_days)
+
+    # Every open dashboard asks for this the moment a result lands. Computed
+    # per request, a burst of results piled requests up faster than they
+    # finished until no worker thread or connection was free; shared, it is
+    # one computation per change however many dashboards are watching.
+    current = context.bus.latest_cursor(context.workspace_id)
+    return context.overviews.get(
+        window_days,
+        need=current if after is None else after,
+        current=current,
+        compute=compute,
+        # Only a caller on the event stream says `after`, and only such a
+        # caller is told — and asks again — when a newer answer exists.
+        reuse_finished=after is not None,
+    )
 
 
 @router.get("/projects", response_model=ProjectListResponse, summary="List projects")

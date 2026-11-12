@@ -476,7 +476,17 @@ chart 700 pixels wide.
 `ProjectHealth` is one line per project: `project_key`, `name`, `team`,
 `runs_24h`, `last_run_id`, `last_run_at`, `last_status`, `pass_rate`,
 `pass_rate_delta` (against the equally long window immediately before this one),
-`flaky_tests` and `live_runs`.
+`flaky_tests`, `live_runs` and `last_run`.
+
+`last_run` is the run `last_run_id` names, as a full `RunSummary` — its
+`counts`, `trigger`, `branch`, `is_live` and the rest — or null when the
+project has not run inside the window. It is the project's newest run whether
+it has finished or is still going, so a run in flight *is* the project's
+current status until it ends. It exists so a client can draw every project's
+current status from one overview response instead of one request per project,
+and it costs the response no query per project either. It arrived as an
+optional field under [the compatibility promise](#the-compatibility-promise) —
+a reader that does not know it ignores it — so `SCHEMA_VERSION` did not move.
 
 ### `ImportResult`
 
