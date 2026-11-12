@@ -454,6 +454,58 @@
 
     /* ------------------------------------------------------- live updates */
 
+    /* A live change reloads what is on screen — one request per section at a
+     * time. While results stream in, changes arrive every second or two, and a
+     * load is not guaranteed to finish in that time: firing a fresh one per
+     * change piled requests up faster than they completed, until the browser's
+     * queue and the server's workers were both full and the page reported a
+     * 20-second timeout. Now a change that lands mid-load queues exactly one
+     * more load, read from the page as it is when that load starts. */
+    var inFlight = {};
+    var queued = {};
+
+    var LIVE_LOADERS = {
+      overview: function () { return loadOverview(); },
+      timeline: function () { return loadTimeline(); },
+      analytics: function () { return loadRunDetails(); },
+      runs: function () { return loadRuns(); },
+      run: function () { return loadRun(state.route.params.runId, { keepPrevious: true }); },
+      test: function () { return loadTest(state.route.params.testId, { keepPrevious: true }); }
+    };
+
+    /** The sections a live change reloads on this route. */
+    function liveSections(route) {
+      if (route.name === 'overview') { return ['overview', 'timeline']; }
+      if (DETAIL_ROUTES[route.name]) { return ['analytics']; }
+      if (route.name === 'runs' || route.name === 'run' || route.name === 'test') {
+        return [route.name];
+      }
+      return [];
+    }
+
+    function refresh(section) {
+      if (inFlight[section]) {
+        queued[section] = true;
+        return;
+      }
+      inFlight[section] = true;
+      var done = function () {
+        inFlight[section] = false;
+        if (!queued[section]) { return; }
+        queued[section] = false;
+        // Only if the page still shows it: a change that arrived while the
+        // overview loaded means nothing to a reader who has since opened a run.
+        if (liveSections(state.route).indexOf(section) >= 0) { refresh(section); }
+      };
+      var pending = null;
+      try {
+        pending = LIVE_LOADERS[section]();
+      } catch (err) {
+        util.reportError('live reload of ' + section + ' failed', err);
+      }
+      Promise.resolve(pending).then(done, done);
+    }
+
     function onProviderMessage(message) {
       if (message.type === 'status') {
         state.status = message.status || provider.status;
@@ -465,23 +517,23 @@
       var route = state.route;
       var resync = message.reason === 'resync';
       if (route.name === 'overview') {
-        loadOverview();
+        refresh('overview');
         // The timeline is the part of this page a live event is *for*: a run
         // that just started is a new bar, a result that just landed a taller one.
-        loadTimeline();
+        refresh('timeline');
       } else if (DETAIL_ROUTES[route.name]) {
         // Cheap to repeat: the overview is one request and the finished runs it
         // names are already cached, so a live update costs a run payload only
         // when a run this page has never drawn appears.
         if (resync) { analyticsCache = {}; }
-        loadRunDetails();
+        refresh('analytics');
       } else if (route.name === 'runs') {
-        loadRuns();
+        refresh('runs');
       } else if (route.name === 'run') {
         var touched = (message.runIds || []).indexOf(String(route.params.runId)) >= 0;
-        if (touched || resync) { loadRun(route.params.runId, { keepPrevious: true }); }
+        if (touched || resync) { refresh('run'); }
       } else if (route.name === 'test') {
-        loadTest(route.params.testId, { keepPrevious: true });
+        refresh('test');
       }
       if (resync) { loadFacets(); }
     }

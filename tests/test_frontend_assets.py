@@ -757,7 +757,8 @@ def test_the_timeline_is_loaded_with_the_overview_and_on_every_live_event() -> N
     assert "loadTimeline()" in route
     live = store[store.index("function onProviderMessage") :]
     live = live[: live.index("var store = {")]
-    assert "loadTimeline()" in live, "a run that starts must reach the timeline"
+    assert "refresh('timeline')" in live, "a run that starts must reach the timeline"
+    assert "timeline: function () { return loadTimeline(); }" in store
 
 
 def test_the_timeline_asks_the_api_for_its_window() -> None:
@@ -784,3 +785,48 @@ def test_the_timeline_table_cannot_widen_a_phone() -> None:
     timeline's caption is a sentence — 380px on its own."""
     source = timeline_source()
     assert "el('div', { className: 'sr-only' }, el('table'" in source
+
+
+# ------------------------------------------------------ live load under bursts
+
+
+def live_provider_source() -> str:
+    return (WEB / "assets" / "js" / "12-live-provider.js").read_text(encoding="utf-8")
+
+
+def test_live_reloads_are_one_at_a_time_per_section() -> None:
+    """Regression: every live change fired fresh requests whether or not the
+    last ones had come back. Under a burst of results they piled up until the
+    server's workers and the browser's queue were full, and the overview
+    reported a 20-second timeout."""
+    store = store_source()
+    live = store[store.index("function onProviderMessage") :]
+    live = live[: live.index("var store = {")]
+    for direct in ("loadOverview()", "loadTimeline()", "loadRunDetails()", "loadRuns()"):
+        assert direct not in live, f"a live change calls {direct} past the single-flight guard"
+    refresh = store[store.index("function refresh(section)") :]
+    refresh = refresh[: refresh.index("function onProviderMessage")]
+    assert "if (inFlight[section])" in refresh and "queued[section] = true" in refresh
+    assert "liveSections(state.route)" in refresh, "a queued reload must re-check the page"
+
+
+def test_a_background_tab_gives_its_stream_back() -> None:
+    """Regression: a browser allows six connections per server over HTTP/1.1
+    and each open stream holds one, so six Test Hub tabs left no room for any
+    request and every one of them timed out."""
+    source = live_provider_source()
+    assert re.search(r"var HIDDEN_RELEASE_MS = \d+;", source)
+    pause = source[source.index("function pause()") : source.index("function resume()")]
+    assert "disconnect()" in pause and "resyncOnOpen = true" in pause
+    connect = source[source.index("function connect()") :]
+    assert "if (paused) { return; }" in connect[: connect.index("disconnect();")]
+    start = source[source.index("self.start = function") :]
+    assert "document.hidden" in start[: start.index("};")], "a tab opened hidden still connects"
+
+
+def test_the_overview_says_which_change_it_needs() -> None:
+    """`after` is what lets every dashboard's refetch share one computation."""
+    source = live_provider_source()
+    body = source[source.index("self.getOverview = function") :]
+    body = body[: body.index("self.listRuns")]
+    assert "params.after = lastEventId" in body

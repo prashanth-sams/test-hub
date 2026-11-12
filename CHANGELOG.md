@@ -162,6 +162,27 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Fixed
 
+- **"The overview did not load — the request timed out after 20 s" while tests
+  were running.** Three causes, each reproduced and measured
+  ([scaling](docs/scaling.md#dashboards-under-a-burst-of-results)):
+  - Every live event fired fresh requests whether or not the last ones had come
+    back, so under a burst of results they piled up faster than they finished.
+    With 60 publishers the server stalled outright: every worker thread and
+    every pooled connection held by queued overviews, `/healthz` unanswered.
+    Live reloads are now one request per section at a time.
+  - Every open dashboard computed its own overview on every event. Concurrent
+    `/overview` requests now share one computation, and `?after=<cursor>` lets
+    a dashboard be handed one already running — never one older than the
+    newest change it has heard about.
+  - A browser allows six connections per server over HTTP/1.1, and each open
+    event stream holds one: six Test Hub tabs left no room for any request, and
+    every tab timed out. A tab hidden for ten seconds now gives its stream back
+    and reconnects, reloading once, when it is looked at again.
+- **A burst of publishers could get dropped connections.** SQLite's
+  `database is locked` escaped as an unhandled exception — a 500 or a reset
+  connection, and a traceback in the log. It is now `503 storage_busy` with
+  `Retry-After`, which the SDK already retries; any other database error is a
+  JSON 500 rather than a dropped connection.
 - **`serve --reload` ignored `--data-dir`.** The reloader starts the app in a
   fresh process that only sees the environment; the flag (and the new
   `--database-url`) is now passed through it.

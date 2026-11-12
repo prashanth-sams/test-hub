@@ -110,6 +110,39 @@ grows with your data.
 If your dashboard feels slow before your imports do, this is why, and the fix is
 not PostgreSQL.
 
+### Dashboards under a burst of results
+
+That collapse used to be reachable from one browser. Every open dashboard
+refetched the overview on every live event and never waited for the last
+request, so once a burst of results made a refetch slower than the gap between
+events, requests piled up until every worker thread and every pooled connection
+was held — `/healthz` included. Separately, a browser allows six connections per
+server over HTTP/1.1 and each open event stream holds one, so six Test Hub tabs
+left no room for any request at all. Both showed up as *"The overview did not
+load — the request timed out after 20 s"* while tests were running.
+
+Three changes, measured with 60 publishers posting results two at a time into a
+database of 2 300 runs and 50 000 results, with dashboards refetching as the
+browser does:
+
+- **One overview per change, not one per dashboard.** Concurrent `/overview`
+  requests share a computation, and a dashboard says (`?after=`) which change it
+  needs, so it can be handed one already running — never one older than that
+  change. See `test_hub.service.coalesce`.
+- **One request per section in flight, per tab.** A change that lands mid-load
+  queues exactly one more load.
+- **Background tabs give their stream back** ten seconds after they are hidden,
+  and reconnect — and reload once — when looked at again.
+
+| Dashboards | Before | After: overview p95 | After: `/healthz` worst |
+|---:|---|---:|---:|
+| 3 | server stalled, `/healthz` unanswered for 30 s | 1.96 s | 1.2 s |
+| 10 | — | 4.90 s | 3.0 s |
+
+Ten dashboards and sixty writers saturate one process and it slows, but nothing
+queues without bound any more, so nothing times out. Six tabs in one browser,
+five of them in the background, now hold one stream instead of six.
+
 ## SQLite or PostgreSQL
 
 <a id="sqlite-or-postgresql"></a>
