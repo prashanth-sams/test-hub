@@ -98,10 +98,36 @@ Filter = Annotated[RunFilter, Depends(build_filter)]
 def get_overview(
     context: Context,
     window_days: Annotated[int, Query(ge=1, le=365)] = 30,
+    after: Annotated[
+        int | None,
+        Query(
+            ge=0,
+            description="The cursor (SSE `id:`) of the newest change the caller has seen. The "
+            "answer includes it and every change before it — and may be shared with other "
+            "callers asking for the same. Without it, the answer is as new as the request.",
+        ),
+    ] = None,
 ) -> OverviewSnapshot:
     """Totals, trends, project health, live runs and the worst offenders."""
-    with context.uow_factory(read_only=True) as uow:
-        return uow.runs.overview(context.workspace_id, window_days=window_days)
+
+    def compute() -> OverviewSnapshot:
+        with context.uow_factory(read_only=True) as uow:
+            return uow.runs.overview(context.workspace_id, window_days=window_days)
+
+    # Every open dashboard asks for this the moment a result lands. Computed
+    # per request, a burst of results piled requests up faster than they
+    # finished until no worker thread or connection was free; shared, it is
+    # one computation per change however many dashboards are watching.
+    current = context.bus.latest_cursor(context.workspace_id)
+    return context.overviews.get(
+        window_days,
+        need=current if after is None else after,
+        current=current,
+        compute=compute,
+        # Only a caller on the event stream says `after`, and only such a
+        # caller is told — and asks again — when a newer answer exists.
+        reuse_finished=after is not None,
+    )
 
 
 @router.get("/projects", response_model=ProjectListResponse, summary="List projects")

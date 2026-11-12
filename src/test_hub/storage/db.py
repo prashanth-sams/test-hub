@@ -82,6 +82,7 @@ __all__ = [
     "Database",
     "create_database",
     "describe_database_url",
+    "is_contention",
     "migrations_path",
 ]
 
@@ -114,6 +115,26 @@ def _is_memory_url(url: str) -> bool:
     """True for the URL forms that address a transient, per-connection database."""
     lowered = url.lower()
     return ":memory:" in lowered or "mode=memory" in lowered
+
+
+#: PostgreSQL's "another transaction got there first" SQLSTATEs:
+#: lock_not_available, deadlock_detected and serialization_failure.
+_CONTENTION_SQLSTATES = frozenset({"55P03", "40P01", "40001"})
+
+
+def is_contention(exc: BaseException) -> bool:
+    """Is this database error another writer in the way, rather than a fault?
+
+    Contention is worth a retry and nothing else is: the transaction that hit it
+    wrote nothing, and the same request a moment later succeeds. SQLite says so
+    in a message ("database is locked") and PostgreSQL in a SQLSTATE.
+    """
+    original = getattr(exc, "orig", None) or exc
+    if isinstance(original, sqlite3.OperationalError):
+        message = str(original).lower()
+        return "database is locked" in message or "database table is locked" in message
+    sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+    return sqlstate in _CONTENTION_SQLSTATES
 
 
 def describe_database_url(url: str) -> str:

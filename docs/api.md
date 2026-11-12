@@ -135,6 +135,7 @@ $ curl -s http://127.0.0.1:8123/api/v1/runs/00000000-0000-0000-0000-000000000000
 | `unauthorized` | 401 | 5 | Missing, malformed or wrong token. |
 | `forbidden` | 403 | 5 | Reserved; the first release has authentication but no per-user authorization. |
 | `payload_too_large` | 413 | 6 | The upload exceeded `TEST_HUB_MAX_REPORT_BYTES` or `TEST_HUB_MAX_ARTIFACT_BYTES`. |
+| `storage_busy` | 503 | 75 | Other writers held the database for longer than this request would wait — on SQLite, under a burst of publishers. Nothing was written: send the same request again after the `Retry-After` seconds. The SDK does this by itself. 75 is `EX_TEMPFAIL`. |
 | `configuration_error` | 500 | 78 | The server was asked to start in a state that is not coherent or not safe. 78 is `EX_CONFIG`, so a supervisor can tell it apart from a crash. |
 
 The exit-code column is what `test-hub ingest` returns for the same condition —
@@ -735,6 +736,13 @@ different machine — see [Adapters § Identity](adapters.md#identity).
 
 The portfolio altitude: totals, trend, project health, live runs and the worst
 offenders. `?window_days=N` (1–365, default 30).
+
+`?after=N` is for clients on the event stream: `N` is the cursor (the SSE `id:`)
+of the newest change the caller has seen, and the answer includes it and every
+change before it. Every open dashboard asks for the overview the moment a result
+lands, and saying which change it needs is what lets the server answer all of
+them with one computation instead of one each. Without `after`, the answer is as
+new as the request.
 
 Keys: `schema_version`, `generated_at`, `window_days`, `counts`, `total_runs`,
 `total_runs_all_time`, `live_runs[]`, `recent_runs[]` (20), `projects[]`,

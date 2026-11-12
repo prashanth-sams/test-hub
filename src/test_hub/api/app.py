@@ -30,15 +30,17 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import exc as sa_exc
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from test_hub.api.routes import health, imports, queries, retention, runs, stream
 from test_hub.api.security import TokenVerifier
 from test_hub.config import Settings, get_settings
-from test_hub.errors import TestHubError
+from test_hub.errors import StorageBusyError, TestHubError
 from test_hub.logging import configure_logging, get_logger
 from test_hub.service.runtime import AppContext, create_context
+from test_hub.storage.db import is_contention
 from test_hub.version import __version__
 
 __all__ = ["create_app", "web_root"]
@@ -139,12 +141,40 @@ def _install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(TestHubError)
     async def _test_hub_error(_: Request, exc: TestHubError) -> JSONResponse:
-        if exc.http_status >= 500:
+        if isinstance(exc, StorageBusyError):
+            # Expected under a burst of publishers, and answered with a retry.
+            logger.warning("%s: %s", exc.code, exc.message)
+        elif exc.http_status >= 500:
             logger.error("%s: %s", exc.code, exc.message)
         else:
             logger.debug("%s: %s", exc.code, exc.message)
-        headers = {"WWW-Authenticate": "Bearer"} if exc.http_status == 401 else None
-        return JSONResponse(exc.to_dict(), status_code=exc.http_status, headers=headers)
+        headers: dict[str, str] = {}
+        if exc.http_status == 401:
+            headers["WWW-Authenticate"] = "Bearer"
+        if isinstance(exc, StorageBusyError):
+            headers["Retry-After"] = str(exc.retry_after)
+        return JSONResponse(exc.to_dict(), status_code=exc.http_status, headers=headers or None)
+
+    @app.exception_handler(sa_exc.OperationalError)
+    async def _database_error(_: Request, exc: sa_exc.OperationalError) -> JSONResponse:
+        # Contention that SQLite reported itself — the writer queue in
+        # storage/db.py keeps one process's writers in line, but a second
+        # process (a `test-hub ingest` beside the server) can still hold the
+        # lock. Either way nothing was written and a retry succeeds; a
+        # traceback and a dropped connection told the publisher neither.
+        if is_contention(exc):
+            busy = StorageBusyError("The database is busy with other writes. Retry shortly.")
+            logger.warning("%s: %s", busy.code, exc.orig)
+            return JSONResponse(
+                busy.to_dict(),
+                status_code=busy.http_status,
+                headers={"Retry-After": str(busy.retry_after)},
+            )
+        logger.error("database error: %s", exc.orig)
+        return JSONResponse(
+            {"error": "storage_error", "message": "The database could not complete the request."},
+            status_code=500,
+        )
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:

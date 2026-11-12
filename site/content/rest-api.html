@@ -49,6 +49,7 @@ parser:</p>
     <tr><td>413</td><td><code>payload_too_large</code></td><td>Over a configured size limit.</td></tr>
     <tr><td>415</td><td><code>unknown_format</code></td><td>No adapter recognised the input. <code>detail</code> lists every installed one.</td></tr>
     <tr><td>422</td><td><code>validation_error</code>, <code>adapter_error</code></td><td>The body did not match the schema, or the format was recognised but unparseable.</td></tr>
+    <tr><td>503</td><td><code>storage_busy</code></td><td>Other writers held the database longer than this request would wait. Nothing was written; send it again after the <code>Retry-After</code> seconds. The SDK does this by itself.</td></tr>
   </tbody>
 </table>
 </div>
@@ -231,6 +232,10 @@ enough to poll.</p>
 <div class="codeblock" data-lang="shell">
 <pre><code>curl -s "localhost:8000/api/v1/overview?window_days=30&amp;team=payments"</code></pre>
 </div>
+
+<p><code>after</code> is for clients on the event stream: the cursor (SSE <code>id:</code>)
+of the newest change the caller has seen. The answer includes it, and the server may
+answer every dashboard that asks for the same with one computation.</p>
 
 <p><code>window_days</code> accepts 1–365. Note <code>total_runs</code> (inside the
 window) and <code>total_runs_all_time</code>: when the first is zero and the second is

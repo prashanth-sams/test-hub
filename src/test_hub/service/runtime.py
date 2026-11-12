@@ -15,13 +15,14 @@ those three fight over the same SQLite file.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from test_hub.config import Settings, get_settings
 from test_hub.domain.identity import workspace_id as workspace_uuid
-from test_hub.domain.models import Workspace
+from test_hub.domain.models import OverviewSnapshot, Workspace
 from test_hub.logging import configure_logging, get_logger
 from test_hub.service.bus import InMemoryEventBus
+from test_hub.service.coalesce import Coalescer
 from test_hub.storage import (
     Database,
     UnitOfWorkFactory,
@@ -43,6 +44,9 @@ class AppContext:
     uow_factory: UnitOfWorkFactory
     bus: InMemoryEventBus
     workspace: Workspace
+    #: Every open dashboard asks for the overview the moment a result lands;
+    #: this computes it once for all of them. See test_hub.service.coalesce.
+    overviews: Coalescer[OverviewSnapshot] = field(default_factory=Coalescer)
 
     @property
     def workspace_id(self) -> uuid.UUID:
