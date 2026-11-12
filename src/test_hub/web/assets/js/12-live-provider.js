@@ -30,6 +30,7 @@
   var TestHub = window.TestHub = window.TestHub || {};
   var util = TestHub.util;
   var provider = TestHub.provider;
+  var windows = TestHub.windows;
 
   var REQUEST_TIMEOUT_MS = 20000;
   var FLUSH_DEBOUNCE_MS = 350;
@@ -192,7 +193,6 @@
       // the one it declared and ignores the other — and means the filter works
       // whichever spelling this build settled on.
       if (params.test_type !== undefined) { params.type = params.test_type; }
-      if (clean.window_days) { params.window_days = clean.window_days; }
       return params;
     }
 
@@ -209,10 +209,15 @@
       return project;
     }
 
-    function shapeOverview(payload) {
+    function shapeOverview(payload, win) {
       var overview = {};
       var keys = Object.keys(payload);
       for (var i = 0; i < keys.length; i++) { overview[keys[i]] = payload[keys[i]]; }
+      // The window these numbers were asked for, so every sentence a page
+      // writes about them names the same hours — even while the next window's
+      // answer is still on its way.
+      overview.window = win;
+      if (!overview.trend_bucket_seconds) { overview.trend_bucket_seconds = 86400; }
       overview.counts = provider.normalizeCounts(payload.counts);
       overview.live_runs = (payload.live_runs || []).map(provider.normalizeSummary);
       overview.recent_runs = (payload.recent_runs || []).map(provider.normalizeSummary);
@@ -234,19 +239,25 @@
     /**
      * Recompute the overview for a filtered slice.
      *
-     * ``GET /overview`` answers for the whole workspace and takes only
-     * ``window_days``; the facet parameters ride along in case a build honours
-     * them, but this client cannot assume they were applied. Rather than show
+     * ``GET /overview`` answers for the whole workspace and takes only its
+     * window; the facet parameters ride along in case a build honours them,
+     * but this client cannot assume they were applied. Rather than show
      * portfolio-wide totals under an active filter — which would be a lie the
-     * user cannot see — the matching runs are fetched and folded with the
-     * shared arithmetic in 10-provider.js, and the result says so.
+     * user cannot see — the runs that match inside the window are fetched and
+     * folded with the shared arithmetic in 10-provider.js, and the result
+     * says so.
      */
-    function narrowOverview(base, clean) {
+    function narrowOverview(base, clean, win) {
       var params = facetParams(clean);
+      var span = windows.bounds(win);
       params.limit = NARROW_LIMIT;
       params.offset = 0;
       if (clean.status) { params.status = clean.status; }
       if (clean.q) { params.q = clean.q; params.search = clean.q; }
+      // The window goes to the server, so the newest 500 are the newest 500
+      // inside it rather than the newest 500 overall.
+      params.since = new Date(span.start).toISOString();
+      if (span.fixedEnd) { params.until = new Date(span.end).toISOString(); }
 
       return request('runs', params).then(function (payload) {
         var summaries = (payload.runs || []).map(provider.normalizeSummary)
@@ -259,20 +270,24 @@
           if (summaries[i].is_live) { live.push(summaries[i]); }
         }
         var ordered = util.sortBy(summaries, 'started_at', 'desc');
-        var windowDays = Number(clean.window_days) || base.window_days || 30;
+        var step = windows.trendStep(span.end - span.start);
         var truncated = typeof payload.total === 'number' && payload.total > summaries.length;
 
         return {
           schema_version: base.schema_version,
           generated_at: new Date().toISOString(),
-          window_days: windowDays,
+          window: win,
+          window_days: Math.max(1, Math.ceil((span.end - span.start) / 86400000)),
+          window_start: new Date(span.start).toISOString(),
+          window_end: new Date(span.end).toISOString(),
+          trend_bucket_seconds: step,
           counts: counts,
           total_runs: summaries.length,
           total_runs_all_time: base.total_runs_all_time || 0,
           live_runs: live,
           recent_runs: ordered.slice(0, 8),
           projects: provider.buildProjectHealth(ordered, [], []),
-          trend: provider.buildTrend(ordered, windowDays),
+          trend: provider.buildTrend(ordered, { start: span.start, end: span.end, step: step }),
           top_failing_tests: [],
           flakiest_tests: [],
           filters: base.filters || {},
@@ -291,7 +306,12 @@
 
     self.getOverview = function (filters) {
       var clean = provider.cleanFilters(filters);
+      var win = windows.parse(clean.window);
       var params = facetParams(clean);
+      // `window_hours`, `window_days`, or `since`/`until` for a range.
+      var asked = windows.apiParams(win);
+      var askedKeys = Object.keys(asked);
+      for (var w = 0; w < askedKeys.length; w++) { params[askedKeys[w]] = asked[askedKeys[w]]; }
       // The newest change this tab has heard about. Every open dashboard asks
       // for the overview the moment a result lands; saying which change this
       // one needs to include lets the server answer all of them with a single
@@ -300,9 +320,9 @@
         params.after = lastEventId;
       }
       return request('overview', params).then(function (payload) {
-        var overview = shapeOverview(payload);
+        var overview = shapeOverview(payload, win);
         if (!provider.hasFacetFilter(clean)) { return overview; }
-        return narrowOverview(overview, clean);
+        return narrowOverview(overview, clean, win);
       });
     };
 

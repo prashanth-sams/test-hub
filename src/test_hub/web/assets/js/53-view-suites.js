@@ -21,6 +21,7 @@
   var TestHub = window.TestHub = window.TestHub || {};
   var util = TestHub.util;
   var ui = TestHub.ui;
+  var windows = TestHub.windows;
   var el = util.el;
 
   TestHub.views = TestHub.views || {};
@@ -215,7 +216,7 @@
       var summaries = state.analytics.summaries || [];
 
       if (!summaries.length) {
-        subtitle.textContent = 'Across the last ' + state.overview.window_days + ' days.';
+        subtitle.textContent = windows.across(windows.of(state.overview)) + '.';
         util.replace(content, ui.card({
           title: 'Test Suites',
           icon: 'briefcase',

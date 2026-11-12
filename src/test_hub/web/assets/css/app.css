@@ -108,6 +108,11 @@
   --chart-fill-bottom: #36a2eb05;
   --chart-marker: #ffffff;
   --chart-band: #f1f3f7;
+  /* One data hue for single-series charts and its lighter step, validated
+     (dataviz validate_palette.js): >= 3:1 on the surface, one hue, the light
+     step clearing 2:1. */
+  --chart-series: #2f7fc4;
+  --chart-series-soft: #86b4e0;
 
   /* -- effects ------------------------------------------------------- */
   --shadow-1: 0 1px 2px #2e3d4914, 0 1px 3px #2e3d491a;
@@ -160,6 +165,9 @@
   --r-md: 10px;
   --r-lg: 14px;
   --r-pill: 999px;
+  /* Every control — buttons, selects, inputs, segmented options, the
+     calendar's days — shares one corner, so the chrome reads as one set. */
+  --r-control: 0.3rem;
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -245,6 +253,8 @@
   --chart-fill-bottom: #58a8ec05;
   --chart-marker: #1b1f27;
   --chart-band: #0e1116;
+  --chart-series: #4a96dc;
+  --chart-series-soft: #2d5f8f;
 
   --shadow-1: 0 1px 2px #00000080, 0 1px 3px #0000005c;
   --shadow-2: 0 12px 34px #000000b3, 0 2px 10px #00000080;
@@ -302,7 +312,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
 }
 
 ::selection { background: var(--accent-soft); }
@@ -343,7 +353,7 @@ table.sr-only,
   padding: var(--sp-2) var(--sp-3);
   clip: auto;
   clip-path: none;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
   background: var(--surface);
   border: 1px solid var(--border-strong);
   box-shadow: var(--shadow-2);
@@ -499,7 +509,7 @@ table.sr-only,
      sidebar's own 8px makes up the rest of the 28px here; the right side stays
      tight because nothing is aligned against it. */
   padding: 8px 10px 8px 20px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
   color: var(--rail-muted);
   /* A step above body text, matching the report's 16px rail. The rail holds
      nine words total and is read at a glance from the far edge of the screen,
@@ -563,35 +573,90 @@ table.sr-only,
   font-variant-numeric: tabular-nums;
 }
 
-/* connection status pill ------------------------------------------------ */
+/* connection status ------------------------------------------------------ */
+/* A fixed slot. Every state's label is laid, hidden, into the same grid cell
+ * as the pill, so the slot is exactly as wide as the longest of them and never
+ * changes: when the stream drops, the pill grows to the left into room that
+ * was already there, and nothing else in the header — or below it — moves.
+ * The details and "Retry now" open in a popover over the page, never above it
+ * in the flow, which is what the old banner did to every view. */
+.conn-slot {
+  display: inline-grid;
+  justify-items: end;
+  align-items: center;
+}
+.conn-slot > * { grid-area: 1 / 1; }
+.conn-slot__sizer { visibility: hidden; pointer-events: none; }
+
 .conn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px 4px 8px;
-  border-radius: var(--r-pill);
+  padding: 3px 10px 3px 8px;
+  border-radius: var(--r-control);
   border: 1px solid var(--border);
   background: var(--surface-2);
+  font: inherit;
   font-size: var(--fs-xs);
   font-weight: 550;
+  line-height: 1.5;
   color: var(--text-muted);
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease);
 }
+.conn:hover { border-color: var(--border-strong); color: var(--text); }
+.conn[aria-expanded="true"] { border-color: var(--border-strong); background: var(--surface-3); color: var(--text); }
 .conn__dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--status-unknown);
   flex: none;
 }
-.conn[data-status="live"] { color: var(--status-passed-fg); border-color: var(--status-passed-soft); background: var(--status-passed-soft); }
-.conn[data-status="live"] .conn__dot { background: var(--status-passed); animation: pulse 2.4s var(--ease) infinite; }
-.conn[data-status="connecting"] { color: var(--status-running-fg); background: var(--status-running-soft); border-color: var(--status-running-soft); }
-.conn[data-status="connecting"] .conn__dot { background: var(--status-running); animation: pulse 1.2s var(--ease) infinite; }
+/* Live is the quiet state: a green dot is all it needs to say. The two that
+ * want attention take a tint as well — inside the slot, so the tint costs no
+ * layout either. */
+[data-status="live"] > .conn__dot { background: var(--status-passed); animation: pulse 2.4s var(--ease) infinite; }
+[data-status="connecting"] > .conn__dot { background: var(--status-running); animation: pulse 1.2s var(--ease) infinite; }
+[data-status="reconnecting"] > .conn__dot { background: var(--status-skipped); animation: pulse 1.2s var(--ease) infinite; }
+[data-status="offline"] > .conn__dot { background: var(--status-failed); }
 .conn[data-status="reconnecting"] { color: var(--status-skipped-fg); background: var(--status-skipped-soft); border-color: var(--status-skipped-soft); }
-.conn[data-status="reconnecting"] .conn__dot { background: var(--status-skipped); animation: pulse 1.2s var(--ease) infinite; }
 .conn[data-status="offline"] { color: var(--status-failed-fg); background: var(--status-failed-soft); border-color: var(--status-failed-soft); }
-.conn[data-status="offline"] .conn__dot { background: var(--status-failed); }
-.conn[data-status="static"] { color: var(--text-muted); }
-.conn[data-status="static"] .conn__dot { background: var(--text-subtle); }
+
+.connpop { width: 288px; }
+.connpop__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--text);
+}
+.connpop__text {
+  margin: var(--sp-2) 0 var(--sp-3);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.connpop__rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px var(--sp-3);
+  margin: 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+}
+.connpop__rows dt { color: var(--text-subtle); white-space: nowrap; }
+.connpop__rows dd {
+  margin: 0;
+  color: var(--text-muted);
+  text-align: right;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.connpop__actions { display: flex; justify-content: flex-end; margin-top: var(--sp-3); }
+.connpop__actions:empty { display: none; }
+.connpop__actions .btn { display: inline-flex; align-items: center; gap: 6px; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -604,7 +669,7 @@ table.sr-only,
   place-items: center;
   width: 32px; height: 32px;
   padding: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text-muted);
@@ -652,7 +717,7 @@ table.sr-only,
   width: 100%;
   padding: 7px var(--sp-2);
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
   background: none;
   color: var(--text-muted);
   font: inherit;
@@ -673,7 +738,7 @@ table.sr-only,
   width: 100%;
   padding: 9px 11px;
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
   background: none;
   color: var(--text-muted);
   font: inherit;
@@ -767,9 +832,37 @@ table.sr-only,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .menu__panel { animation: none; }
+  .menu__panel,
+  .popover { animation: none; }
   .switch,
   .switch__thumb { transition: none; }
+}
+
+/* popover ---------------------------------------------------------------- */
+/* Floats over the page from its trigger — `ui.popover`. Absolutely placed, so
+ * opening one never moves anything around it. */
+.popover-anchor { position: relative; display: inline-flex; }
+.popover {
+  position: absolute;
+  top: calc(100% + var(--sp-2));
+  left: 0;
+  z-index: 60;
+  max-width: calc(100vw - 2 * var(--sp-4));
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  text-align: left;
+  white-space: normal;
+  animation: menu-in 120ms var(--ease);
+}
+.popover[data-align="end"] { left: auto; right: 0; }
+.popover__title {
+  margin-bottom: var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--text);
 }
 
 /* ====================================================================== */
@@ -855,7 +948,7 @@ table.sr-only,
   align-items: center;
   gap: 6px;
   padding: 7px 13px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
@@ -1080,6 +1173,9 @@ table.sr-only,
 .legend__swatch[data-status="running"] { background: var(--status-running); }
 .legend__swatch[data-status="line"] { background: var(--chart-line); }
 .legend__swatch[data-status="line-alt"] { background: var(--chart-line-alt); }
+/* The duration chart's two marks: the median's dot and the p50-p95 bar. */
+.legend__swatch[data-status="median"] { background: var(--chart-series); border-radius: 50%; }
+.legend__swatch[data-status="spread"] { width: 6px; height: 12px; background: var(--chart-series-soft); }
 
 /* ====================================================================== */
 /* Analytics — tiles, meters, chips, verdicts, streaks                     */
@@ -1163,7 +1259,7 @@ table.sr-only,
   align-items: center;
   max-width: 100%;
   padding: 2px 8px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-muted);
@@ -1244,6 +1340,7 @@ table.sr-only,
   color: inherit;
 }
 button.statstrip__item {
+  border-radius: var(--r-control);
   border: 0;
   background: none;
   font: inherit;
@@ -1291,7 +1388,22 @@ button.statstrip__item:hover { background: var(--surface-2); }
   text-transform: uppercase;
   color: var(--text-subtle);
 }
-.hero__meta { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.hero__meta { display: flex; flex-wrap: wrap; gap: 6px var(--sp-2); margin-top: var(--sp-3); }
+/* The donut keeps the size it was drawn at. Stretched to its column it was
+ * the width of a phone, and its counters sat right on its edge. */
+.hero > .chart { width: 148px; }
+/* Air between the headline and the bar under it: the pills above it have
+ * borders of their own, and with nothing between they read as one block. */
+.hero + .countbar { margin-top: var(--sp-2); }
+/* "1 in flight": a pill with a live dot, not a badge nested inside a pill. */
+.hero__pill--live::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--status-running);
+  animation: pulse 1.6s var(--ease) infinite;
+}
 .hero__pill {
   display: inline-flex;
   align-items: center;
@@ -1319,18 +1431,20 @@ button.statstrip__item:hover { background: var(--surface-2); }
 /* Filters                                                                 */
 /* ====================================================================== */
 
+/* One compact line of controls — labels inside the selects, no chips under
+ * them — so the page reaches the timeline without scrolling. */
 .filters {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
-  padding: var(--sp-3) var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
   box-shadow: var(--shadow-1);
 }
 .filters__row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-3);
-  align-items: flex-end;
+  gap: var(--sp-2);
+  align-items: center;
 }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .field__label {
@@ -1345,7 +1459,7 @@ button.statstrip__item:hover { background: var(--surface-2); }
   min-width: 140px;
   max-width: 100%;
   padding: 8px 11px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
   border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
@@ -1358,32 +1472,66 @@ button.statstrip__item:hover { background: var(--surface-2); }
 .field-holder { display: flex; min-width: 0; }
 .field--grow { flex: 1 1 220px; }
 .field--grow .input { width: 100%; }
-.filters__spacer { flex: 1 1 auto; }
-.filters__actions { display: flex; gap: var(--sp-2); align-items: center; }
+/* Pushed to the right edge of whichever line it lands on. */
+.filters__actions { display: flex; gap: var(--sp-2); align-items: center; margin-left: auto; }
+.filters__reset { color: var(--text-muted); }
 
-.chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
-.chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 6px 3px 10px;
-  border-radius: var(--r-pill);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
-  color: var(--accent-ink);
+/* An inline select: one bordered control holding its label and its value. */
+.field--inline {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  padding-left: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  transition: border-color 120ms var(--ease);
+}
+.field--inline:hover { border-color: var(--text-subtle); }
+.field--inline > .field__label {
   font-size: var(--fs-xs);
   font-weight: 550;
-}
-.chip__remove {
-  display: grid; place-items: center;
-  width: 16px; height: 16px;
-  border: 0; padding: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: inherit;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-subtle);
+  white-space: nowrap;
   cursor: pointer;
-  font-size: var(--fs-sm);
-  line-height: 1;
 }
-.chip__remove:hover { background: var(--accent-border); }
+.field--inline > .select {
+  /* As wide as the value it shows — "All" — not as its longest option, which
+     is what a native select measures; the cap is for browsers without it. */
+  field-sizing: content;
+  min-width: 0;
+  max-width: 220px;
+  padding: 5px 28px 5px 6px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+.field--inline[data-set="true"] > .select { color: var(--text); font-weight: 600; }
+/* The chevron: borders in a token colour, so it follows the theme. */
+.field--inline::after {
+  content: "";
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--text-subtle);
+  border-bottom: 1.5px solid var(--text-subtle);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+/* Focus is shown on the whole control, and only to the keyboard: a choice
+ * made with the pointer leaves nothing outlined behind it. */
+.field--inline > .select:focus-visible { outline: none; }
+.field--inline:has(> .select:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+.field--search { flex: 1 1 200px; max-width: 320px; }
+.field--search > .input { padding-top: 6px; padding-bottom: 6px; }
+
 
 /* segmented control ---------------------------------------------------- */
 .segmented {
@@ -1392,7 +1540,7 @@ button.statstrip__item:hover { background: var(--surface-2); }
   gap: 2px;
   background: var(--surface-3);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-control);
 }
 .segmented button {
   border: 0;
@@ -1401,13 +1549,282 @@ button.statstrip__item:hover { background: var(--surface-2); }
   font-size: var(--fs-xs);
   font-weight: 600;
   padding: 4px 10px;
-  border-radius: 5px;
+  border-radius: var(--r-control);
   cursor: pointer;
 }
 .segmented button[aria-pressed="true"] {
   background: var(--surface);
   color: var(--text);
   box-shadow: var(--shadow-1);
+}
+
+/* window picker ---------------------------------------------------------- */
+/* The presets, then a small calendar button the same height as their track.
+ * Idle it is part of the track's furniture; with a range set it is the
+ * pressed one — and says the range, since no preset can. */
+.winpick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+.winpick > .popover-anchor { align-items: stretch; }
+.winpick__custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.winpick__custom:hover { color: var(--text); border-color: var(--border-strong); }
+.winpick__custom[aria-expanded="true"] { color: var(--text); border-color: var(--border-strong); }
+.winpick__custom[data-active="true"] {
+  background: var(--surface);
+  border-color: var(--accent-border);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+.winpick__custom[data-active="true"] svg { color: var(--accent); }
+.winpick__custom svg { flex: none; }
+.winpick__range { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* range picker ----------------------------------------------------------- */
+/* Quick ranges as a list beside one month calendar; the picked ends, with
+ * optional times of day, underneath. `ui.rangePicker`. */
+.winpick__panel { width: 456px; padding: 0; }
+.rangepick__body { display: grid; grid-template-columns: 128px minmax(0, 1fr); }
+.rangepick__presets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sp-3) var(--sp-2);
+  border-right: 1px solid var(--border);
+}
+.rangepick__preset {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* Hover is a ghost wash; the selected range is the one with the check. */
+.rangepick__preset:hover { background: var(--surface-2); color: var(--text); }
+.rangepick__preset[aria-pressed="true"] { color: var(--text); font-weight: 650; }
+.rangepick__check { flex: none; color: var(--accent); visibility: hidden; }
+.rangepick__preset[aria-pressed="true"] .rangepick__check { visibility: visible; }
+
+.cal { padding: var(--sp-3) var(--sp-4) var(--sp-2); }
+.cal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
+.cal__title { font-size: var(--fs-sm); font-weight: 650; color: var(--text); }
+.cal__nav {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.cal__nav:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.cal__nav:disabled { opacity: 0.3; cursor: default; }
+.cal__nav--prev svg { transform: scaleX(-1); }
+.cal__grid { display: grid; row-gap: 2px; }
+.cal__row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal__dow {
+  padding: 2px 0 6px;
+  text-align: center;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--text-subtle);
+}
+.cal__blank { height: 34px; }
+/* The cell carries the range band, edge to edge, so a week of it is one
+ * continuous wash; the number sits in its own square on top. */
+.cal__day {
+  display: grid;
+  place-items: center;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.cal__num {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-control);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  transition: background 100ms var(--ease);
+}
+.cal__day:hover .cal__num { background: var(--surface-3); }
+.cal__day[data-today="true"] .cal__num { box-shadow: inset 0 0 0 1px var(--border-strong); font-weight: 650; }
+.cal__day[data-band="mid"] { background: var(--accent-soft); }
+.cal__day[data-band="start"] { background: linear-gradient(90deg, transparent 50%, var(--accent-soft) 50%); }
+.cal__day[data-band="end"] { background: linear-gradient(270deg, transparent 50%, var(--accent-soft) 50%); }
+/* While the second day is being chosen the band is a preview: lighter. */
+.cal__day[data-preview="true"][data-band="mid"] { background: var(--surface-2); }
+.cal__day[data-preview="true"][data-band="start"] { background: linear-gradient(90deg, transparent 50%, var(--surface-2) 50%); }
+.cal__day[data-preview="true"][data-band="end"] { background: linear-gradient(270deg, transparent 50%, var(--surface-2) 50%); }
+.cal__day[data-preview="true"][data-band="end"] .cal__num { box-shadow: inset 0 0 0 1px var(--accent); }
+.cal__day[data-edge="true"] .cal__num,
+.cal__day[data-edge="true"]:hover .cal__num {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-weight: 650;
+  box-shadow: none;
+}
+.cal__day[aria-disabled="true"] { color: var(--text-subtle); cursor: default; }
+.cal__day[aria-disabled="true"] .cal__num { opacity: 0.45; }
+.cal__day[aria-disabled="true"]:hover .cal__num { background: none; }
+.cal__day:focus-visible { outline: none; }
+.cal__day:focus-visible .cal__num { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.rangepick__foot {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--border);
+}
+.rangepick__ends {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-2);
+}
+.rangepick__arrow { color: var(--text-subtle); }
+.rangepick__end {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+}
+.rangepick__date {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-control) 0 0 var(--r-control);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rangepick__date:hover { background: var(--surface-2); }
+.rangepick__label {
+  font-size: var(--fs-3xs);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+/* The end the next click sets: its label in the accent, nothing louder. */
+.rangepick__end[data-active="true"] .rangepick__label { color: var(--accent-ink); }
+.rangepick__end[data-active="true"] { background: var(--surface-2); }
+.rangepick__value {
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rangepick__time {
+  flex: none;
+  width: 88px;
+  padding: 0 6px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0 var(--r-control) var(--r-control) 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.rangepick__problem { margin: 0; font-size: var(--fs-xs); color: var(--status-failed-fg); }
+.rangepick__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.rangepick__meta { display: grid; min-width: 0; }
+.rangepick__summary {
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rangepick__summary:empty { display: none; }
+.rangepick__zone {
+  overflow: hidden;
+  font-size: var(--fs-2xs);
+  color: var(--text-subtle);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.rangepick__buttons { display: flex; flex: none; gap: var(--sp-2); }
+
+/* On a phone the list of ranges becomes a row of them over the calendar,
+ * and the two ends stack. */
+@media (max-width: 640px) {
+  .winpick__panel { width: calc(100vw - 2 * var(--sp-3)); }
+  .rangepick__body { grid-template-columns: minmax(0, 1fr); }
+  .rangepick__presets {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: var(--sp-2) var(--sp-3);
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .rangepick__preset { padding: 4px 9px; border: 1px solid var(--border); font-size: var(--fs-xs); }
+  .rangepick__preset[aria-pressed="true"] {
+    background: var(--accent-soft);
+    border-color: var(--accent-border);
+    color: var(--accent-ink);
+  }
+  .rangepick__check { display: none; }
+  .cal { padding: var(--sp-2) var(--sp-3); }
+  .rangepick__foot { padding: var(--sp-3); }
+  .rangepick__ends { grid-template-columns: minmax(0, 1fr); }
+  .rangepick__arrow { display: none; }
 }
 
 /* ====================================================================== */
@@ -1515,6 +1932,31 @@ th[aria-sort] .table__sort { color: var(--text); }
 
 .chart { position: relative; width: 100%; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart svg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* The bucket readout: value first and strong, its name after it, a short
+ * stroke of the series colour as the key. */
+.chart__tip {
+  position: absolute;
+  z-index: 5;
+  min-width: 132px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.chart__tip-title { margin-bottom: 2px; font-weight: 650; color: var(--text); }
+.chart__tip-row { display: flex; align-items: center; gap: 6px; line-height: 1.65; }
+.chart__tip-row strong { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.chart__tip-key { flex: none; width: 10px; height: 2px; border-radius: 1px; }
+.chart__tip-key[data-key="series"] { background: var(--chart-series); }
+.chart__tip-key[data-key="soft"] { height: 6px; background: var(--chart-series-soft); }
+.chart__tip-key[data-key="none"] { background: transparent; }
 .chart__empty {
   display: grid; place-items: center;
   min-height: 120px;
@@ -1817,11 +2259,15 @@ th[aria-sort] .table__sort { color: var(--text); }
   pointer-events: none;
 }
 
+/* The clock labels slide across this strip and off its ends; the ends fade,
+ * so a label leaving reads as leaving rather than as cut in half. */
 .tl__xaxis {
   position: relative;
   height: 16px;
   margin-left: calc(var(--tl-yaxis) + var(--tl-gap));
   overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 28px, black calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, transparent, black 28px, black calc(100% - 28px), transparent);
   font-size: var(--fs-2xs);
   color: var(--chart-axis);
   font-variant-numeric: tabular-nums;
@@ -2071,7 +2517,10 @@ th[aria-sort] .table__sort { color: var(--text); }
 .taxonomy__row > * { min-width: 0; }
 .stack { display: grid; gap: var(--sp-4); }
 .stack > * { min-width: 0; }
-.stack--sm { gap: var(--sp-3); }
+/* A grid of its own: used without `.stack` — as it is on the Health card and
+ * seven other places — a gap on a block box spaced nothing, and the count bar
+ * sat against the pills above it and the counters below. */
+.stack--sm { display: grid; gap: var(--sp-3); }
 .stack--sm > * { min-width: 0; }
 .card { min-width: 0; }
 .row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
@@ -2157,7 +2606,19 @@ th[aria-sort] .table__sort { color: var(--text); }
    * height as well. */
   .topbar__inner { min-height: 44px; }
   .headline { grid-template-columns: minmax(0, 1fr); }
-  .hero { grid-template-columns: minmax(0, 1fr); justify-items: start; }
+  /* Number and donut side by side, the pills on a line of their own under
+   * both: a phone's width split the other way left the pills four rows tall. */
+  .hero {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "value donut" "label donut" "meta meta";
+    row-gap: 4px;
+    column-gap: var(--sp-4);
+  }
+  .hero__figure { display: contents; }
+  .hero__value { grid-area: value; align-self: end; }
+  .hero__label { grid-area: label; align-self: start; }
+  .hero__meta { grid-area: meta; margin-top: var(--sp-3); }
+  .hero > .chart { grid-area: donut; width: 112px; }
 }
 
 @media (max-width: 640px) {

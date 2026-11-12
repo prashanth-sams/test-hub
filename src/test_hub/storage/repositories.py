@@ -98,7 +98,7 @@ from test_hub.domain.status import (
 )
 from test_hub.errors import ValidationError
 from test_hub.logging import get_redactor
-from test_hub.storage.base import RunFilter, WriteResult
+from test_hub.storage.base import OverviewWindow, RunFilter, WriteResult
 from test_hub.storage.locks import WriteLocks
 from test_hub.storage.models import (
     ArtifactRow,
@@ -904,14 +904,28 @@ class SqlRunRepository:
 
     # --------------------------------------------------------- overview
 
-    def overview(self, workspace_id: uuid.UUID, *, window_days: int = 30) -> OverviewSnapshot:
+    def overview(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        window_days: int = 30,
+        window: OverviewWindow | None = None,
+    ) -> OverviewSnapshot:
         now = utcnow()
-        window = max(1, window_days)
-        since = now - timedelta(days=window)
-        previous_since = since - timedelta(days=window)
+        if window is None:
+            window = OverviewWindow(length=timedelta(days=max(1, window_days)))
+        since, until = window.bounds(now)
+        span = until - since
+        previous_since = since - span
+        # A window that ends now takes a run whose clock ran a little ahead of
+        # ours; one that ends at a named instant means it.
+        bounded = window.until is not None
 
         # One scan covering both the window and the window before it, so the
         # per-project pass-rate delta costs no extra round trip.
+        conditions = [RunRow.workspace_id == workspace_id, self._at_or_after(previous_since)]
+        if bounded:
+            conditions.append(self._at_or_before(until))
         rows = self._session.execute(
             select(
                 RunRow.id,
@@ -921,7 +935,7 @@ class SqlRunRepository:
                 RunRow.created_at,
                 RunRow.duration_ms,
                 RunRow.counts,
-            ).where(RunRow.workspace_id == workspace_id, self._at_or_after(previous_since))
+            ).where(*conditions)
         ).all()
 
         current: list[Any] = []
@@ -936,19 +950,25 @@ class SqlRunRepository:
 
         live = self.list_runs(RunFilter(workspace_id=workspace_id, live_only=True, limit=50))
         recent = self.list_runs(RunFilter(workspace_id=workspace_id, limit=20))
+        step = self.trend_step(span)
 
         return OverviewSnapshot(
             generated_at=now,
-            window_days=window,
+            window_days=max(1, -(-span // timedelta(days=1))),
+            window_start=since,
+            window_end=until,
+            trend_bucket_seconds=int(step.total_seconds()),
             counts=counts,
             total_runs=len(current),
             total_runs_all_time=self.count_runs(RunFilter(workspace_id=workspace_id)),
             live_runs=live,
             recent_runs=recent,
             projects=self._project_health(workspace_id, current, previous, now, live, recent),
-            trend=self._trend(current, since, window),
-            top_failing_tests=self._top_failing(workspace_id, since),
-            flakiest_tests=self._flakiest(workspace_id, since),
+            # The line stops at now: past it there is nothing to have run yet,
+            # and an empty bucket would read as a quiet hour that never was.
+            trend=self._trend(current, since, min(until, now), step),
+            top_failing_tests=self._top_failing(workspace_id, since, until if bounded else None),
+            flakiest_tests=self._flakiest(workspace_id, since, until if bounded else None),
             filters=self.facets(workspace_id),
         )
 
@@ -961,7 +981,6 @@ class SqlRunRepository:
         live: Sequence[RunSummary],
         recent: Sequence[RunSummary],
     ) -> list[ProjectHealth]:
-        day_ago = now - timedelta(days=1)
         by_project: dict[str, list[Any]] = defaultdict(list)
         for row in current:
             by_project[row.project_key].append(row)
@@ -993,6 +1012,19 @@ class SqlRunRepository:
                 .group_by(RunRow.project_key)
             ).all()
         )
+        # "Runs in the last 24 hours" is about now, whatever the window is: an
+        # hour's window would undercount it and last week's would zero it, so
+        # it is its own count rather than a fold over the window's rows.
+        runs_24h: dict[str, int] = dict(
+            self._session.execute(
+                select(RunRow.project_key, sa.func.count())
+                .where(
+                    RunRow.workspace_id == workspace_id,
+                    self._at_or_after(now - timedelta(days=1)),
+                )
+                .group_by(RunRow.project_key)
+            ).all()
+        )
         live_by_project: dict[str, int] = defaultdict(int)
         for summary in live:
             live_by_project[summary.project_key] += 1
@@ -1017,9 +1049,7 @@ class SqlRunRepository:
                     project_key=project.key,
                     name=project.name,
                     team=project.default_team,
-                    runs_24h=sum(
-                        1 for row in runs if (row.started_at or row.created_at) >= day_ago
-                    ),
+                    runs_24h=int(runs_24h.get(project.key, 0)),
                     last_run_id=newest.id if newest else None,
                     last_run_at=newest.started_at if newest else None,
                     last_status=_run_status(newest.status) if newest else RunStatus.UNKNOWN,
@@ -1055,6 +1085,18 @@ class SqlRunRepository:
     #: chart that is 700 pixels wide — the bucket widens instead.
     MAX_TREND_BUCKETS = 60
 
+    #: Windows this short are bucketed by the clock rather than by the date:
+    #: a day-wide bucket would make an hour's trend one point.
+    CLOCK_TREND_LIMIT = timedelta(hours=48)
+
+    #: Clock bucket widths, in seconds, narrowest first. A window takes the
+    #: narrowest that keeps it to ``CLOCK_TREND_BUCKETS`` points or fewer — five
+    #: minutes for an hour, a quarter of an hour for six, an hour for a day —
+    #: and every one of them divides an hour or a day evenly, so the buckets
+    #: start on times a person would write down.
+    CLOCK_STEPS = (60, 120, 300, 600, 900, 1800, 3600, 7200)
+    CLOCK_TREND_BUCKETS = 24
+
     @classmethod
     def _bucket_days(cls, window: int) -> int:
         """How many days each trend bucket covers, for a window of ``window`` days."""
@@ -1063,24 +1105,59 @@ class SqlRunRepository:
         return -(-window // cls.MAX_TREND_BUCKETS)  # ceil, without importing math
 
     @classmethod
-    def _trend(cls, rows: Sequence[Any], since: datetime, window: int) -> list[TrendPoint]:
-        """Bucketed pass rate and duration percentiles across the window.
+    def trend_step(cls, span: timedelta) -> timedelta:
+        """How long each trend bucket is, for a window ``span`` long."""
+        if span <= cls.CLOCK_TREND_LIMIT:
+            seconds = max(1.0, span.total_seconds())
+            for step in cls.CLOCK_STEPS:
+                if seconds <= step * cls.CLOCK_TREND_BUCKETS:
+                    return timedelta(seconds=step)
+            return timedelta(seconds=cls.CLOCK_STEPS[-1])
+        return timedelta(days=cls._bucket_days(-(-span // timedelta(days=1))))
 
-        Buckets are labelled by their first day. A bucket with no runs is still
-        emitted, so the chart shows a genuine gap where nothing ran rather than
-        joining two distant points with a straight line that implies continuity.
+    @classmethod
+    def _trend(
+        cls, rows: Sequence[Any], since: datetime, end: datetime, step: timedelta
+    ) -> list[TrendPoint]:
+        """Bucketed pass rate and duration percentiles from ``since`` to ``end``.
+
+        Daily buckets are labelled by their first day (UTC) and clock buckets
+        by their first instant. A bucket with no runs is still emitted, so the
+        chart shows a genuine gap where nothing ran rather than joining two
+        distant points with a straight line that implies continuity.
         """
-        span = cls._bucket_days(window)
-        start = since.astimezone(UTC).date()
+        if end < since:
+            return []
+        if step < timedelta(days=1):
+            seconds = int(step.total_seconds())
+            first = int(since.timestamp()) // seconds
+            last = int(end.timestamp()) // seconds
+
+            def index_of(moment: datetime) -> int:
+                return int(moment.timestamp()) // seconds - first
+
+            def label(index: int) -> str:
+                start = datetime.fromtimestamp((first + index) * seconds, UTC)
+                return start.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            bucket_count = last - first + 1
+        else:
+            days = step.days
+            start_day = since.astimezone(UTC).date()
+
+            def index_of(moment: datetime) -> int:
+                return (moment.astimezone(UTC).date() - start_day).days // days
+
+            def label(index: int) -> str:
+                return (start_day + timedelta(days=index * days)).isoformat()
+
+            bucket_count = (end.astimezone(UTC).date() - start_day).days // days + 1
 
         buckets: dict[int, list[Any]] = defaultdict(list)
         for row in rows:
-            moment = row.started_at or row.created_at
-            offset = (moment.astimezone(UTC).date() - start).days
-            buckets[max(0, offset) // span].append(row)
+            buckets[max(0, index_of(row.started_at or row.created_at))].append(row)
 
         points: list[TrendPoint] = []
-        bucket_count = -(-(window + 1) // span)
         for index in range(bucket_count):
             bucket_rows = buckets.get(index, [])
             merged = RunCounts()
@@ -1091,7 +1168,7 @@ class SqlRunRepository:
             p95 = percentile(durations, 0.95)
             points.append(
                 TrendPoint(
-                    bucket=(start + timedelta(days=index * span)).isoformat(),
+                    bucket=label(index),
                     runs=len(bucket_rows),
                     pass_rate=merged.pass_rate,
                     failure_rate=merged.failure_rate,
@@ -1103,13 +1180,20 @@ class SqlRunRepository:
             )
         return points
 
-    def _top_failing(self, workspace_id: uuid.UUID, since: datetime) -> list[TestDetail]:
+    def _in_window(self, since: datetime, until: datetime | None) -> Any:
+        if until is None:
+            return self._at_or_after(since)
+        return sa.and_(self._at_or_after(since), self._at_or_before(until))
+
+    def _top_failing(
+        self, workspace_id: uuid.UUID, since: datetime, until: datetime | None = None
+    ) -> list[TestDetail]:
         rows = self._session.execute(
             select(TestCaseRow.test_id, sa.func.count().label("hits"))
             .join(RunRow, RunRow.id == TestCaseRow.run_id)
             .where(
                 RunRow.workspace_id == workspace_id,
-                self._at_or_after(since),
+                self._in_window(since, until),
                 TestCaseRow.status.in_(
                     (TestStatus.FAILED.value, TestStatus.ERROR.value, TestStatus.XPASSED.value)
                 ),
@@ -1120,13 +1204,15 @@ class SqlRunRepository:
         ).all()
         return self._details_for([row[0] for row in rows], workspace_id)
 
-    def _flakiest(self, workspace_id: uuid.UUID, since: datetime) -> list[TestDetail]:
+    def _flakiest(
+        self, workspace_id: uuid.UUID, since: datetime, until: datetime | None = None
+    ) -> list[TestDetail]:
         rows = self._session.execute(
             select(TestCaseRow.test_id, sa.func.count().label("hits"))
             .join(RunRow, RunRow.id == TestCaseRow.run_id)
             .where(
                 RunRow.workspace_id == workspace_id,
-                self._at_or_after(since),
+                self._in_window(since, until),
                 TestCaseRow.flaky.is_(True),
             )
             .group_by(TestCaseRow.test_id)

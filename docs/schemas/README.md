@@ -454,7 +454,9 @@ detail is the engineering drill-down and is allowed to be large.
 | Field | Type | Notes |
 |---|---|---|
 | `generated_at` | timestamp | |
-| `window_days` | int | |
+| `window_days` | int | The window's length in days, rounded up: a six-hour window is `1`. |
+| `window_start` `window_end` | timestamp or null | The window's exact bounds. `window_end` is `generated_at` unless the request named `until`. |
+| `trend_bucket_seconds` | int or null | How long each `trend` bucket is: `86400` for daily points, less for a window of two days or under, which is bucketed by the clock. |
 | `counts` | `RunCounts` | Merged across every run in the window, then the rates computed — so they are test-weighted. |
 | `total_runs` | int | Runs that started inside the window. |
 | `total_runs_all_time` | int | Regardless of the window. When this is non-zero and `total_runs` is zero, every run is older than the window, and the dashboard says so rather than showing an empty state that looks like an empty installation. |
@@ -465,9 +467,10 @@ detail is the engineering drill-down and is allowed to be large.
 | `top_failing_tests` `flakiest_tests` | list of `TestDetail` | Ten each. |
 | `filters` | object of string → list of string | Distinct values per facet, for the dropdowns. |
 
-`TrendPoint` is `bucket` (an ISO date), `runs`, `pass_rate`, `failure_rate`,
-`duration_ms_p50`, `duration_ms_p95`, `total` and `failed` (which is
-`failed + error`). Buckets with no runs are still emitted, so a chart shows a
+`TrendPoint` is `bucket` (where the bucket starts: an ISO date for daily
+buckets, an ISO datetime in UTC such as `2026-11-12T14:15:00Z` for clock
+buckets), `runs`, `pass_rate`, `failure_rate`, `duration_ms_p50`,
+`duration_ms_p95`, `total` and `failed` (which is `failed + error`). Buckets with no runs are still emitted, so a chart shows a
 genuine gap rather than joining two distant points with a line implying
 continuity, and the bucket *widens* past 60 points rather than the list growing
 — a year of daily points would be 366 objects in every overview response for a
@@ -487,6 +490,11 @@ current status from one overview response instead of one request per project,
 and it costs the response no query per project either. It arrived as an
 optional field under [the compatibility promise](#the-compatibility-promise) —
 a reader that does not know it ignores it — so `SCHEMA_VERSION` did not move.
+
+`window_start`, `window_end` and `trend_bucket_seconds` arrived the same way,
+with windows shorter than a day. A reader that predates them still gets
+`window_days`, and a `bucket` it cannot read as a date is one it was never sent
+before it asked for an hour's window.
 
 ### `ImportResult`
 

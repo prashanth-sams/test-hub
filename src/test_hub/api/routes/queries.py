@@ -13,6 +13,7 @@ other without translating it.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -21,10 +22,10 @@ from pydantic import AwareDatetime
 
 from test_hub.api.deps import Context, require_read
 from test_hub.api.schemas import ArtifactListResponse, ProjectListResponse, RunListResponse
-from test_hub.domain.models import OverviewSnapshot, RunDetail, TestDetail
+from test_hub.domain.models import OverviewSnapshot, RunDetail, TestDetail, utcnow
 from test_hub.domain.status import RunStatus
-from test_hub.errors import NotFoundError
-from test_hub.storage.base import RunFilter
+from test_hub.errors import NotFoundError, ValidationError
+from test_hub.storage.base import OverviewWindow, RunFilter
 
 router = APIRouter(tags=["query"], dependencies=[Depends(require_read)])
 
@@ -94,10 +95,65 @@ def build_filter(
 Filter = Annotated[RunFilter, Depends(build_filter)]
 
 
+#: The longest window an overview answers for, however it is asked for. The
+#: trend's buckets widen rather than multiply, but every run in the window is
+#: still read to fold its counts, and this endpoint has to stay cheap to poll.
+MAX_OVERVIEW_WINDOW = timedelta(days=366)
+
+_WINDOW_DAYS = "The window's length in days, ending now: 1 to 365. The default is 30."
+_WINDOW_HOURS = (
+    "The window's length in hours, ending now — for windows shorter than a day, or not a "
+    "whole number of days. One of `window_days` and `window_hours`, not both."
+)
+_SINCE = (
+    "Where a fixed window starts. ISO 8601 with an offset. Without `until`, the window "
+    "runs to now and keeps growing; it cannot also have a length."
+)
+_UNTIL = (
+    "Where the window ends. ISO 8601 with an offset. With `since`, a fixed range; alone, "
+    "the `window_days` or `window_hours` before it."
+)
+
+
+def overview_window(
+    window_days: int | None,
+    window_hours: int | None,
+    since: AwareDatetime | None,
+    until: AwareDatetime | None,
+) -> OverviewWindow:
+    """The window a request asked for, or a 422 that says why it cannot be one."""
+    if window_days is not None and window_hours is not None:
+        raise ValidationError("pass window_days or window_hours, not both")
+    if since is not None and (window_days is not None or window_hours is not None):
+        raise ValidationError(
+            "since fixes where the window starts, so it cannot also have a length: pass "
+            "since and until for a fixed range, or a length on its own"
+        )
+    if window_hours is not None:
+        length = timedelta(hours=window_hours)
+    else:
+        length = timedelta(days=window_days if window_days is not None else 30)
+    start = since.astimezone(UTC) if since is not None else None
+    end = until.astimezone(UTC) if until is not None else None
+    if start is not None:
+        if start >= (end if end is not None else utcnow()):
+            raise ValidationError(
+                "since must be before until" if end is not None else "since is in the future"
+            )
+        if (end if end is not None else utcnow()) - start > MAX_OVERVIEW_WINDOW:
+            raise ValidationError("an overview window can be at most 366 days long")
+    if length > MAX_OVERVIEW_WINDOW:
+        raise ValidationError("an overview window can be at most 366 days long")
+    return OverviewWindow(length=length, since=start, until=end)
+
+
 @router.get("/overview", response_model=OverviewSnapshot, summary="Portfolio overview")
 def get_overview(
     context: Context,
-    window_days: Annotated[int, Query(ge=1, le=365)] = 30,
+    window_days: Annotated[int | None, Query(ge=1, le=365, description=_WINDOW_DAYS)] = None,
+    window_hours: Annotated[int | None, Query(ge=1, le=8784, description=_WINDOW_HOURS)] = None,
+    since: Annotated[AwareDatetime | None, Query(description=_SINCE)] = None,
+    until: Annotated[AwareDatetime | None, Query(description=_UNTIL)] = None,
     after: Annotated[
         int | None,
         Query(
@@ -109,10 +165,11 @@ def get_overview(
     ] = None,
 ) -> OverviewSnapshot:
     """Totals, trends, project health, live runs and the worst offenders."""
+    window = overview_window(window_days, window_hours, since, until)
 
     def compute() -> OverviewSnapshot:
         with context.uow_factory(read_only=True) as uow:
-            return uow.runs.overview(context.workspace_id, window_days=window_days)
+            return uow.runs.overview(context.workspace_id, window=window)
 
     # Every open dashboard asks for this the moment a result lands. Computed
     # per request, a burst of results piled requests up faster than they
@@ -120,7 +177,7 @@ def get_overview(
     # one computation per change however many dashboards are watching.
     current = context.bus.latest_cursor(context.workspace_id)
     return context.overviews.get(
-        window_days,
+        window,
         need=current if after is None else after,
         current=current,
         compute=compute,

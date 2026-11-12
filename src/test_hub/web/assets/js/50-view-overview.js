@@ -27,6 +27,7 @@
   var util = TestHub.util;
   var ui = TestHub.ui;
   var charts = TestHub.charts;
+  var windows = TestHub.windows;
   var el = util.el;
 
   TestHub.views = TestHub.views || {};
@@ -131,7 +132,7 @@
       }
       var idle = projects.length - entries.length;
       var text = 'Newest run per project' + (idle > 0
-        ? ' · ' + util.formatNumber(idle) + ' without a run in ' + overview.window_days + ' days'
+        ? ' · ' + util.formatNumber(idle) + ' without a run ' + windows.during(windows.of(overview))
         : '');
       if (hint.textContent !== text) { hint.textContent = text; }
     }
@@ -390,9 +391,11 @@
       // for the same corner — one number per level of detail.
       var live = overview.live_runs || [];
       var failing = (counts.failed || 0) + (counts.error || 0);
+      var win = windows.of(overview);
+      var step = windows.bucketWords(overview.trend_bucket_seconds);
       var pills = [
         pill('clock', util.formatNumber(overview.total_runs) + ' ' +
-          util.pluralize(overview.total_runs, 'run') + ' in ' + overview.window_days + ' days'),
+          util.pluralize(overview.total_runs, 'run') + ' ' + windows.briefly(win)),
         pill('grid', util.formatNumber((overview.projects || []).length) + ' ' +
           util.pluralize((overview.projects || []).length, 'project')),
         // Not the pass rate: the donut is already saying that, two inches to
@@ -400,16 +403,16 @@
         pill(failing ? 'alert' : 'check', util.formatNumber(failing) + ' failed or errored')
       ];
       if (live.length) {
-        pills.push(el('span', { className: 'hero__pill' }, [
-          ui.liveBadge(),
-          el('span', { text: util.formatNumber(live.length) + ' in flight' })
-        ]));
+        pills.push(el('span', {
+          className: 'hero__pill hero__pill--live',
+          text: util.formatNumber(live.length) + ' in flight'
+        }));
       }
 
       return el('div', { className: 'grid grid--2' }, [
         ui.card({
           title: 'Health',
-          hint: 'Last ' + overview.window_days + ' days',
+          hint: windows.title(win),
           body: el('div', { className: 'stack--sm' }, [
             el('div', { className: 'hero' }, [
               el('div', { className: 'hero__figure' }, [
@@ -431,16 +434,17 @@
           ])
         }),
         ui.card({
-          title: 'Volume by day',
+          title: 'Volume ' + step.by,
           hint: util.formatNumber(overview.total_runs) + ' runs',
           body: chart({
             kind: 'stackedBar',
-            title: 'Tests executed per day',
-            description: 'Failed and errored tests stacked against everything else, per day.',
+            title: 'Tests executed ' + step.per,
+            description: 'Failed and errored tests stacked against everything else, ' +
+              step.per + '.',
             height: 196,
             buckets: (overview.trend || []).map(function (point) {
               return {
-                label: util.formatDay(point.bucket),
+                label: windows.bucketLabel(point.bucket, overview.trend_bucket_seconds),
                 values: {
                   rest: Math.max(0, (point.total || 0) - (point.failed || 0)),
                   failed: point.failed || 0
@@ -458,75 +462,80 @@
     }
 
     function trendRow(overview) {
-      var points = (overview.trend || []).map(function (point) {
+      var seconds = overview.trend_bucket_seconds;
+      var step = windows.bucketWords(seconds);
+      var per = step.per.charAt(0).toUpperCase() + step.per.slice(1);
+      var trend = overview.trend || [];
+
+      function counted(point) {
+        return [
+          { value: util.formatNumber(point.total || 0), label: util.pluralize(point.total || 0, 'test') },
+          { value: util.formatNumber(point.failed || 0), label: 'failed or errored' },
+          { value: util.formatNumber(point.runs || 0), label: util.pluralize(point.runs || 0, 'run') }
+        ];
+      }
+
+      var rates = trend.map(function (point) {
         return {
-          label: util.formatDay(point.bucket),
-          values: {
-            pass_rate: typeof point.pass_rate === 'number' ? point.pass_rate : null,
-            failure_rate: typeof point.failure_rate === 'number' ? point.failure_rate : null,
-            p50: typeof point.duration_ms_p50 === 'number' ? point.duration_ms_p50 : null,
-            p95: typeof point.duration_ms_p95 === 'number' ? point.duration_ms_p95 : null
-          }
+          label: windows.bucketLabel(point.bucket, seconds),
+          value: typeof point.pass_rate === 'number' ? point.pass_rate : null,
+          rows: counted(point),
+          cells: [
+            util.formatNumber(point.total || 0),
+            util.formatNumber(point.failed || 0),
+            util.formatNumber(point.runs || 0)
+          ]
+        };
+      });
+      var durations = trend.map(function (point) {
+        return {
+          label: windows.bucketLabel(point.bucket, seconds),
+          low: typeof point.duration_ms_p50 === 'number' ? point.duration_ms_p50 : null,
+          high: typeof point.duration_ms_p95 === 'number' ? point.duration_ms_p95 : null,
+          rows: [{
+            value: util.formatNumber(point.runs || 0),
+            label: util.pluralize(point.runs || 0, 'timed run')
+          }]
         };
       });
 
+      // The failure rate is not drawn beside the pass rate: over executed
+      // tests the two always sum to 100, so a second series would only be the
+      // first one upside down. The tooltip and the table carry the counts.
       return el('div', { className: 'grid grid--2' }, [
         ui.card({
           title: 'Pass rate trend',
-          hint: 'Days with no runs are gaps, not zeroes',
-          body: [
-            chart({
-              kind: 'trend',
-              title: 'Pass rate by day',
-              description: 'Pass rate and failure rate per day over the selected window.',
-              points: points,
-              yMin: 0,
-              yMax: 100,
-              formatY: function (value) { return Math.round(value) + '%'; },
-              series: [
-                {
-                  key: 'pass_rate', label: 'Pass rate', color: '--status-passed', area: true,
-                  format: function (value) { return util.formatPercent(value, 1); }
-                },
-                {
-                  key: 'failure_rate', label: 'Failure rate', color: '--status-failed', dashed: true,
-                  format: function (value) { return util.formatPercent(value, 1); }
-                }
-              ],
-              emptyMessage: 'No completed runs in this window'
-            }),
-            el('div', { className: 'legend' }, [
-              legendItem('passed', 'Pass rate'),
-              legendItem('failed', 'Failure rate')
-            ])
-          ]
+          hint: per + ' \u00b7 dashed line is the whole window',
+          body: chart({
+            kind: 'rateColumns',
+            title: 'Pass rate ' + step.by,
+            description: 'Pass rate ' + step.per + ' across the selected window, against the ' +
+              'window\'s overall pass rate of ' + util.formatPercent(overview.counts.pass_rate, 1) + '.',
+            buckets: rates,
+            reference: overview.counts.pass_rate,
+            referenceLabel: 'overall',
+            valueLabel: 'pass rate',
+            extraHeaders: ['Tests', 'Failed or errored', 'Runs'],
+            height: 220,
+            emptyMessage: 'No completed runs in this window'
+          })
         }),
         ui.card({
           title: 'Run duration',
-          hint: 'Wall clock, p50 and p95',
+          hint: 'Wall clock, ' + step.per,
           body: [
             chart({
-              kind: 'trend',
-              title: 'Run duration by day',
-              description: 'Median and 95th percentile wall-clock run duration per day.',
-              points: points,
-              yFloor: 0,
-              formatY: function (value) { return util.formatDuration(value); },
-              series: [
-                {
-                  key: 'p50', label: 'p50', color: '--chart-line', area: true,
-                  format: util.formatDuration
-                },
-                {
-                  key: 'p95', label: 'p95', color: '--chart-line-alt', dashed: true,
-                  format: util.formatDuration
-                }
-              ],
+              kind: 'rangeBars',
+              title: 'Run duration ' + step.by,
+              description: 'Median and 95th percentile wall-clock run duration ' + step.per +
+                ': the dot is the median, the bar runs from the median to the 95th percentile.',
+              buckets: durations,
+              height: 196,
               emptyMessage: 'No timed runs in this window'
             }),
             el('div', { className: 'legend' }, [
-              legendItem('line', 'p50'),
-              legendItem('line-alt', 'p95')
+              legendItem('median', 'Median (p50)'),
+              legendItem('spread', 'p50 to p95')
             ])
           ]
         })

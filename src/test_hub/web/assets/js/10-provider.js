@@ -35,6 +35,7 @@
 
   var TestHub = window.TestHub = window.TestHub || {};
   var util = TestHub.util;
+  var windows = TestHub.windows;
 
   var STATUSES = ['connecting', 'live', 'reconnecting', 'offline'];
 
@@ -167,11 +168,12 @@
       ].join(' ').toLowerCase();
       if (haystack.indexOf(needle) < 0) { return false; }
     }
-    if (clean.window_days) {
-      var started = util.toDate(summary.started_at);
+    if (clean.window) {
+      var started = util.toDate(summary.started_at || summary.created_at);
       if (started) {
-        var cutoff = Date.now() - Number(clean.window_days) * 86400000;
-        if (started.getTime() < cutoff) { return false; }
+        var span = windows.bounds(windows.parse(clean.window));
+        if (started.getTime() < span.start) { return false; }
+        if (span.fixedEnd && started.getTime() > span.end) { return false; }
       }
     }
     return true;
@@ -194,29 +196,55 @@
 
   /* ----------------------------------------------------------- aggregation */
 
-  function dayKey(value) {
-    var date = util.toDate(value);
-    if (!date) { return null; }
-    return date.toISOString().slice(0, 10);
-  }
-
   /**
-   * Bucket runs by UTC day into TrendPoint-shaped rows.
+   * Bucket runs into TrendPoint-shaped rows from `span.start` to `span.end`
+   * (ms), `span.step` seconds each — SqlRunRepository._trend, transcribed, so
+   * a filtered slice charts like the server's whole-workspace answer: clock
+   * buckets start on multiples of the step, daily ones on UTC dates, and every
+   * bucket is emitted, so a quiet weekend is a gap in the line rather than a
+   * straight segment pretending two Fridays were adjacent.
    *
    * Pass rate per bucket is computed from the bucket's *summed* counts rather
    * than by averaging the runs' own pass rates: a 4000-test run and a 3-test
    * run are not equal votes on the health of a day.
    */
-  function buildTrend(summaries, windowDays) {
-    var byDay = {};
+  function buildTrend(summaries, span) {
+    var DAY = 86400000;
+    var step = Math.max(60, Number(span.step) || 86400);
+    var end = Math.min(span.end, Date.now());
+    if (!(end >= span.start)) { return []; }
+    var count;
+    var indexOf;
+    var labelOf;
+    if (step < 86400) {
+      var stepMs = step * 1000;
+      var first = Math.floor(span.start / stepMs);
+      count = Math.floor(end / stepMs) - first + 1;
+      indexOf = function (ms) { return Math.floor(ms / stepMs) - first; };
+      labelOf = function (index) {
+        return new Date((first + index) * stepMs).toISOString().slice(0, 19) + 'Z';
+      };
+    } else {
+      var days = Math.round(step / 86400);
+      var startDay = Math.floor(span.start / DAY);
+      count = Math.floor((Math.floor(end / DAY) - startDay) / days) + 1;
+      indexOf = function (ms) { return Math.floor((Math.floor(ms / DAY) - startDay) / days); };
+      labelOf = function (index) {
+        return new Date((startDay + index * days) * DAY).toISOString().slice(0, 10);
+      };
+    }
+
+    var buckets = [];
     var i;
+    for (i = 0; i < count; i++) {
+      buckets.push({ runs: 0, counts: emptyCounts(), durations: [] });
+    }
     for (i = 0; i < summaries.length; i++) {
-      var key = dayKey(summaries[i].started_at);
-      if (!key) { continue; }
-      if (!byDay[key]) {
-        byDay[key] = { bucket: key, runs: 0, counts: emptyCounts(), durations: [] };
-      }
-      var bucket = byDay[key];
+      var started = util.toDate(summaries[i].started_at || summaries[i].created_at);
+      if (!started) { continue; }
+      var index = Math.max(0, indexOf(started.getTime()));
+      if (index >= count) { continue; }
+      var bucket = buckets[index];
       bucket.runs += 1;
       bucket.counts = mergeCounts(bucket.counts, summaries[i].counts);
       if (typeof summaries[i].duration_ms === 'number') {
@@ -224,38 +252,24 @@
       }
     }
 
-    var days = Object.keys(byDay).sort();
-    // Fill the gaps so a quiet weekend is a gap in the line, not a straight
-    // segment pretending two Fridays were adjacent.
-    var filled = [];
-    if (days.length) {
-      var cursor = new Date(days[0] + 'T00:00:00Z');
-      var last = new Date(days[days.length - 1] + 'T00:00:00Z');
-      var guard = 0;
-      var limit = Math.max(Number(windowDays) || 30, 1) + 400;
-      while (cursor.getTime() <= last.getTime() && guard < limit) {
-        var key2 = cursor.toISOString().slice(0, 10);
-        var found = byDay[key2];
-        filled.push(found
-          ? {
-            bucket: key2,
-            runs: found.runs,
-            pass_rate: found.counts.pass_rate,
-            failure_rate: found.counts.failure_rate,
-            duration_ms_p50: roundOrNull(percentile(found.durations, 0.5)),
-            duration_ms_p95: roundOrNull(percentile(found.durations, 0.95)),
-            total: found.counts.total,
-            failed: found.counts.failed + found.counts.error
-          }
-          : {
-            bucket: key2, runs: 0, pass_rate: null, failure_rate: null,
-            duration_ms_p50: null, duration_ms_p95: null, total: 0, failed: 0
-          });
-        cursor = new Date(cursor.getTime() + 86400000);
-        guard += 1;
+    return buckets.map(function (found, position) {
+      if (!found.runs) {
+        return {
+          bucket: labelOf(position), runs: 0, pass_rate: null, failure_rate: null,
+          duration_ms_p50: null, duration_ms_p95: null, total: 0, failed: 0
+        };
       }
-    }
-    return filled;
+      return {
+        bucket: labelOf(position),
+        runs: found.runs,
+        pass_rate: found.counts.pass_rate,
+        failure_rate: found.counts.failure_rate,
+        duration_ms_p50: roundOrNull(percentile(found.durations, 0.5)),
+        duration_ms_p95: roundOrNull(percentile(found.durations, 0.95)),
+        total: found.counts.total,
+        failed: found.counts.failed + found.counts.error
+      };
+    });
   }
 
   function roundOrNull(value) {
@@ -374,7 +388,6 @@
     matchesFilters: matchesFilters,
     normalizeSummary: normalizeSummary,
     buildTrend: buildTrend,
-    buildProjectHealth: buildProjectHealth,
-    dayKey: dayKey
+    buildProjectHealth: buildProjectHealth
   };
 })(window);

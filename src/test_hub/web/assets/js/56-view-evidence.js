@@ -35,6 +35,7 @@
   var TestHub = window.TestHub = window.TestHub || {};
   var util = TestHub.util;
   var ui = TestHub.ui;
+  var windows = TestHub.windows;
   var el = util.el;
 
   TestHub.views = TestHub.views || {};
@@ -211,7 +212,7 @@
 
         var details = state.analytics.runs || [];
         if (!(state.analytics.summaries || []).length) {
-          subtitle.textContent = 'Across the last ' + state.overview.window_days + ' days.';
+          subtitle.textContent = windows.across(windows.of(state.overview)) + '.';
           util.replace(content, ui.card({
             title: spec.title,
             icon: spec.icon,

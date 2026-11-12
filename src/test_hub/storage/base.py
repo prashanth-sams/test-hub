@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncIterator, Collection, Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import IO, Any, Protocol, runtime_checkable
 
 from test_hub.domain.events import DomainEvent
@@ -37,6 +37,7 @@ __all__ = [
     "ArtifactSweep",
     "EventBus",
     "EventRepository",
+    "OverviewWindow",
     "RunFilter",
     "RunRepository",
     "StoredArtifact",
@@ -89,6 +90,28 @@ class RunFilter:
             f"{self.limit}:{self.offset}",
         ]
         return "|".join(parts)
+
+
+@dataclass(frozen=True, slots=True)
+class OverviewWindow:
+    """The stretch of time an overview covers.
+
+    Either a length ending now — the dashboard's 1h … 90d — or a fixed range.
+    ``since`` alone is a range that ends now and keeps growing; ``until``
+    alone is ``length`` ending there. Frozen, so it can key a shared
+    computation (``test_hub.service.coalesce``): two requests for the same
+    window are the same question.
+    """
+
+    length: timedelta = timedelta(days=30)
+    since: datetime | None = None
+    until: datetime | None = None
+
+    def bounds(self, now: datetime) -> tuple[datetime, datetime]:
+        """The window's first and last instant, for a clock reading ``now``."""
+        end = self.until if self.until is not None else now
+        start = self.since if self.since is not None else end - self.length
+        return start, end
 
 
 @dataclass(slots=True)
@@ -161,7 +184,13 @@ class RunRepository(Protocol):
 
     def count_runs(self, run_filter: RunFilter) -> int: ...
 
-    def overview(self, workspace_id: uuid.UUID, *, window_days: int = 30) -> OverviewSnapshot: ...
+    def overview(
+        self,
+        workspace_id: uuid.UUID,
+        *,
+        window_days: int = 30,
+        window: OverviewWindow | None = None,
+    ) -> OverviewSnapshot: ...
 
     def get_test_detail(
         self, test_id: uuid.UUID, *, workspace_id: uuid.UUID, history: int = 30

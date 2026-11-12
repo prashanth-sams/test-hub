@@ -81,6 +81,7 @@ class Coalescer(Generic[T]):
         need = min(need, current)
         now = time.monotonic()
         with self._lock:
+            self._forget_stale(now)
             computation = self._latest.get(key)
             if computation is not None and self._serves(computation, need, now, reuse_finished):
                 shared: _Computation[T] | None = computation
@@ -104,6 +105,23 @@ class Coalescer(Generic[T]):
             computation.finished_at = time.monotonic()
             computation.done.set()
         return computation.result
+
+    def _forget_stale(self, now: float) -> None:
+        """Drop results too old to serve anyone. Called with the lock held.
+
+        A key is whatever the caller asks about — for the overview, its window,
+        and a custom range is a new key every time somebody picks one. A result
+        past ``ttl`` can never be handed out again, so keeping it would only be
+        a slow leak of every range anyone ever asked for.
+        """
+        stale = [
+            key
+            for key, computation in self._latest.items()
+            if computation.finished_at is not None
+            and (computation.failed or now - computation.finished_at > self._ttl)
+        ]
+        for key in stale:
+            del self._latest[key]
 
     def _serves(
         self, computation: _Computation[T], need: int, now: float, reuse_finished: bool

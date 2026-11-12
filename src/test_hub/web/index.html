@@ -26,6 +26,7 @@
 <link rel="stylesheet" href="assets/css/app.css">
 
 <script src="assets/js/00-util.js"></script>
+<script src="assets/js/05-windows.js"></script>
 <script src="assets/js/10-provider.js"></script>
 <script src="assets/js/12-live-provider.js"></script>
 <script src="assets/js/20-charts.js"></script>
@@ -107,12 +108,21 @@
     <header class="topbar">
       <div class="container topbar__inner">
         <div class="topbar__meta">
-          <span class="updated" id="th-updated"></span>
-
-          <span class="conn" id="th-conn" data-status="connecting" role="status" aria-live="polite">
-            <span class="conn__dot" aria-hidden="true"></span>
-            <span id="th-conn-label">Connecting</span>
+          <!-- The connection status: a pill in a slot as wide as its longest
+               label, so a dropped stream changes the pill and nothing else.
+               First in the row, so the room it keeps for "Reconnecting" is
+               empty header to its left rather than a gap beside the clock.
+               90-app.js lays the labels into the slot and hangs the details —
+               and "Retry now" — off the pill in a popover. -->
+          <span class="conn-slot" id="th-conn-slot">
+            <button class="conn" id="th-conn" type="button" data-status="connecting">
+              <span class="conn__dot" aria-hidden="true"></span>
+              <span id="th-conn-label">Connecting</span>
+            </button>
           </span>
+          <span class="sr-only" id="th-conn-announce" role="status" aria-live="polite"></span>
+
+          <span class="updated" id="th-updated"></span>
 
           <!-- The settings menu mounts here. Its trigger is built in JS rather
                than written out below, because the panel it controls has to be
@@ -126,7 +136,6 @@
 
     <main class="main">
       <div class="container">
-        <div id="th-banner"></div>
         <div id="th-view" tabindex="-1">
           <noscript>
             <div class="banner banner--warn">

@@ -34,6 +34,7 @@
     back: ['M20 12H4', 'm10 6-6 6 6 6'],
     filter: ['M3.5 5.5h17l-6.5 7.6V19l-4 2v-7.9Z'],
     clock: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7.2V12l3 1.8'],
+    calendar: ['M5.5 5h13A1.5 1.5 0 0 1 20 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5Z', 'M4 9.6h16', 'M8.4 3.2v3.6M15.6 3.2v3.6', 'M8 13.2h.01M12 13.2h.01M16 13.2h.01M8 16.6h.01M12 16.6h.01'],
     gear: ['M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z', 'M19.4 14.4a1.5 1.5 0 0 0 .3 1.7l.1.1a1.9 1.9 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-2.6 1v.2a1.9 1.9 0 1 1-3.8 0v-.1a1.5 1.5 0 0 0-2.6-1l-.1.1a1.9 1.9 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0-1-2.6h-.2a1.9 1.9 0 1 1 0-3.8h.1a1.5 1.5 0 0 0 1-2.6l-.1-.1a1.9 1.9 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 1.7.3h.1a1.5 1.5 0 0 0 .9-1.4v-.2a1.9 1.9 0 1 1 3.8 0v.1a1.5 1.5 0 0 0 2.6 1l.1-.1a1.9 1.9 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0-.3 1.7v.1a1.5 1.5 0 0 0 1.4.9h.2a1.9 1.9 0 1 1 0 3.8h-.1a1.5 1.5 0 0 0-1.4.9Z'],
     check: ['m5 12.8 4.4 4.4L19 7.6'],
     monitor: ['M4.5 4.8h15a1.5 1.5 0 0 1 1.5 1.5v8.4a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 14.7V6.3a1.5 1.5 0 0 1 1.5-1.5Z', 'M9 19.2h6M12 16.2v3'],
@@ -599,7 +600,15 @@
       className: 'select',
       attrs: { id: spec.id, 'aria-label': spec.label },
       on: {
-        change: function (event) { spec.onChange(spec.key, event.target.value); }
+        change: function (event) {
+          // Picked with the pointer, the choice is made and the control is
+          // done: it lets go of focus rather than sitting there outlined. A
+          // keyboard user keeps focus where they are.
+          if (select.getAttribute('data-pointer') === 'true') { select.blur(); }
+          spec.onChange(spec.key, event.target.value);
+        },
+        pointerdown: function () { select.setAttribute('data-pointer', 'true'); },
+        keydown: function () { select.removeAttribute('data-pointer'); }
       }
     });
     var options = spec.options || [];
@@ -614,7 +623,9 @@
       }
       select.appendChild(node);
     }
-    return el('div', { className: 'field' }, [
+    // Inline: the label sits inside the control, before the value — "Team
+    // All" — so a filter bar is one line of controls rather than two.
+    return el('div', { className: 'field' + (spec.inline ? ' field--inline' : '') }, [
       el('label', { className: 'field__label', attrs: { for: spec.id }, text: spec.label }),
       select
     ]);
@@ -635,8 +646,11 @@
       if (event.key === 'Enter') { spec.onChange(spec.key, input.value); }
       if (event.key === 'Escape') { input.value = ''; spec.onChange(spec.key, ''); }
     });
-    return el('div', { className: 'field field--grow' }, [
-      el('label', { className: 'field__label', attrs: { for: spec.id }, text: spec.label }),
+    return el('div', { className: 'field field--grow' + (spec.inline ? ' field--search' : '') }, [
+      el('label', {
+        className: spec.inline ? 'field__label sr-only' : 'field__label',
+        attrs: { for: spec.id }, text: spec.label
+      }),
       input
     ]);
   }
@@ -690,6 +704,458 @@
     };
   }
 
+  /* -------------------------------------------------------- window picker */
+
+  /**
+   * The Window control: the preset lengths as one segmented control, and at
+   * its end a small calendar button that opens a range picker.
+   *
+   * The presets answer "lately"; the calendar answers "that week". While a
+   * range is set no preset is pressed and the button says the range instead,
+   * so the control always shows the window the page is reading — and pressing
+   * a preset is how a range is let go of, with nothing else to find.
+   */
+  function windowPicker(spec) {
+    var windows = TestHub.windows;
+    var uid = Math.random().toString(36).slice(2, 8);
+    var current = windows.parse(spec.value);
+
+    function choose(value) {
+      if (pop.isOpen()) { pop.close(); }
+      spec.onChange(value);
+    }
+
+    var presetButtons = [];
+    var presets = el('div', {
+      className: 'segmented',
+      attrs: { role: 'group', 'aria-label': spec.label + ' presets' }
+    });
+    for (var i = 0; i < windows.PRESETS.length; i++) {
+      (function (length) {
+        var button = el('button', {
+          attrs: { type: 'button', 'aria-pressed': 'false', title: 'Last ' + length.words },
+          dataset: { value: length.key },
+          text: length.key,
+          on: { click: function () { choose(length.key); } }
+        });
+        presetButtons.push(button);
+        presets.appendChild(button);
+      })(windows.PRESETS[i]);
+    }
+
+    var rangeText = el('span', { className: 'winpick__range' });
+    var trigger = el('button', {
+      className: 'winpick__custom',
+      attrs: { type: 'button' }
+    }, [icon('calendar', 15), rangeText]);
+
+    var picker = rangePicker({
+      uid: uid,
+      onApply: function (value) {
+        pop.close({ restoreFocus: true });
+        spec.onChange(value);
+      },
+      onCancel: function () { pop.close({ restoreFocus: true }); }
+    });
+
+    // From the button's left edge: the control sits at the start of the bar,
+    // and hanging leftwards the panel covered the rail.
+    var pop = popover({
+      trigger: trigger,
+      label: 'Custom range',
+      className: 'winpick__panel',
+      align: 'start',
+      initialFocus: picker.focusTarget,
+      onOpen: function () { picker.fill(current); },
+      body: picker.el
+    });
+
+    var group = el('div', {
+      className: 'winpick',
+      attrs: { role: 'group', 'aria-label': spec.label }
+    }, [presets, pop.el]);
+
+    function sync(value) {
+      current = windows.parse(value);
+      for (var k = 0; k < presetButtons.length; k++) {
+        var pressed = current.kind === 'length' && presetButtons[k].dataset.value === current.value;
+        presetButtons[k].setAttribute('aria-pressed', String(pressed));
+      }
+      // A preset says itself; anything else — a range, or a length typed into
+      // the URL that no button offers — is said by the calendar button.
+      var custom = !current.preset;
+      var text = custom ? windows.label(current) : '';
+      trigger.setAttribute('data-active', String(custom));
+      trigger.setAttribute('aria-label', custom ? 'Custom range: ' + text : 'Custom range');
+      trigger.setAttribute('title', custom ? text + ' — change the range' : 'Pick a custom range');
+      if (rangeText.textContent !== text) { rangeText.textContent = text; }
+      rangeText.hidden = !custom;
+    }
+    sync(spec.value);
+
+    // No visible label: the buttons say what they choose, and a compact bar
+    // has no room for a word above every control. The group keeps the name.
+    return { el: el('div', { className: 'field field--window' }, group), sync: sync };
+  }
+
+  /**
+   * The range picker: quick ranges as a list, one month calendar beside it,
+   * and the picked ends — with optional times of day — under both.
+   *
+   * Click the first day, then the last; the days between fill in, and while
+   * the second is being chosen the pointer previews it. Nothing applies until
+   * Apply, except a quick range, which is a whole answer in one click. The
+   * grid is keyboard-driven the way a date grid is expected to be: arrows by
+   * day and week, Page Up/Down by month, Home/End to the week's ends, Enter
+   * or Space to pick. Days after today, or before the API's 366-day reach,
+   * cannot be picked.
+   */
+  function rangePicker(spec) {
+    var windows = TestHub.windows;
+    var cal = windows.calendar;
+    var names = cal.weekdays();
+    var state = { start: null, end: null, picking: 'start', hover: null, view: null, focus: null };
+    var today = cal.startOfDay(new Date());
+    var earliest = cal.addDays(today, -365);
+    var current = windows.parse('');
+    var cells = [];
+
+    var presetList = el('div', {
+      className: 'rangepick__presets',
+      attrs: { role: 'group', 'aria-label': 'Quick ranges' }
+    });
+
+    var titleId = 'rangepick-title-' + spec.uid;
+    var title = el('div', { className: 'cal__title', attrs: { id: titleId, 'aria-live': 'polite' } });
+    var prev = el('button', {
+      className: 'cal__nav cal__nav--prev',
+      attrs: { type: 'button', 'aria-label': 'Previous month' },
+      on: { click: function () { page(-1); } }
+    }, icon('chevron', 16));
+    var next = el('button', {
+      className: 'cal__nav',
+      attrs: { type: 'button', 'aria-label': 'Next month' },
+      on: { click: function () { page(1); } }
+    }, icon('chevron', 16));
+    var grid = el('div', { className: 'cal__grid', attrs: { role: 'grid', 'aria-labelledby': titleId } });
+
+    function end(which, label) {
+      var value = el('span', { className: 'rangepick__value' });
+      var time = el('input', {
+        className: 'rangepick__time',
+        attrs: { type: 'time', step: '60', 'aria-label': label + ' time (optional)' }
+      });
+      var button = el('button', {
+        className: 'rangepick__date',
+        attrs: { type: 'button', 'aria-label': 'Change the ' + label.toLowerCase() + ' day' },
+        on: {
+          click: function () {
+            state.picking = which;
+            paint();
+            focusDay(state[which] || state.start || today);
+          }
+        }
+      }, [el('span', { className: 'rangepick__label', text: label }), value]);
+      time.addEventListener('input', function () { paint(); });
+      return { el: el('div', { className: 'rangepick__end' }, [button, time]), value: value, time: time };
+    }
+
+    var first = end('start', 'Start');
+    var last = end('end', 'End');
+    var summary = el('span', { className: 'rangepick__summary' });
+    var zone = el('span', { className: 'rangepick__zone' });
+    var problem = el('p', { className: 'rangepick__problem', attrs: { role: 'alert' } });
+    problem.hidden = true;
+    var apply = el('button', {
+      className: 'btn btn--primary btn--sm',
+      attrs: { type: 'button' },
+      text: 'Apply',
+      on: { click: commit }
+    });
+
+    var root = el('div', { className: 'rangepick' }, [
+      el('div', { className: 'rangepick__body' }, [
+        presetList,
+        el('div', { className: 'cal' }, [el('div', { className: 'cal__head' }, [prev, title, next]), grid])
+      ]),
+      el('div', { className: 'rangepick__foot' }, [
+        el('div', { className: 'rangepick__ends' }, [
+          first.el,
+          el('span', { className: 'rangepick__arrow', attrs: { 'aria-hidden': 'true' }, text: '→' }),
+          last.el
+        ]),
+        problem,
+        el('div', { className: 'rangepick__actions' }, [
+          el('div', { className: 'rangepick__meta' }, [summary, zone]),
+          el('div', { className: 'rangepick__buttons' }, [
+            el('button', {
+              className: 'btn btn--ghost btn--sm', attrs: { type: 'button' }, text: 'Cancel',
+              on: { click: function () { spec.onCancel(); } }
+            }),
+            apply
+          ])
+        ])
+      ])
+    ]);
+
+    /* ---------------------------------------------------------- geometry */
+
+    function clamp(day) {
+      if (day.getTime() < earliest.getTime()) { return earliest; }
+      if (day.getTime() > today.getTime()) { return today; }
+      return day;
+    }
+
+    function selectable(day) {
+      return day.getTime() >= earliest.getTime() && day.getTime() <= today.getTime();
+    }
+
+    function monthOf(day) { return new Date(day.getFullYear(), day.getMonth(), 1); }
+
+    function cellFor(day) {
+      for (var c = 0; c < cells.length; c++) {
+        if (cal.sameDay(cells[c].date, day)) { return cells[c].button; }
+      }
+      return null;
+    }
+
+    function focusDay(day) {
+      var target = clamp(day);
+      state.focus = target;
+      if (monthOf(target).getTime() !== state.view.getTime()) {
+        state.view = monthOf(target);
+        build();
+      } else {
+        paint();
+      }
+      var button = cellFor(target);
+      if (button) { button.focus(); }
+    }
+
+    function page(direction) {
+      state.view = cal.addMonths(state.view, direction);
+      build();
+    }
+
+    /* ------------------------------------------------------------ render */
+
+    function build() {
+      util.clear(grid);
+      cells = [];
+      title.textContent = cal.monthTitle(state.view);
+      grid.appendChild(el('div', { className: 'cal__row', attrs: { role: 'row' } }, names.map(function (name) {
+        return el('span', {
+          className: 'cal__dow', attrs: { role: 'columnheader', title: name.long }, text: name.short
+        });
+      })));
+      var days = cal.monthGrid(state.view);
+      for (var r = 0; r < 6; r++) {
+        var row = el('div', { className: 'cal__row', attrs: { role: 'row' } });
+        for (var c = 0; c < 7; c++) {
+          var day = days[r * 7 + c];
+          if (!day) {
+            row.appendChild(el('span', { className: 'cal__blank', attrs: { role: 'gridcell' } }));
+            continue;
+          }
+          var button = el('button', {
+            className: 'cal__day',
+            attrs: { type: 'button', role: 'gridcell', tabindex: '-1', 'aria-label': cal.longDate(day) }
+          }, el('span', { className: 'cal__num', text: String(day.getDate()) }));
+          cells.push({ date: day, button: button });
+          row.appendChild(button);
+        }
+        grid.appendChild(row);
+      }
+      // Paging stops where picking would: the month of today, and the month of
+      // the earliest day the API will answer for.
+      prev.disabled = cal.addMonths(state.view, 0).getTime() <= monthOf(earliest).getTime();
+      next.disabled = cal.addMonths(state.view, 1).getTime() > today.getTime();
+      paint();
+    }
+
+    function paint() {
+      var lo = state.start;
+      var hi = state.end;
+      var previewing = false;
+      if (state.picking === 'end' && lo && state.hover && !cal.sameDay(state.hover, lo)) {
+        previewing = true;
+        hi = state.hover;
+      }
+      if (lo && hi && hi.getTime() < lo.getTime()) {
+        var swap = lo;
+        lo = hi;
+        hi = swap;
+      }
+      for (var c = 0; c < cells.length; c++) {
+        var day = cells[c].date;
+        var button = cells[c].button;
+        var time = day.getTime();
+        var band = '';
+        if (lo && hi && !cal.sameDay(lo, hi)) {
+          if (cal.sameDay(day, lo)) { band = 'start'; } else if (cal.sameDay(day, hi)) { band = 'end'; } else if (time > lo.getTime() && time < hi.getTime()) { band = 'mid'; }
+        }
+        var edge = cal.sameDay(day, state.start) || (!previewing && cal.sameDay(day, state.end));
+        button.setAttribute('data-band', band);
+        button.setAttribute('data-preview', String(previewing && band !== ''));
+        button.setAttribute('data-edge', String(edge));
+        button.setAttribute('data-today', String(cal.sameDay(day, today)));
+        button.setAttribute('aria-selected', String(edge || (band !== '' && !previewing)));
+        button.setAttribute('aria-disabled', String(!selectable(day)));
+        button.setAttribute('tabindex', cal.sameDay(day, state.focus) ? '0' : '-1');
+      }
+
+      first.value.textContent = state.start ? cal.shortDate(state.start) : 'Pick a day';
+      last.value.textContent = state.end
+        ? cal.shortDate(state.end)
+        : (state.start ? cal.shortDate(state.start) : 'Pick a day');
+      first.el.setAttribute('data-active', String(state.picking === 'start'));
+      last.el.setAttribute('data-active', String(state.picking === 'end'));
+
+      var draft = cal.rangeFromDays(state.start, state.end, first.time.value, last.time.value);
+      if (draft.problem) {
+        summary.textContent = '';
+        say(state.start ? draft.problem : '');
+      } else {
+        var win = windows.range(draft.from, draft.to);
+        summary.textContent = windows.label(win) + (draft.to ? '' : ' · live');
+        say('');
+      }
+      apply.disabled = !!draft.problem;
+    }
+
+    function say(text) {
+      problem.textContent = text || '';
+      problem.hidden = !text;
+    }
+
+    function buildPresets(now) {
+      util.clear(presetList);
+      var ranges = windows.quickRanges(now);
+      for (var q = 0; q < ranges.length; q++) {
+        (function (entry) {
+          var value = windows.range(entry.from, entry.to).value;
+          var check = icon('check', 15);
+          check.setAttribute('class', 'rangepick__check');
+          presetList.appendChild(el('button', {
+            className: 'rangepick__preset',
+            attrs: {
+              type: 'button',
+              'aria-pressed': String(current.kind === 'range' && current.value === value),
+              title: windows.label(windows.range(entry.from, entry.to))
+            },
+            on: { click: function () { spec.onApply(value); } }
+          }, [check, el('span', { text: entry.label })]));
+        })(ranges[q]);
+      }
+    }
+
+    /* ------------------------------------------------------------ events */
+
+    function dayOf(target) {
+      var node = target && target.closest ? target.closest('.cal__day') : null;
+      if (!node) { return null; }
+      for (var c = 0; c < cells.length; c++) {
+        if (cells[c].button === node) { return cells[c].date; }
+      }
+      return null;
+    }
+
+    function pick(day) {
+      if (!selectable(day)) { return; }
+      if (state.picking === 'start' || !state.start) {
+        state.start = day;
+        if (state.end && state.end.getTime() < day.getTime()) { state.end = null; }
+        state.picking = 'end';
+      } else {
+        if (day.getTime() < state.start.getTime()) {
+          state.end = state.start;
+          state.start = day;
+        } else {
+          state.end = day;
+        }
+        state.picking = 'start';
+      }
+      state.hover = null;
+      state.focus = day;
+      paint();
+    }
+
+    grid.addEventListener('click', function (event) {
+      var day = dayOf(event.target);
+      if (day) { pick(day); }
+    });
+    grid.addEventListener('pointerover', function (event) {
+      var day = dayOf(event.target);
+      if (day && selectable(day) && !cal.sameDay(day, state.hover)) {
+        state.hover = day;
+        if (state.picking === 'end') { paint(); }
+      }
+    });
+    grid.addEventListener('pointerleave', function () {
+      if (state.hover) {
+        state.hover = null;
+        if (state.picking === 'end') { paint(); }
+      }
+    });
+    grid.addEventListener('keydown', function (event) {
+      if (!state.focus) { return; }
+      var steps = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+      var weekday = (state.focus.getDay() + 6) % 7;
+      var target = null;
+      if (steps[event.key] !== undefined) {
+        target = cal.addDays(state.focus, steps[event.key]);
+      } else if (event.key === 'PageUp' || event.key === 'PageDown') {
+        var month = cal.addMonths(state.focus, event.key === 'PageUp' ? -1 : 1);
+        var length = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+        target = new Date(month.getFullYear(), month.getMonth(), Math.min(state.focus.getDate(), length));
+      } else if (event.key === 'Home') {
+        target = cal.addDays(state.focus, -weekday);
+      } else if (event.key === 'End') {
+        target = cal.addDays(state.focus, 6 - weekday);
+      }
+      if (!target) { return; }
+      event.preventDefault();
+      // The keyboard previews the second day the way the pointer does.
+      if (state.picking === 'end') { state.hover = clamp(target); }
+      focusDay(target);
+    });
+
+    function commit() {
+      var draft = cal.rangeFromDays(state.start, state.end, first.time.value, last.time.value);
+      if (draft.problem) {
+        say(draft.problem);
+        return;
+      }
+      spec.onApply(windows.range(draft.from, draft.to).value);
+    }
+
+    /** Fill from the window the page is reading, every time the picker opens. */
+    function fill(win) {
+      var now = Date.now();
+      current = win;
+      today = cal.startOfDay(new Date(now));
+      earliest = cal.addDays(today, -365);
+      var days = cal.daysOf(win, now);
+      state.start = clamp(days.startDay);
+      state.end = clamp(days.endDay);
+      first.time.value = days.startTime;
+      last.time.value = days.endTime;
+      state.picking = 'start';
+      state.hover = null;
+      state.focus = state.end;
+      state.view = monthOf(state.focus);
+      zone.textContent = windows.zoneName();
+      buildPresets(now);
+      build();
+    }
+
+    return {
+      el: root,
+      fill: fill,
+      focusTarget: function () { return cellFor(state.focus) || prev; }
+    };
+  }
+
   /**
    * A filter bar that owns its own DOM across re-renders.
    *
@@ -706,13 +1172,8 @@
    */
   function portfolioFields() {
     return [
-      {
-        key: 'window_days', label: 'Window', type: 'segmented', defaultValue: '30',
-        options: [
-          { value: '7', label: '7d' }, { value: '14', label: '14d' },
-          { value: '30', label: '30d' }, { value: '90', label: '90d' }
-        ]
-      },
+      // 1h … 90d, and a calendar button for a range — see windowPicker.
+      { key: 'window', label: 'Window', type: 'window', defaultValue: TestHub.windows.DEFAULT_KEY },
       { key: 'project', label: 'Project' },
       { key: 'team', label: 'Team' },
       { key: 'component', label: 'Component' },
@@ -725,7 +1186,6 @@
   function filterPanel(spec) {
     var controls = {};
     var row = el('div', { className: 'filters__row' });
-    var chips = el('div', { className: 'chips' });
     var i;
 
     for (i = 0; i < spec.fields.length; i++) {
@@ -733,7 +1193,7 @@
         var id = 'filter-' + field.key;
         if (field.type === 'search') {
           var searchNode = searchField({
-            id: id, key: field.key, label: field.label,
+            id: id, key: field.key, label: field.label, inline: true,
             placeholder: field.placeholder, value: spec.values[field.key] || '',
             onChange: spec.onChange
           });
@@ -742,6 +1202,19 @@
             input: searchNode.querySelector('input')
           };
           row.appendChild(searchNode);
+          return;
+        }
+        if (field.type === 'window') {
+          var picker = windowPicker({
+            label: field.label,
+            value: spec.values[field.key] || field.defaultValue,
+            onChange: function (next) { spec.onChange(field.key, next); }
+          });
+          var pickerHolder = el('div', { className: 'field-holder' }, picker.el);
+          controls[field.key] = {
+            type: 'window', holder: pickerHolder, field: field, control: picker
+          };
+          row.appendChild(pickerHolder);
           return;
         }
         if (field.type === 'segmented') {
@@ -769,23 +1242,30 @@
     }
 
     var reset = el('button', {
-      className: 'btn btn--ghost btn--sm', attrs: { type: 'button' },
+      className: 'btn btn--ghost btn--sm filters__reset', attrs: { type: 'button' },
       text: 'Reset', on: { click: spec.onReset }
     });
-    row.appendChild(el('div', { className: 'filters__spacer' }));
+    // Always the last thing on the row and always against its right edge,
+    // whichever line the row has wrapped it onto — see `.filters__actions`.
     row.appendChild(el('div', { className: 'filters__actions' }, [reset]));
 
+    // No chips under the controls: every select already says its value
+    // inline, so a second copy of each filter as a pill was the same
+    // information again, and the height the timeline below needed.
     var root = el('section', {
       className: 'filters',
       attrs: { 'aria-label': spec.label || 'Filters' }
-    }, [row, chips]);
+    }, [row]);
 
     function optionsFor(field, facets) {
+      if (field.options) {
+        // The label is already inside the control, so "Any status" is "All".
+        return field.options.map(function (option) {
+          return option.value === '' ? { value: '', label: 'All' } : option;
+        });
+      }
       var values = (facets && facets[field.facet || (field.key + 's')]) || [];
-      var options = [{
-        value: '',
-        label: field.allLabel || ('All ' + util.pluralLabel(field.label).toLowerCase())
-      }];
+      var options = [{ value: '', label: 'All' }];
       for (var k = 0; k < values.length; k++) {
         options.push({ value: values[k], label: util.titleCase(values[k]) });
       }
@@ -794,7 +1274,6 @@
 
     function sync(values, facets) {
       var keys = Object.keys(controls);
-      var active = [];
       for (var k = 0; k < keys.length; k++) {
         var key = keys[k];
         var control = controls[key];
@@ -803,45 +1282,27 @@
           if (document.activeElement !== control.input && control.input.value !== value) {
             control.input.value = value;
           }
-        } else if (control.type === 'segmented') {
+        } else if (control.type === 'segmented' || control.type === 'window') {
           control.control.sync(value || control.field.defaultValue);
         } else {
-          var options = control.field.options || optionsFor(control.field, facets);
+          var options = optionsFor(control.field, facets);
           var signature = options.map(function (option) { return option.value; }).join('\u001f');
           if (control.signature !== signature) {
             control.signature = signature;
             util.replace(control.holder, selectField({
-              id: 'filter-' + key, key: key, label: control.field.label,
+              id: 'filter-' + key, key: key, label: control.field.label, inline: true,
               options: options, value: value, onChange: spec.onChange
             }));
           } else {
             var select = control.holder.querySelector('select');
             if (select && select.value !== value) { select.value = value; }
           }
-        }
-        // The window selector is always set and is shown as a control, not as
-        // a chip; chips are for narrowings the user can be surprised by.
-        if (value && control.type !== 'segmented') {
-          active.push([key, value, (control.field && control.field.label) ||
-            (control.type === 'search' ? 'Search' : key)]);
+          // A narrowed filter reads a shade stronger than one left at "All":
+          // with the chips gone, that is how a glance finds what is applied.
+          var field = control.holder.firstChild;
+          if (field) { field.setAttribute('data-set', String(value !== '')); }
         }
       }
-
-      util.clear(chips);
-      for (var a = 0; a < active.length; a++) {
-        (function (entry) {
-          chips.appendChild(el('span', { className: 'chip' }, [
-            document.createTextNode(entry[2] + ': ' + entry[1]),
-            el('button', {
-              className: 'chip__remove',
-              attrs: { type: 'button', 'aria-label': 'Remove filter ' + entry[2] },
-              text: '\u00d7',
-              on: { click: function () { spec.onChange(entry[0], ''); } }
-            })
-          ]));
-        })(active[a]);
-      }
-      chips.hidden = active.length === 0;
     }
 
     return { el: root, sync: sync };
@@ -993,6 +1454,123 @@
         document.removeEventListener('mousedown', onDocumentMouseDown);
         document.removeEventListener('focusin', onDocumentFocusIn);
       }
+    };
+  }
+
+  /* -------------------------------------------------------------- popover */
+
+  /* An anchored, non-modal dialog: a panel that opens under its trigger and
+   * floats over the page instead of pushing it down. The window picker's
+   * range form and the connection status's details both live in one, so
+   * opening either never moves a pixel of the page around it.
+   *
+   *   click / Enter / Space   toggle; on open, focus moves into the panel
+   *   Escape                  close, and focus goes back to the trigger
+   *   click outside           close, without stealing focus
+   *   focus leaving           close (Tab out, or clicking into another control)
+   *
+   * Unlike the menu's, its document listeners exist only while it is open: a
+   * view that is torn down with its popover closed leaves nothing behind, and
+   * one torn down open lets go at the next click anywhere.
+   *
+   * `align` is the edge the panel hangs from, `start` or `end`; if that would
+   * put it off screen it hangs from the other one.
+   */
+  function popover(spec) {
+    var id = 'th-popover-' + Math.random().toString(36).slice(2, 8);
+    var open = false;
+    var trigger = spec.trigger;
+
+    var panel = el('div', {
+      className: 'popover' + (spec.className ? ' ' + spec.className : ''),
+      attrs: { id: id, role: 'dialog', 'aria-label': spec.label || 'Details' },
+      dataset: { align: spec.align || 'start' }
+    }, spec.body || []);
+    panel.hidden = true;
+
+    trigger.setAttribute('aria-haspopup', 'dialog');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', id);
+
+    var root = el('div', { className: 'popover-anchor' }, [trigger, panel]);
+
+    function focusables() {
+      return panel.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea'
+      );
+    }
+
+    /* Hang from the preferred edge, then slide along the row until the
+     * whole panel is on screen: a panel nearly as wide as a phone fits from
+     * neither edge of a trigger in the middle of the row. */
+    function place() {
+      panel.dataset.align = spec.align || 'start';
+      panel.style.left = '';
+      panel.style.right = '';
+      var width = document.documentElement.clientWidth || window.innerWidth;
+      var rect = panel.getBoundingClientRect();
+      var shift = 0;
+      if (rect.right > width - 8) { shift = width - 8 - rect.right; }
+      if (rect.left + shift < 8) { shift = 8 - rect.left; }
+      if (shift) {
+        var anchor = root.getBoundingClientRect();
+        panel.style.left = Math.round(rect.left + shift - anchor.left) + 'px';
+        panel.style.right = 'auto';
+      }
+    }
+
+    function onDocumentMouseDown(event) {
+      if (open && !root.contains(event.target)) { setOpen(false); }
+    }
+
+    function onDocumentFocusIn(event) {
+      if (open && !root.contains(event.target)) { setOpen(false); }
+    }
+
+    function setOpen(next, options) {
+      if (open === next) { return; }
+      open = next;
+      panel.hidden = !next;
+      root.setAttribute('data-open', String(next));
+      trigger.setAttribute('aria-expanded', String(next));
+      if (next) {
+        document.addEventListener('mousedown', onDocumentMouseDown);
+        document.addEventListener('focusin', onDocumentFocusIn);
+        if (spec.onOpen) { spec.onOpen(panel); }
+        place();
+        if (!options || options.focus !== false) {
+          var target = spec.initialFocus ? spec.initialFocus() : focusables()[0];
+          if (target) { target.focus(); }
+        }
+      } else {
+        document.removeEventListener('mousedown', onDocumentMouseDown);
+        document.removeEventListener('focusin', onDocumentFocusIn);
+        if (spec.onClose) { spec.onClose(); }
+        if (options && options.restoreFocus) { trigger.focus(); }
+      }
+    }
+
+    trigger.addEventListener('click', function () { setOpen(!open); });
+    trigger.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && open) {
+        event.stopPropagation();
+        setOpen(false, { restoreFocus: true });
+      }
+    });
+    panel.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setOpen(false, { restoreFocus: true });
+      }
+    });
+
+    return {
+      el: root,
+      panel: panel,
+      trigger: trigger,
+      open: function (options) { setOpen(true, options); },
+      close: function (options) { setOpen(false, options); },
+      isOpen: function () { return open; }
     };
   }
 
@@ -1409,6 +1987,7 @@
     icon: icon,
     railIcon: railIcon,
     menu: menu,
+    popover: popover,
     menuSection: menuSection,
     themeSwitch: themeSwitch,
     statusPill: statusPill,
@@ -1443,6 +2022,7 @@
     portfolioFields: portfolioFields,
     searchField: searchField,
     segmented: segmented,
+    windowPicker: windowPicker,
     statusBars: statusBars,
     // The live timeline (42-timeline.js) stacks the same classes in the same
     // order, so the two charts never disagree about what a colour means.

@@ -1,7 +1,7 @@
 /* Test Hub — charts, hand-rolled in SVG (ADR-0001 D7).
  *
- * Four shapes cover the whole dashboard: a trend line with an optional area, a
- * stacked bar, a donut and a sparkline. No library, no canvas, no build step —
+ * Five shapes cover the whole dashboard: a stacked bar, rate columns, range
+ * bars, a donut and a sparkline. No library, no canvas, no build step —
  * a chart is a DOM tree like everything else, which means it inherits the
  * theme, scales with the container, and can be inspected in devtools.
  *
@@ -19,8 +19,9 @@
  *     does not exist for a screen reader, and "look at the graph" is not an
  *     answer anybody can act on.
  *
- * Gaps are gaps: a bucket with no runs breaks the line instead of drawing a
- * straight segment between the days on either side of a quiet weekend.
+ * Gaps are gaps: a bucket with no runs is an empty slot, never a straight
+ * segment joining the days on either side of a quiet weekend — which is why
+ * the time series here are columns and bars, not lines.
  */
 (function (window, document) {
   'use strict';
@@ -109,168 +110,6 @@
     return node;
   }
 
-  /* ================================================================ trend */
-
-  function drawTrend(container, spec) {
-    var points = spec.points || [];
-    var series = spec.series || [];
-    if (!points.length || !series.length) {
-      emptyState(container, spec.emptyMessage);
-      return;
-    }
-
-    var width = containerWidth(container, 720);
-    var height = spec.height || 220;
-    var padding = { top: 14, right: 14, bottom: 26, left: 46 };
-    var plotWidth = Math.max(10, width - padding.left - padding.right);
-    var plotHeight = Math.max(10, height - padding.top - padding.bottom);
-
-    var values = [];
-    var s;
-    var p;
-    for (s = 0; s < series.length; s++) {
-      for (p = 0; p < points.length; p++) {
-        var raw = points[p].values[series[s].key];
-        if (typeof raw === 'number' && isFinite(raw)) { values.push(raw); }
-      }
-    }
-    if (!values.length) {
-      emptyState(container, spec.emptyMessage);
-      return;
-    }
-
-    var min = spec.yMin !== undefined ? spec.yMin : Math.min.apply(null, values);
-    var max = spec.yMax !== undefined ? spec.yMax : Math.max.apply(null, values);
-    if (max === min) { max = min + (Math.abs(min) > 1 ? Math.abs(min) * 0.1 : 1); }
-    // Breathing room, so a line does not graze the top gridline — but only on
-    // the ends the caller left open. A pass-rate axis pinned to 0..100 stays.
-    var headroom = (max - min) * 0.12 || 1;
-    if (spec.yMin === undefined) { min = min - headroom; }
-    if (spec.yMax === undefined) { max = max + headroom; }
-    if (spec.yFloor !== undefined) { min = Math.max(spec.yFloor, min); }
-    var span = max - min || 1;
-
-    var xFor = function (index) {
-      return points.length === 1
-        ? padding.left + plotWidth / 2
-        : padding.left + (index / (points.length - 1)) * plotWidth;
-    };
-    var yFor = function (value) {
-      return padding.top + plotHeight - ((value - min) / span) * plotHeight;
-    };
-
-    var node = frame(spec, width, height);
-    var gridColor = color('--chart-grid', '#f0f2f6');
-    var axisColor = color('--chart-axis', '#666666');
-    var markerColor = color('--chart-marker', '#ffffff');
-    var formatY = spec.formatY || function (value) { return String(Math.round(value)); };
-
-    var ticks = spec.ticks || 4;
-    var t;
-    for (t = 0; t <= ticks; t++) {
-      var value = min + (span * t) / ticks;
-      var y = yFor(value);
-      node.appendChild(svg('line', {
-        x1: padding.left, x2: width - padding.right, y1: y, y2: y,
-        stroke: gridColor, 'stroke-width': 1, 'shape-rendering': 'crispEdges'
-      }));
-      node.appendChild(svg('text', {
-        x: padding.left - 8, y: y + 3.5, 'text-anchor': 'end',
-        fill: axisColor, 'font-size': 11.5
-      }, formatY(value)));
-    }
-
-    var maxLabels = Math.max(2, Math.floor(plotWidth / 78));
-    var step = Math.max(1, Math.ceil(points.length / maxLabels));
-    for (p = 0; p < points.length; p++) {
-      if (p % step !== 0 && p !== points.length - 1) { continue; }
-      node.appendChild(svg('text', {
-        x: xFor(p), y: height - 8,
-        'text-anchor': p === 0 ? 'start' : (p === points.length - 1 ? 'end' : 'middle'),
-        fill: axisColor, 'font-size': 11.5
-      }, points[p].label));
-    }
-
-    for (s = 0; s < series.length; s++) {
-      var line = series[s];
-      var stroke = color(line.color, '#36a2eb');
-      var segments = [];
-      var current = [];
-      for (p = 0; p < points.length; p++) {
-        var pointValue = points[p].values[line.key];
-        if (typeof pointValue === 'number' && isFinite(pointValue)) {
-          current.push({ x: xFor(p), y: yFor(pointValue), index: p, value: pointValue });
-        } else if (current.length) {
-          segments.push(current);
-          current = [];
-        }
-      }
-      if (current.length) { segments.push(current); }
-
-      var gradientId = null;
-      if (line.area) {
-        gradientId = nextId('g');
-        var gradient = svg('linearGradient', {
-          id: gradientId, x1: 0, y1: 0, x2: 0, y2: 1
-        }, [
-          svg('stop', { offset: '0%', 'stop-color': color('--chart-fill-top', '#36a2eb33') }),
-          svg('stop', { offset: '100%', 'stop-color': color('--chart-fill-bottom', '#36a2eb05') })
-        ]);
-        node.appendChild(svg('defs', {}, gradient));
-      }
-
-      for (var g = 0; g < segments.length; g++) {
-        var segment = segments[g];
-        var path = segment.map(function (point, index) {
-          return (index === 0 ? 'M' : 'L') + round1(point.x) + ' ' + round1(point.y);
-        }).join(' ');
-
-        if (line.area && segment.length > 1) {
-          var baseline = padding.top + plotHeight;
-          node.appendChild(svg('path', {
-            d: path + ' L' + round1(segment[segment.length - 1].x) + ' ' + round1(baseline) +
-              ' L' + round1(segment[0].x) + ' ' + round1(baseline) + ' Z',
-            fill: 'url(#' + gradientId + ')', stroke: 'none'
-          }));
-        }
-        node.appendChild(svg('path', {
-          d: path, fill: 'none', stroke: stroke, 'stroke-width': line.width || 2,
-          'stroke-linecap': 'round', 'stroke-linejoin': 'round',
-          'stroke-dasharray': line.dashed ? '5 4' : null
-        }));
-
-        // One marker per point when the series is sparse enough to read; a
-        // 90-day trend with 90 dots is noise, not information.
-        if (points.length <= 45) {
-          for (var m = 0; m < segment.length; m++) {
-            var marker = svg('circle', {
-              cx: round1(segment[m].x), cy: round1(segment[m].y), r: 2.8,
-              fill: markerColor, stroke: stroke, 'stroke-width': 1.6
-            });
-            marker.appendChild(svg('title', {}, points[segment[m].index].label + ' · ' +
-              line.label + ' ' + (line.format ? line.format(segment[m].value) : formatY(segment[m].value))));
-            node.appendChild(marker);
-          }
-        }
-      }
-    }
-
-    var rows = points.map(function (point) {
-      var row = [point.label];
-      for (var i = 0; i < series.length; i++) {
-        var value = point.values[series[i].key];
-        row.push(typeof value === 'number'
-          ? (series[i].format ? series[i].format(value) : formatY(value))
-          : util.DASH);
-      }
-      return row;
-    });
-    var headers = [spec.xLabel || 'Bucket'];
-    for (s = 0; s < series.length; s++) { headers.push(series[s].label); }
-
-    util.replace(container, [node, dataTable(spec.title || 'Trend', headers, rows)]);
-  }
-
   /* =========================================================== stacked bar */
 
   function drawStackedBar(container, spec) {
@@ -314,7 +153,7 @@
     var slot = plotWidth / buckets.length;
     var barWidth = Math.max(3, Math.min(spec.maxBarWidth || 26, slot - 4));
     var maxLabels = Math.max(2, Math.floor(plotWidth / 78));
-    var step = Math.max(1, Math.ceil(buckets.length / maxLabels));
+    var shown = labelledBuckets(buckets.length, Math.max(1, Math.ceil(buckets.length / maxLabels)));
 
     for (var b = 0; b < buckets.length; b++) {
       var bucket = buckets[b];
@@ -340,7 +179,7 @@
           fill: gridColor
         }));
       }
-      if (b % step === 0 || b === buckets.length - 1) {
+      if (shown[b]) {
         node.appendChild(svg('text', {
           x: round1(x + barWidth / 2), y: height - 8, 'text-anchor': 'middle',
           fill: axisColor, 'font-size': 11.5
@@ -359,6 +198,375 @@
     });
 
     util.replace(container, [node, dataTable(spec.title || 'Volume', headers, rows)]);
+  }
+
+  /**
+   * Which buckets get an axis label: every `every`-th, and always the last —
+   * but when the last lands closer than a step to the one before it, that one
+   * gives way, or the two print over each other.
+   */
+  function labelledBuckets(count, every) {
+    var picked = [];
+    for (var i = 0; i < count; i += every) { picked.push(i); }
+    var last = count - 1;
+    if (picked[picked.length - 1] !== last) {
+      if (picked.length > 1 && last - picked[picked.length - 1] < every) { picked.pop(); }
+      picked.push(last);
+    }
+    var set = Object.create(null);
+    for (var p = 0; p < picked.length; p++) { set[picked[p]] = true; }
+    return set;
+  }
+
+  /* =========================================================== hover layer */
+
+  /**
+   * The readout the bucketed charts share: one tooltip over the bucket under
+   * the pointer, and the same readout from the keyboard. The whole chart is
+   * one tab stop — the arrows move between buckets with data — rather than a
+   * stop per bar, which on a 90-day window is 46 presses to get past it.
+   *
+   * `slots[i]` is `{x, width, title, rows: [{value, label, key?}]}` or null
+   * for a bucket with nothing in it. The table under every chart still holds
+   * all of it: the tooltip enhances, it never gates.
+   */
+  function hoverLayer(container, node, slots, plot) {
+    var band = svg('rect', {
+      x: 0, y: plot.top, width: 0, height: plot.height,
+      fill: color('--chart-band', '#f1f3f7'), opacity: 0
+    });
+    node.insertBefore(band, node.firstChild.nextSibling.nextSibling);
+    var tip = el('div', { className: 'chart__tip', attrs: { role: 'status', 'aria-live': 'polite' } });
+    tip.hidden = true;
+    var active = -1;
+
+    function show(index) {
+      var slot = slots[index];
+      if (!slot) { hide(); return; }
+      active = index;
+      band.setAttribute('x', String(round1(slot.x)));
+      band.setAttribute('width', String(round1(slot.width)));
+      band.setAttribute('opacity', '1');
+      util.clear(tip);
+      tip.appendChild(el('div', { className: 'chart__tip-title', text: slot.title }));
+      for (var r = 0; r < slot.rows.length; r++) {
+        var row = slot.rows[r];
+        tip.appendChild(el('div', { className: 'chart__tip-row' }, [
+          el('span', { className: 'chart__tip-key', dataset: { key: row.key || 'none' } }),
+          el('strong', { text: row.value }),
+          el('span', { text: row.label })
+        ]));
+      }
+      tip.hidden = false;
+      var width = container.clientWidth || plot.width;
+      var left = slot.x + slot.width / 2 - tip.offsetWidth / 2;
+      tip.style.left = Math.max(0, Math.min(width - tip.offsetWidth, left)) + 'px';
+      tip.style.top = Math.max(0, plot.top - tip.offsetHeight - 6) + 'px';
+    }
+
+    function hide() {
+      active = -1;
+      band.setAttribute('opacity', '0');
+      tip.hidden = true;
+    }
+
+    function step(from, direction) {
+      for (var i = from + direction; i >= 0 && i < slots.length; i += direction) {
+        if (slots[i]) { return i; }
+      }
+      return from;
+    }
+
+    function lastWithData() { return step(slots.length, -1); }
+
+    for (var i = 0; i < slots.length; i++) {
+      (function (index) {
+        var hit = svg('rect', {
+          x: round1(plot.left + plot.slot * index), y: plot.top,
+          width: round1(plot.slot), height: plot.height,
+          fill: 'transparent'
+        });
+        hit.addEventListener('pointerenter', function () { show(index); });
+        node.appendChild(hit);
+      })(i);
+    }
+
+    node.setAttribute('tabindex', '0');
+    node.addEventListener('pointerleave', function () {
+      if (document.activeElement !== node) { hide(); }
+    });
+    node.addEventListener('focus', function () { show(active >= 0 ? active : lastWithData()); });
+    node.addEventListener('blur', hide);
+    node.addEventListener('keydown', function (event) {
+      var start = active >= 0 ? active : lastWithData();
+      var next = null;
+      if (event.key === 'ArrowLeft') { next = step(start, -1); }
+      if (event.key === 'ArrowRight') { next = step(start, 1); }
+      if (event.key === 'Home') { next = step(-1, 1); }
+      if (event.key === 'End') { next = lastWithData(); }
+      if (event.key === 'Escape') { hide(); return; }
+      if (next === null) { return; }
+      event.preventDefault();
+      show(next);
+    });
+    return tip;
+  }
+
+  function xLabels(node, buckets, plot, height, axisColor) {
+    var maxLabels = Math.max(2, Math.floor(plot.width / 78));
+    var shown = labelledBuckets(buckets.length, Math.max(1, Math.ceil(buckets.length / maxLabels)));
+    for (var b = 0; b < buckets.length; b++) {
+      if (!shown[b]) { continue; }
+      node.appendChild(svg('text', {
+        x: round1(plot.left + plot.slot * b + plot.slot / 2), y: height - 8,
+        'text-anchor': 'middle', fill: axisColor, 'font-size': 11.5
+      }, buckets[b].label));
+    }
+  }
+
+  function gridline(node, plot, y, label, gridColor, axisColor) {
+    node.appendChild(svg('line', {
+      x1: plot.left, x2: plot.left + plot.width, y1: round1(y), y2: round1(y),
+      stroke: gridColor, 'stroke-width': 1, 'shape-rendering': 'crispEdges'
+    }));
+    node.appendChild(svg('text', {
+      x: plot.left - 8, y: round1(y + 3.5), 'text-anchor': 'end', fill: axisColor, 'font-size': 11.5
+    }, label));
+  }
+
+  /** A column whose data end is rounded and whose baseline end is square. */
+  function columnPath(x, top, width, baseline) {
+    var radius = Math.min(4, width / 2, Math.max(0, baseline - top));
+    return 'M' + round1(x) + ' ' + round1(baseline) +
+      ' V' + round1(top + radius) +
+      ' Q' + round1(x) + ' ' + round1(top) + ' ' + round1(x + radius) + ' ' + round1(top) +
+      ' H' + round1(x + width - radius) +
+      ' Q' + round1(x + width) + ' ' + round1(top) + ' ' + round1(x + width) + ' ' + round1(top + radius) +
+      ' V' + round1(baseline) + ' Z';
+  }
+
+  /* ======================================================= rate columns */
+
+  /**
+   * A rate per bucket, as columns on a fixed 0–100% axis — the pass rate
+   * trend. Columns rather than a line because the buckets are often sparse:
+   * a line through a fortnight with four active days is four dots and three
+   * dashes, and the eye joins what the data never did. An empty bucket is an
+   * empty slot. One series, so no legend: the title says what it is. A thin
+   * reference line carries the window's own rate, so a bad day reads as
+   * "below the line" without a second colour, and the newest column carries
+   * its value.
+   *
+   *   buckets: [{label, value: 0..100 | null, rows: [...tooltip rows]}]
+   *   reference: number | null, referenceLabel: string
+   */
+  function drawRateColumns(container, spec) {
+    var buckets = spec.buckets || [];
+    var any = buckets.some(function (bucket) { return typeof bucket.value === 'number'; });
+    if (!buckets.length || !any) {
+      emptyState(container, spec.emptyMessage);
+      return;
+    }
+    var width = containerWidth(container, 720);
+    var height = spec.height || 220;
+    var padding = { top: 18, right: 14, bottom: 26, left: 46 };
+    var plot = {
+      left: padding.left, top: padding.top,
+      width: Math.max(10, width - padding.left - padding.right),
+      height: Math.max(10, height - padding.top - padding.bottom)
+    };
+    plot.slot = plot.width / buckets.length;
+    var baseline = plot.top + plot.height;
+    var yFor = function (value) { return baseline - (Math.max(0, Math.min(100, value)) / 100) * plot.height; };
+    var format = spec.formatValue || function (value) { return util.formatPercent(value, 1); };
+
+    var node = frame(spec, width, height);
+    var gridColor = color('--chart-grid', '#f0f2f6');
+    var axisColor = color('--chart-axis', '#666666');
+    var series = color('--chart-series', '#2f7fc4');
+    var t;
+    for (t = 0; t <= 4; t++) { gridline(node, plot, yFor(t * 25), (t * 25) + '%', gridColor, axisColor); }
+
+    var barWidth = Math.max(2, Math.min(24, plot.slot - 2, plot.slot * 0.62));
+    var slots = [];
+    var newest = -1;
+    for (var b = 0; b < buckets.length; b++) {
+      var bucket = buckets[b];
+      var x = plot.left + plot.slot * b + (plot.slot - barWidth) / 2;
+      if (typeof bucket.value !== 'number') {
+        node.appendChild(svg('rect', {
+          x: round1(x), y: round1(baseline - 1), width: round1(barWidth), height: 1, fill: gridColor
+        }));
+        slots.push(null);
+        continue;
+      }
+      newest = b;
+      var top = yFor(bucket.value);
+      node.appendChild(svg('path', { d: columnPath(x, top, barWidth, baseline), fill: series }));
+      slots.push({
+        x: plot.left + plot.slot * b, width: plot.slot, title: bucket.label,
+        rows: [{ value: format(bucket.value), label: spec.valueLabel || 'pass rate', key: 'series' }]
+          .concat(bucket.rows || [])
+      });
+    }
+
+    var textColor = color('--text-muted', '#5b6573');
+    if (typeof spec.reference === 'number' && isFinite(spec.reference)) {
+      var refY = yFor(spec.reference);
+      node.appendChild(svg('line', {
+        x1: plot.left, x2: plot.left + plot.width, y1: round1(refY), y2: round1(refY),
+        stroke: color('--text-subtle', '#7b8390'), 'stroke-width': 1, 'stroke-dasharray': '4 3'
+      }));
+      // At the left end: the newest column, and its label, are on the right.
+      var below = refY - 6 < plot.top + 10;
+      node.appendChild(svg('text', {
+        x: plot.left + 6, y: round1(below ? refY + 14 : refY - 6), 'text-anchor': 'start',
+        fill: textColor, 'font-size': 11.5, 'font-weight': 600
+      }, (spec.referenceLabel || 'window') + ' ' + format(spec.reference)));
+    }
+    if (newest >= 0) {
+      var capY = yFor(buckets[newest].value) - 6;
+      if (capY > 10) {
+        node.appendChild(svg('text', {
+          x: round1(plot.left + plot.slot * newest + plot.slot / 2), y: round1(capY),
+          'text-anchor': 'middle', fill: textColor, 'font-size': 11.5, 'font-weight': 600
+        }, util.formatPercent(buckets[newest].value, 0)));
+      }
+    }
+    xLabels(node, buckets, plot, height, axisColor);
+    var tip = hoverLayer(container, node, slots, plot);
+
+    var headers = [spec.xLabel || 'Bucket', spec.valueLabel ? util.titleCase(spec.valueLabel) : 'Pass rate']
+      .concat(spec.extraHeaders || []);
+    var rows = buckets.map(function (bucket) {
+      return [bucket.label, typeof bucket.value === 'number' ? format(bucket.value) : util.DASH]
+        .concat(bucket.cells || []);
+    });
+    util.replace(container, [node, tip, dataTable(spec.title || 'Rate', headers, rows)]);
+  }
+
+  /* ========================================================= range bars */
+
+  //: Axis steps for durations: round to what a person would say.
+  var DURATION_STEPS = [
+    100, 200, 500, 1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000,
+    600000, 900000, 1800000, 3600000, 7200000
+  ];
+
+  function durationTick(ms) {
+    if (ms === 0) { return '0'; }
+    if (ms < 1000) { return Math.round(ms) + 'ms'; }
+    if (ms < 60000) { return (ms % 1000 ? (ms / 1000).toFixed(1) : String(ms / 1000)) + 's'; }
+    if (ms < 3600000) {
+      var minutes = Math.floor(ms / 60000);
+      var seconds = Math.round((ms - minutes * 60000) / 1000);
+      return minutes + 'm' + (seconds ? ' ' + seconds + 's' : '');
+    }
+    var hours = Math.floor(ms / 3600000);
+    var rest = Math.round((ms - hours * 3600000) / 60000);
+    return hours + 'h' + (rest ? ' ' + rest + 'm' : '');
+  }
+
+  /**
+   * Two quantiles per bucket as a floating bar — the run duration chart. The
+   * bar spans p50 to p95, so its length is how unpredictable the bucket was;
+   * the dot on it is the median, so its height is the typical run. Nothing is
+   * joined across buckets, for the same reason as the rate columns.
+   *
+   *   buckets: [{label, low: ms | null, high: ms | null, rows: [...]}]
+   */
+  function drawRangeBars(container, spec) {
+    var buckets = spec.buckets || [];
+    var highest = 0;
+    var any = false;
+    buckets.forEach(function (bucket) {
+      [bucket.low, bucket.high].forEach(function (value) {
+        if (typeof value === 'number' && isFinite(value)) {
+          any = true;
+          highest = Math.max(highest, value);
+        }
+      });
+    });
+    if (!buckets.length || !any) {
+      emptyState(container, spec.emptyMessage);
+      return;
+    }
+    var width = containerWidth(container, 720);
+    var height = spec.height || 220;
+    var padding = { top: 18, right: 14, bottom: 26, left: 52 };
+    var plot = {
+      left: padding.left, top: padding.top,
+      width: Math.max(10, width - padding.left - padding.right),
+      height: Math.max(10, height - padding.top - padding.bottom)
+    };
+    plot.slot = plot.width / buckets.length;
+    var raw = Math.max(1, highest) / 4;
+    var tick = DURATION_STEPS[DURATION_STEPS.length - 1];
+    for (var d = 0; d < DURATION_STEPS.length; d++) {
+      if (DURATION_STEPS[d] >= raw) { tick = DURATION_STEPS[d]; break; }
+    }
+    var top = Math.max(tick, Math.ceil((highest * 1.08) / tick) * tick);
+    var baseline = plot.top + plot.height;
+    var yFor = function (value) { return baseline - (value / top) * plot.height; };
+
+    var node = frame(spec, width, height);
+    var gridColor = color('--chart-grid', '#f0f2f6');
+    var axisColor = color('--chart-axis', '#666666');
+    for (var v = 0; v <= top + 1; v += tick) { gridline(node, plot, yFor(v), durationTick(v), gridColor, axisColor); }
+
+    var series = color('--chart-series', '#2f7fc4');
+    var soft = color('--chart-series-soft', '#86b4e0');
+    var ring = color('--surface', '#ffffff');
+    var barWidth = Math.max(4, Math.min(12, plot.slot * 0.42));
+    var slots = [];
+    for (var b = 0; b < buckets.length; b++) {
+      var bucket = buckets[b];
+      var low = typeof bucket.low === 'number' ? bucket.low : null;
+      var high = typeof bucket.high === 'number' ? bucket.high : null;
+      var center = plot.left + plot.slot * b + plot.slot / 2;
+      if (low === null && high === null) {
+        node.appendChild(svg('rect', {
+          x: round1(center - barWidth / 2), y: round1(baseline - 1), width: round1(barWidth), height: 1,
+          fill: gridColor
+        }));
+        slots.push(null);
+        continue;
+      }
+      if (low !== null && high !== null && high > low) {
+        var barTop = yFor(high);
+        var barHeight = Math.max(2, yFor(low) - barTop);
+        node.appendChild(svg('rect', {
+          x: round1(center - barWidth / 2), y: round1(barTop), width: round1(barWidth),
+          height: round1(barHeight), rx: Math.min(4, barWidth / 2), fill: soft
+        }));
+      }
+      var median = low !== null ? low : high;
+      node.appendChild(svg('circle', {
+        cx: round1(center), cy: round1(yFor(median)), r: 4.5,
+        fill: series, stroke: ring, 'stroke-width': 2
+      }));
+      slots.push({
+        x: plot.left + plot.slot * b, width: plot.slot, title: bucket.label,
+        rows: [
+          { value: low !== null ? util.formatDuration(low) : util.DASH, label: 'median (p50)', key: 'series' },
+          { value: high !== null ? util.formatDuration(high) : util.DASH, label: 'p95', key: 'soft' }
+        ].concat(bucket.rows || [])
+      });
+    }
+    xLabels(node, buckets, plot, height, axisColor);
+    var tip = hoverLayer(container, node, slots, plot);
+
+    var rows = buckets.map(function (bucket) {
+      return [
+        bucket.label,
+        typeof bucket.low === 'number' ? util.formatDuration(bucket.low) : util.DASH,
+        typeof bucket.high === 'number' ? util.formatDuration(bucket.high) : util.DASH
+      ];
+    });
+    util.replace(container, [
+      node, tip,
+      dataTable(spec.title || 'Duration', [spec.xLabel || 'Bucket', 'p50', 'p95'], rows)
+    ]);
   }
 
   /* ================================================================ donut */
@@ -471,8 +679,9 @@
   /* ------------------------------------------------------------ dispatch */
 
   var KINDS = {
-    trend: drawTrend,
     stackedBar: drawStackedBar,
+    rateColumns: drawRateColumns,
+    rangeBars: drawRangeBars,
     donut: drawDonut,
     sparkline: drawSparkline
   };
@@ -495,7 +704,6 @@
 
   TestHub.charts = {
     draw: draw,
-    trend: function (container, spec) { spec.kind = 'trend'; draw(container, spec); },
     stackedBar: function (container, spec) { spec.kind = 'stackedBar'; draw(container, spec); },
     donut: function (container, spec) { spec.kind = 'donut'; draw(container, spec); },
     sparkline: function (container, spec) { spec.kind = 'sparkline'; draw(container, spec); },

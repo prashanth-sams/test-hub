@@ -15,9 +15,11 @@ from __future__ import annotations
 
 import time
 import uuid
+from datetime import datetime
 from pathlib import Path
 from types import TracebackType
 from typing import IO, Any
+from urllib.parse import urlencode
 
 import httpx
 
@@ -378,7 +380,22 @@ class TestHubClient:
         return self._request("GET", "/healthz")  # type: ignore[no-any-return]
 
     def overview(self, **params: Any) -> dict[str, Any]:
-        query = "&".join(f"{key}={value}" for key, value in params.items() if value is not None)
+        """``GET /overview``: ``window_days=7``, ``window_hours=6``, or ``since``/``until``.
+
+        ``since`` and ``until`` may be aware datetimes; the API refuses a naive
+        one rather than guess its zone, and so does this.
+        """
+        values: dict[str, Any] = {}
+        for key, value in params.items():
+            if value is None:
+                continue
+            if isinstance(value, datetime):
+                if value.utcoffset() is None:
+                    raise ValueError(f"{key} needs a timezone; the API will not guess one")
+                value = value.isoformat()
+            values[key] = value
+        # Encoded, not joined: an offset's `+` is a space in a query string.
+        query = urlencode(values)
         return self._request(  # type: ignore[no-any-return]
             "GET", f"/api/v1/overview{'?' + query if query else ''}"
         )

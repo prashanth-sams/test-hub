@@ -196,3 +196,16 @@ def test_the_overview_window_is_capped_by_the_api(sdk: TestHubClient) -> None:
     with pytest.raises(TestHubClientError) as error:
         sdk.overview(window_days=3650)
     assert error.value.status_code == 422
+
+
+def test_the_overview_takes_a_range_with_any_offset(sdk: TestHubClient) -> None:
+    """An offset's `+` is a space in a query string unless it is encoded."""
+    from datetime import datetime, timedelta, timezone
+
+    india = timezone(timedelta(hours=5, minutes=30))
+    since = datetime.now(india) - timedelta(hours=6)
+    body = sdk.overview(since=since)
+    assert datetime.fromisoformat(body["window_start"]) == since
+    assert sdk.overview(window_hours=6)["trend_bucket_seconds"] == 900
+    with pytest.raises(ValueError, match="timezone"):
+        sdk.overview(since=datetime(2026, 11, 1))  # naive, on purpose

@@ -6,8 +6,8 @@
  * came from (ADR-0001 D1, narrowed by ADR-0003).
  *
  * Everything else here is chrome: the header's connection pill and last-updated
- * clock, the settings menu, the disconnected banner, and a router that mounts
- * one view at a time and lets it own its own DOM.
+ * clock, the settings menu, and a router that mounts one view at a time and
+ * lets it own its own DOM.
  */
 (function (window, document) {
   'use strict';
@@ -39,6 +39,24 @@
     offline: 'Offline'
   };
 
+  //: The status details' headline: the pill says the state, this says what it means.
+  var STATUS_HEADLINE = {
+    connecting: 'Connecting to live updates',
+    live: 'Live updates are on',
+    reconnecting: 'Reconnecting to live updates',
+    offline: 'Live updates are offline'
+  };
+
+  //: What the status details say when the provider has nothing more specific.
+  var STATUS_HELP = {
+    connecting: 'Opening the live stream to the Test Hub server.',
+    live: 'Connected. Results land on this page as they arrive.',
+    reconnecting: 'The live stream dropped. It reconnects by itself, and the page ' +
+      'catches up on everything it missed when it does.',
+    offline: 'The numbers on this page are the last ones that arrived. Check that ' +
+      'the server is still running.'
+  };
+
   function boot() {
     var provider = TestHub.LiveDataProvider.create();
 
@@ -46,9 +64,10 @@
     var ctx = { store: store, provider: provider };
 
     var viewHost = document.getElementById('th-view');
-    var bannerHost = document.getElementById('th-banner');
+    var connSlot = document.getElementById('th-conn-slot');
     var connPill = document.getElementById('th-conn');
     var connLabel = document.getElementById('th-conn-label');
+    var connAnnounce = document.getElementById('th-conn-announce');
     var updatedNode = document.getElementById('th-updated');
     var settingsHost = document.getElementById('th-settings');
     var appearanceHost = document.getElementById('th-appearance');
@@ -83,14 +102,110 @@
 
     /* -------------------------------------------------------------- head */
 
+    /* The connection pill. It sits in a slot as wide as its longest label —
+     * every label is laid into the slot's one grid cell, hidden — so a status
+     * change re-labels the pill and moves nothing else on the page. The
+     * details, and the way to retry, open over the page in a popover; there
+     * is no banner pushing the view down while the stream is away. */
+    var conn = (function () {
+      if (!connPill || !connSlot) { return null; }
+      var labels = Object.keys(STATUS_TEXT);
+      for (var k = 0; k < labels.length; k++) {
+        connSlot.insertBefore(el('span', {
+          className: 'conn conn-slot__sizer',
+          attrs: { 'aria-hidden': 'true' }
+        }, [
+          el('span', { className: 'conn__dot' }),
+          el('span', { text: STATUS_TEXT[labels[k]] })
+        ]), connPill);
+      }
+
+      var headline = el('span');
+      var head = el('div', { className: 'connpop__head' }, [
+        el('span', { className: 'conn__dot', attrs: { 'aria-hidden': 'true' } }),
+        headline
+      ]);
+      var text = el('p', { className: 'connpop__text' });
+      var rows = el('dl', { className: 'connpop__rows' });
+      var actions = el('div', { className: 'connpop__actions' });
+
+      var pop = ui.popover({
+        trigger: connPill,
+        label: 'Live updates',
+        className: 'connpop',
+        align: 'end',
+        body: [head, text, rows, actions],
+        onOpen: function () { fill(store.state); }
+      });
+      connSlot.appendChild(pop.el);
+
+      function row(term, value) {
+        rows.appendChild(el('dt', { text: term }));
+        rows.appendChild(el('dd', { text: value }));
+      }
+
+      /** The API's host, not its whole URL: the path is the same everywhere. */
+      function hostOf(base) {
+        try {
+          return new URL(base, window.location.href).host || base;
+        } catch (err) {
+          return base;
+        }
+      }
+
+      function fill(state) {
+        var status = state.status || provider.status;
+        head.setAttribute('data-status', status);
+        headline.textContent = STATUS_HEADLINE[status] ||
+          'Live updates: ' + (STATUS_TEXT[status] || util.titleCase(status));
+        text.textContent = STATUS_HELP[status] || '';
+
+        util.clear(rows);
+        // What the provider knows about this particular drop — "the browser
+        // reports no network", "no heartbeat" — under the general explanation
+        // rather than instead of it.
+        if (state.statusDetail && status !== 'live') { row('Reason', state.statusDetail); }
+        var stamp = state.lastUpdated;
+        row('Last update', stamp ? util.timeAgo(stamp) + ' \u00b7 ' + util.formatTime(stamp) : 'Not yet');
+        var meta = provider.meta || {};
+        if (meta.apiBase) { row('Server', hostOf(meta.apiBase)); }
+
+        util.clear(actions);
+        if (status === 'reconnecting' || status === 'offline') {
+          actions.appendChild(el('button', {
+            className: 'btn btn--sm',
+            attrs: { type: 'button' },
+            on: {
+              click: function () {
+                if (provider.reconnect) { provider.reconnect(); }
+                store.reload();
+              }
+            }
+          }, [ui.icon('refresh', 14), el('span', { text: 'Retry now' })]));
+        }
+      }
+
+      return { pop: pop, fill: fill };
+    })();
+
+    var announced = store.state.status || provider.status;
+
     function syncStatus(state) {
       if (!connPill) { return; }
       var status = state.status || provider.status;
-      connPill.setAttribute('data-status', status);
       var text = STATUS_TEXT[status] || util.titleCase(status);
-      if (connLabel) { connLabel.textContent = text; }
-      var title = state.statusDetail || 'Live updates over server-sent events.';
-      connPill.setAttribute('title', title);
+      connPill.setAttribute('data-status', status);
+      if (connLabel && connLabel.textContent !== text) { connLabel.textContent = text; }
+      connPill.setAttribute('aria-label', 'Live updates: ' + text + '. Show details');
+      connPill.setAttribute('title', 'Live updates: ' + text);
+      // Said once per change, by a live region of its own: the pill is a
+      // button now, and a button that announces itself on every repaint is
+      // noise.
+      if (connAnnounce && status !== announced) {
+        announced = status;
+        connAnnounce.textContent = 'Live updates: ' + text;
+      }
+      if (conn && conn.pop.isOpen()) { conn.fill(state); }
     }
 
     function syncUpdated(state) {
@@ -103,37 +218,7 @@
       }
       updatedNode.textContent = 'Updated ' + util.timeAgo(stamp);
       updatedNode.setAttribute('title', util.formatDateTime(stamp));
-    }
-
-    function syncBanner(state) {
-      if (!bannerHost) { return; }
-      util.clear(bannerHost);
-      if (state.status === 'offline' || state.status === 'reconnecting') {
-        bannerHost.appendChild(ui.banner({
-          tone: state.status === 'offline' ? 'error' : 'warn',
-          icon: 'alert',
-          title: state.status === 'offline'
-            ? 'Disconnected from the Test Hub server'
-            : 'Reconnecting to the live stream',
-          text: state.status === 'offline'
-            ? 'The numbers on this page are the last ones that arrived. ' +
-              (state.statusDetail || 'Check that the server is still running.')
-            : (state.statusDetail || 'Live updates will resume by themselves.'),
-          actions: [
-            el('button', {
-              className: 'btn btn--sm',
-              attrs: { type: 'button' },
-              text: 'Retry now',
-              on: {
-                click: function () {
-                  if (provider.reconnect) { provider.reconnect(); }
-                  store.reload();
-                }
-              }
-            })
-          ]
-        }));
-      }
+      if (conn && conn.pop.isOpen()) { conn.fill(state); }
     }
 
     var navScroller = document.querySelector('.nav');
@@ -205,10 +290,7 @@
         syncNav(state);
       }
       if (!current.view) { mount(state); }
-      if (event.section === 'status') {
-        syncStatus(state);
-        syncBanner(state);
-      }
+      if (event.section === 'status') { syncStatus(state); }
       syncUpdated(state);
       if (current.view) { current.view.update(state, event.section); }
     });

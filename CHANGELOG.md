@@ -21,6 +21,31 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Added
 
+- **1h, 6h and 24h windows, and a custom range, on every portfolio page.** The
+  Window control on the overview, analytics, suites, metrics and evidence pages
+  offers 1h · 6h · 24h · 7d · 30d · 90d, and a small calendar button at its end
+  opens a range picker: quick ranges as a list (*Today*, *Yesterday*, *This
+  week*, *Last week*, *This month*, *Last month* — one click each) beside a
+  single month calendar where you click the first day and then the last, with
+  a preview while you choose, optional times of day, and full keyboard control
+  of the grid. A range that ends today runs on to now and keeps updating. While
+  a range is set the button shows it and no preset is pressed; pressing a
+  preset lets it go. The window is one URL key, `window` — `6h`, or
+  `2026-11-10T00:00Z..2026-11-12T00:00Z` — so a link carries it; old
+  `window_days=N` links still open (`14d` among them, shown on the calendar
+  button now that it is not a preset). Charts over a short window are drawn by the
+  clock (five minutes a point for an hour, fifteen for six, an hour for a day)
+  and say so in their titles, and every sentence that used to read "in the last
+  30 days" names the window actually shown. See the
+  [dashboard tour](https://prashanth-sams.github.io/test-hub/docs/dashboard-tour.html#overview-filters).
+- **`window_hours`, `since` and `until` on `GET /api/v1/overview`**, beside
+  `window_days`: a window of hours, or a fixed range of at most 366 days
+  (`since` alone runs to now). Two at once — days and hours, a range and a
+  length — is a 422, as is a `since` in the future. The answer gains
+  `window_start`, `window_end` and `trend_bucket_seconds`, and a window of two
+  days or less is bucketed by the clock, with UTC datetimes in `bucket`. All
+  optional, so `SCHEMA_VERSION` does not move;
+  see [the API reference](docs/api.md#get-apiv1overview).
 - **A live test execution timeline on the overview.** A full-width chart under
   the KPI tiles with time along the bottom and *now* at the right-hand edge.
   The moment a run starts — any project, CI or not — a bar pops up at that
@@ -162,6 +187,36 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Fixed
 
+- **The Health card's spacing.** Its body — and seven other blocks — used a
+  gap class that was never a grid, so nothing in it was spaced: the count bar
+  sat on the pills above it and the counters below. `.stack--sm` is a grid now.
+  On a phone the donut no longer stretches to the screen's width; the number
+  and the donut sit side by side with the pills under both. "1 in flight" is a
+  pill with a live dot rather than a badge inside a pill.
+- **Chart axes no longer print two labels on top of each other.** The last
+  bucket's label was always drawn, even a slot from the one before it — on the
+  analytics page two suite names overlapped. The live timeline's clock labels
+  now fade at the ends of the axis instead of being cut mid-word as they slide.
+- **A filter no longer stays outlined after you pick a value with the mouse.**
+  The select lets go of focus; a keyboard user keeps it, and the focus ring.
+- **Analytics chips look like chips again.** The filter bar's chip styles came
+  later in the stylesheet and overrode them, monospace font and all.
+- **A dropped live stream no longer pushes the page down.** While the stream
+  was away a banner appeared above every view — 66 px of amber that moved the
+  filters, the KPI tiles and everything under them 82 px down — and the header
+  pill doubled in width. The status is now a small pill in a slot sized for its
+  longest label, so it changes and nothing else moves; clicking it opens the
+  details (the reason, the last update, the server) and **Retry now** in a
+  popover over the page.
+- **`runs_24h` is the last 24 hours whatever the overview's window is.** It was
+  folded from the window's runs, so a window shorter than a day undercounted it
+  and one in the past made it zero.
+- **Daily trend labels are no longer a day early west of Greenwich.** A UTC date
+  such as `2026-11-12` was printed in local time, which in New York is the
+  evening of the 11th.
+- **The SDK's `overview()` encodes its parameters**, so a `since` with a `+05:30`
+  offset reaches the server as one rather than with a space in it; datetimes
+  are accepted, and a naive one is refused before it is sent.
 - **"The overview did not load — the request timed out after 20 s" while tests
   were running.** Three causes, each reproduced and measured
   ([scaling](docs/scaling.md#dashboards-under-a-burst-of-results)):
@@ -231,6 +286,24 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Changed
 
+- **A compact filter bar.** One line of controls: each select carries its name
+  inside it (*Team All*), sized to its value rather than its longest option;
+  the per-filter chips under the bar are gone; **Reset** sits at the right-hand
+  end. At 1440×900 the bar went from 169 px to 52 px, and the live timeline is
+  on screen without scrolling.
+- **New charts for the pass rate trend and run duration.** The pass rate is a
+  column per bucket against a dashed line at the window's overall rate, the
+  newest column labelled; run duration is a bar from p50 to p95 per bucket
+  with the median as a dot. Both replace lines that broke into dots and dashes
+  on sparse days, and the failure-rate line — the pass rate upside down — is
+  gone. Hover, or tab to a chart and use the arrow keys, for a bucket's tests,
+  failures and runs. One validated data hue (`--chart-series`) in both themes.
+- **Every button and option has a 0.3rem corner** — buttons, selects, inputs,
+  segmented options, the status pill, menu items and the calendar's days, from
+  one `--r-control` token.
+- The dashboard's shared overview computations are keyed by window — every
+  dashboard on "6h" shares one — and a finished one too old to hand anyone is
+  dropped, so a stream of one-off ranges cannot pile overviews up in memory.
 - **An import costs a handful of SQL statements, not five per test.** The fold
   looked every test and attempt up with its own query — even in a run the same
   batch had just created, which cannot have any — and each lookup flushed the
