@@ -600,7 +600,15 @@
       className: 'select',
       attrs: { id: spec.id, 'aria-label': spec.label },
       on: {
-        change: function (event) { spec.onChange(spec.key, event.target.value); }
+        change: function (event) {
+          // Picked with the pointer, the choice is made and the control is
+          // done: it lets go of focus rather than sitting there outlined. A
+          // keyboard user keeps focus where they are.
+          if (select.getAttribute('data-pointer') === 'true') { select.blur(); }
+          spec.onChange(spec.key, event.target.value);
+        },
+        pointerdown: function () { select.setAttribute('data-pointer', 'true'); },
+        keydown: function () { select.removeAttribute('data-pointer'); }
       }
     });
     var options = spec.options || [];
@@ -615,7 +623,9 @@
       }
       select.appendChild(node);
     }
-    return el('div', { className: 'field' }, [
+    // Inline: the label sits inside the control, before the value — "Team
+    // All" — so a filter bar is one line of controls rather than two.
+    return el('div', { className: 'field' + (spec.inline ? ' field--inline' : '') }, [
       el('label', { className: 'field__label', attrs: { for: spec.id }, text: spec.label }),
       select
     ]);
@@ -636,8 +646,11 @@
       if (event.key === 'Enter') { spec.onChange(spec.key, input.value); }
       if (event.key === 'Escape') { input.value = ''; spec.onChange(spec.key, ''); }
     });
-    return el('div', { className: 'field field--grow' }, [
-      el('label', { className: 'field__label', attrs: { for: spec.id }, text: spec.label }),
+    return el('div', { className: 'field field--grow' + (spec.inline ? ' field--search' : '') }, [
+      el('label', {
+        className: spec.inline ? 'field__label sr-only' : 'field__label',
+        attrs: { for: spec.id }, text: spec.label
+      }),
       input
     ]);
   }
@@ -697,7 +710,7 @@
    * The Window control: the preset lengths as one segmented control, and at
    * its end a small calendar button that opens a range picker.
    *
-   * The presets answer "lately"; the button answers "that afternoon". While a
+   * The presets answer "lately"; the calendar answers "that week". While a
    * range is set no preset is pressed and the button says the range instead,
    * so the control always shows the window the page is reading — and pressing
    * a preset is how a range is let go of, with nothing else to find.
@@ -736,143 +749,25 @@
       attrs: { type: 'button' }
     }, [icon('calendar', 15), rangeText]);
 
-    /* The panel: one-click calendar ranges, then a from/to pair. */
-    var quick = el('div', {
-      className: 'winpick__quick',
-      attrs: { role: 'group', 'aria-label': 'Quick ranges' }
+    var picker = rangePicker({
+      uid: uid,
+      onApply: function (value) {
+        pop.close({ restoreFocus: true });
+        spec.onChange(value);
+      },
+      onCancel: function () { pop.close({ restoreFocus: true }); }
     });
-    var fromInput = el('input', {
-      className: 'input winpick__input',
-      attrs: { type: 'datetime-local', id: 'winpick-from-' + uid, step: '60', required: true }
-    });
-    var toInput = el('input', {
-      className: 'input winpick__input',
-      attrs: { type: 'datetime-local', id: 'winpick-to-' + uid, step: '60' }
-    });
-    var untilNow = el('input', {
-      attrs: { type: 'checkbox', id: 'winpick-now-' + uid }
-    });
-    var problem = el('p', {
-      className: 'winpick__problem',
-      attrs: { id: 'winpick-problem-' + uid, role: 'alert' }
-    });
-    problem.hidden = true;
-    var zone = el('span', { className: 'winpick__zone' });
 
-    var form = el('form', { className: 'winpick__form', attrs: { novalidate: true } }, [
-      el('div', { className: 'winpick__fields' }, [
-        el('label', { className: 'field', attrs: { for: fromInput.id } }, [
-          el('span', { className: 'field__label', text: 'From' }),
-          fromInput
-        ]),
-        el('label', { className: 'field', attrs: { for: toInput.id } }, [
-          el('span', { className: 'field__label', text: 'To' }),
-          toInput
-        ])
-      ]),
-      el('label', { className: 'winpick__now', attrs: { for: untilNow.id } }, [
-        untilNow,
-        el('span', { text: 'Until now, and keep updating' })
-      ]),
-      problem,
-      el('div', { className: 'winpick__foot' }, [
-        el('span', { className: 'winpick__zone-wrap' }, [icon('clock', 13), zone]),
-        el('div', { className: 'winpick__actions' }, [
-          el('button', {
-            className: 'btn btn--ghost btn--sm', attrs: { type: 'button' }, text: 'Cancel',
-            on: { click: function () { pop.close({ restoreFocus: true }); } }
-          }),
-          el('button', { className: 'btn btn--primary btn--sm', attrs: { type: 'submit' }, text: 'Apply' })
-        ])
-      ])
-    ]);
-
+    // From the button's left edge: the control sits at the start of the bar,
+    // and hanging leftwards the panel covered the rail.
     var pop = popover({
       trigger: trigger,
       label: 'Custom range',
       className: 'winpick__panel',
-      align: 'end',
-      initialFocus: function () { return fromInput; },
-      onOpen: fill,
-      body: [
-        el('div', { className: 'popover__title', text: 'Custom range' }),
-        quick,
-        form
-      ]
-    });
-
-    function say(text, field) {
-      problem.textContent = text || '';
-      problem.hidden = !text;
-      fromInput.removeAttribute('aria-invalid');
-      toInput.removeAttribute('aria-invalid');
-      if (field) {
-        field.setAttribute('aria-invalid', 'true');
-        field.setAttribute('aria-describedby', problem.id);
-        field.focus();
-      }
-    }
-
-    function setUntilNow(on) {
-      untilNow.checked = on;
-      toInput.disabled = on;
-    }
-
-    /** Fill the panel from the window the page is reading, every time it opens. */
-    function fill() {
-      var now = Date.now();
-      var bounds = windows.bounds(current, now);
-      var latest = windows.toLocalInput(new Date(now));
-      fromInput.max = latest;
-      toInput.max = latest;
-      fromInput.value = windows.toLocalInput(new Date(bounds.start));
-      toInput.value = windows.toLocalInput(new Date(bounds.end));
-      setUntilNow(current.kind === 'range' && !current.to);
-      zone.textContent = 'Times in ' + windows.zoneName();
-      say('');
-
-      util.clear(quick);
-      var ranges = windows.quickRanges(now);
-      for (var q = 0; q < ranges.length; q++) {
-        (function (entry) {
-          var value = windows.range(entry.from, entry.to).value;
-          quick.appendChild(el('button', {
-            className: 'winpick__chip',
-            attrs: {
-              type: 'button',
-              'aria-pressed': String(current.kind === 'range' && current.value === value),
-              title: windows.label(windows.range(entry.from, entry.to))
-            },
-            text: entry.label,
-            on: { click: function () { pop.close({ restoreFocus: true }); spec.onChange(value); } }
-          }));
-        })(ranges[q]);
-      }
-    }
-
-    untilNow.addEventListener('change', function () {
-      setUntilNow(untilNow.checked);
-      say('');
-    });
-    fromInput.addEventListener('input', function () { say(''); });
-    toInput.addEventListener('input', function () { say(''); });
-
-    form.addEventListener('submit', function (event) {
-      event.preventDefault();
-      var from = windows.fromLocalInput(fromInput.value);
-      var to = untilNow.checked ? null : windows.fromLocalInput(toInput.value);
-      if (!from) { say('Pick when the range starts.', fromInput); return; }
-      if (!untilNow.checked && !to) {
-        say('Pick when the range ends, or tick "Until now".', toInput);
-        return;
-      }
-      var issue = windows.rangeProblem(from, to);
-      if (issue) {
-        say(issue, issue.indexOf('end') >= 0 ? toInput : fromInput);
-        return;
-      }
-      pop.close({ restoreFocus: true });
-      spec.onChange(windows.range(from, to).value);
+      align: 'start',
+      initialFocus: picker.focusTarget,
+      onOpen: function () { picker.fill(current); },
+      body: picker.el
     });
 
     var group = el('div', {
@@ -898,12 +793,366 @@
     }
     sync(spec.value);
 
-    return {
-      el: el('div', { className: 'field' }, [
-        el('span', { className: 'field__label', text: spec.label }),
-        group
+    // No visible label: the buttons say what they choose, and a compact bar
+    // has no room for a word above every control. The group keeps the name.
+    return { el: el('div', { className: 'field field--window' }, group), sync: sync };
+  }
+
+  /**
+   * The range picker: quick ranges as a list, one month calendar beside it,
+   * and the picked ends — with optional times of day — under both.
+   *
+   * Click the first day, then the last; the days between fill in, and while
+   * the second is being chosen the pointer previews it. Nothing applies until
+   * Apply, except a quick range, which is a whole answer in one click. The
+   * grid is keyboard-driven the way a date grid is expected to be: arrows by
+   * day and week, Page Up/Down by month, Home/End to the week's ends, Enter
+   * or Space to pick. Days after today, or before the API's 366-day reach,
+   * cannot be picked.
+   */
+  function rangePicker(spec) {
+    var windows = TestHub.windows;
+    var cal = windows.calendar;
+    var names = cal.weekdays();
+    var state = { start: null, end: null, picking: 'start', hover: null, view: null, focus: null };
+    var today = cal.startOfDay(new Date());
+    var earliest = cal.addDays(today, -365);
+    var current = windows.parse('');
+    var cells = [];
+
+    var presetList = el('div', {
+      className: 'rangepick__presets',
+      attrs: { role: 'group', 'aria-label': 'Quick ranges' }
+    });
+
+    var titleId = 'rangepick-title-' + spec.uid;
+    var title = el('div', { className: 'cal__title', attrs: { id: titleId, 'aria-live': 'polite' } });
+    var prev = el('button', {
+      className: 'cal__nav cal__nav--prev',
+      attrs: { type: 'button', 'aria-label': 'Previous month' },
+      on: { click: function () { page(-1); } }
+    }, icon('chevron', 16));
+    var next = el('button', {
+      className: 'cal__nav',
+      attrs: { type: 'button', 'aria-label': 'Next month' },
+      on: { click: function () { page(1); } }
+    }, icon('chevron', 16));
+    var grid = el('div', { className: 'cal__grid', attrs: { role: 'grid', 'aria-labelledby': titleId } });
+
+    function end(which, label) {
+      var value = el('span', { className: 'rangepick__value' });
+      var time = el('input', {
+        className: 'rangepick__time',
+        attrs: { type: 'time', step: '60', 'aria-label': label + ' time (optional)' }
+      });
+      var button = el('button', {
+        className: 'rangepick__date',
+        attrs: { type: 'button', 'aria-label': 'Change the ' + label.toLowerCase() + ' day' },
+        on: {
+          click: function () {
+            state.picking = which;
+            paint();
+            focusDay(state[which] || state.start || today);
+          }
+        }
+      }, [el('span', { className: 'rangepick__label', text: label }), value]);
+      time.addEventListener('input', function () { paint(); });
+      return { el: el('div', { className: 'rangepick__end' }, [button, time]), value: value, time: time };
+    }
+
+    var first = end('start', 'Start');
+    var last = end('end', 'End');
+    var summary = el('span', { className: 'rangepick__summary' });
+    var zone = el('span', { className: 'rangepick__zone' });
+    var problem = el('p', { className: 'rangepick__problem', attrs: { role: 'alert' } });
+    problem.hidden = true;
+    var apply = el('button', {
+      className: 'btn btn--primary btn--sm',
+      attrs: { type: 'button' },
+      text: 'Apply',
+      on: { click: commit }
+    });
+
+    var root = el('div', { className: 'rangepick' }, [
+      el('div', { className: 'rangepick__body' }, [
+        presetList,
+        el('div', { className: 'cal' }, [el('div', { className: 'cal__head' }, [prev, title, next]), grid])
       ]),
-      sync: sync
+      el('div', { className: 'rangepick__foot' }, [
+        el('div', { className: 'rangepick__ends' }, [
+          first.el,
+          el('span', { className: 'rangepick__arrow', attrs: { 'aria-hidden': 'true' }, text: '→' }),
+          last.el
+        ]),
+        problem,
+        el('div', { className: 'rangepick__actions' }, [
+          el('div', { className: 'rangepick__meta' }, [summary, zone]),
+          el('div', { className: 'rangepick__buttons' }, [
+            el('button', {
+              className: 'btn btn--ghost btn--sm', attrs: { type: 'button' }, text: 'Cancel',
+              on: { click: function () { spec.onCancel(); } }
+            }),
+            apply
+          ])
+        ])
+      ])
+    ]);
+
+    /* ---------------------------------------------------------- geometry */
+
+    function clamp(day) {
+      if (day.getTime() < earliest.getTime()) { return earliest; }
+      if (day.getTime() > today.getTime()) { return today; }
+      return day;
+    }
+
+    function selectable(day) {
+      return day.getTime() >= earliest.getTime() && day.getTime() <= today.getTime();
+    }
+
+    function monthOf(day) { return new Date(day.getFullYear(), day.getMonth(), 1); }
+
+    function cellFor(day) {
+      for (var c = 0; c < cells.length; c++) {
+        if (cal.sameDay(cells[c].date, day)) { return cells[c].button; }
+      }
+      return null;
+    }
+
+    function focusDay(day) {
+      var target = clamp(day);
+      state.focus = target;
+      if (monthOf(target).getTime() !== state.view.getTime()) {
+        state.view = monthOf(target);
+        build();
+      } else {
+        paint();
+      }
+      var button = cellFor(target);
+      if (button) { button.focus(); }
+    }
+
+    function page(direction) {
+      state.view = cal.addMonths(state.view, direction);
+      build();
+    }
+
+    /* ------------------------------------------------------------ render */
+
+    function build() {
+      util.clear(grid);
+      cells = [];
+      title.textContent = cal.monthTitle(state.view);
+      grid.appendChild(el('div', { className: 'cal__row', attrs: { role: 'row' } }, names.map(function (name) {
+        return el('span', {
+          className: 'cal__dow', attrs: { role: 'columnheader', title: name.long }, text: name.short
+        });
+      })));
+      var days = cal.monthGrid(state.view);
+      for (var r = 0; r < 6; r++) {
+        var row = el('div', { className: 'cal__row', attrs: { role: 'row' } });
+        for (var c = 0; c < 7; c++) {
+          var day = days[r * 7 + c];
+          if (!day) {
+            row.appendChild(el('span', { className: 'cal__blank', attrs: { role: 'gridcell' } }));
+            continue;
+          }
+          var button = el('button', {
+            className: 'cal__day',
+            attrs: { type: 'button', role: 'gridcell', tabindex: '-1', 'aria-label': cal.longDate(day) }
+          }, el('span', { className: 'cal__num', text: String(day.getDate()) }));
+          cells.push({ date: day, button: button });
+          row.appendChild(button);
+        }
+        grid.appendChild(row);
+      }
+      // Paging stops where picking would: the month of today, and the month of
+      // the earliest day the API will answer for.
+      prev.disabled = cal.addMonths(state.view, 0).getTime() <= monthOf(earliest).getTime();
+      next.disabled = cal.addMonths(state.view, 1).getTime() > today.getTime();
+      paint();
+    }
+
+    function paint() {
+      var lo = state.start;
+      var hi = state.end;
+      var previewing = false;
+      if (state.picking === 'end' && lo && state.hover && !cal.sameDay(state.hover, lo)) {
+        previewing = true;
+        hi = state.hover;
+      }
+      if (lo && hi && hi.getTime() < lo.getTime()) {
+        var swap = lo;
+        lo = hi;
+        hi = swap;
+      }
+      for (var c = 0; c < cells.length; c++) {
+        var day = cells[c].date;
+        var button = cells[c].button;
+        var time = day.getTime();
+        var band = '';
+        if (lo && hi && !cal.sameDay(lo, hi)) {
+          if (cal.sameDay(day, lo)) { band = 'start'; } else if (cal.sameDay(day, hi)) { band = 'end'; } else if (time > lo.getTime() && time < hi.getTime()) { band = 'mid'; }
+        }
+        var edge = cal.sameDay(day, state.start) || (!previewing && cal.sameDay(day, state.end));
+        button.setAttribute('data-band', band);
+        button.setAttribute('data-preview', String(previewing && band !== ''));
+        button.setAttribute('data-edge', String(edge));
+        button.setAttribute('data-today', String(cal.sameDay(day, today)));
+        button.setAttribute('aria-selected', String(edge || (band !== '' && !previewing)));
+        button.setAttribute('aria-disabled', String(!selectable(day)));
+        button.setAttribute('tabindex', cal.sameDay(day, state.focus) ? '0' : '-1');
+      }
+
+      first.value.textContent = state.start ? cal.shortDate(state.start) : 'Pick a day';
+      last.value.textContent = state.end
+        ? cal.shortDate(state.end)
+        : (state.start ? cal.shortDate(state.start) : 'Pick a day');
+      first.el.setAttribute('data-active', String(state.picking === 'start'));
+      last.el.setAttribute('data-active', String(state.picking === 'end'));
+
+      var draft = cal.rangeFromDays(state.start, state.end, first.time.value, last.time.value);
+      if (draft.problem) {
+        summary.textContent = '';
+        say(state.start ? draft.problem : '');
+      } else {
+        var win = windows.range(draft.from, draft.to);
+        summary.textContent = windows.label(win) + (draft.to ? '' : ' · live');
+        say('');
+      }
+      apply.disabled = !!draft.problem;
+    }
+
+    function say(text) {
+      problem.textContent = text || '';
+      problem.hidden = !text;
+    }
+
+    function buildPresets(now) {
+      util.clear(presetList);
+      var ranges = windows.quickRanges(now);
+      for (var q = 0; q < ranges.length; q++) {
+        (function (entry) {
+          var value = windows.range(entry.from, entry.to).value;
+          var check = icon('check', 15);
+          check.setAttribute('class', 'rangepick__check');
+          presetList.appendChild(el('button', {
+            className: 'rangepick__preset',
+            attrs: {
+              type: 'button',
+              'aria-pressed': String(current.kind === 'range' && current.value === value),
+              title: windows.label(windows.range(entry.from, entry.to))
+            },
+            on: { click: function () { spec.onApply(value); } }
+          }, [check, el('span', { text: entry.label })]));
+        })(ranges[q]);
+      }
+    }
+
+    /* ------------------------------------------------------------ events */
+
+    function dayOf(target) {
+      var node = target && target.closest ? target.closest('.cal__day') : null;
+      if (!node) { return null; }
+      for (var c = 0; c < cells.length; c++) {
+        if (cells[c].button === node) { return cells[c].date; }
+      }
+      return null;
+    }
+
+    function pick(day) {
+      if (!selectable(day)) { return; }
+      if (state.picking === 'start' || !state.start) {
+        state.start = day;
+        if (state.end && state.end.getTime() < day.getTime()) { state.end = null; }
+        state.picking = 'end';
+      } else {
+        if (day.getTime() < state.start.getTime()) {
+          state.end = state.start;
+          state.start = day;
+        } else {
+          state.end = day;
+        }
+        state.picking = 'start';
+      }
+      state.hover = null;
+      state.focus = day;
+      paint();
+    }
+
+    grid.addEventListener('click', function (event) {
+      var day = dayOf(event.target);
+      if (day) { pick(day); }
+    });
+    grid.addEventListener('pointerover', function (event) {
+      var day = dayOf(event.target);
+      if (day && selectable(day) && !cal.sameDay(day, state.hover)) {
+        state.hover = day;
+        if (state.picking === 'end') { paint(); }
+      }
+    });
+    grid.addEventListener('pointerleave', function () {
+      if (state.hover) {
+        state.hover = null;
+        if (state.picking === 'end') { paint(); }
+      }
+    });
+    grid.addEventListener('keydown', function (event) {
+      if (!state.focus) { return; }
+      var steps = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+      var weekday = (state.focus.getDay() + 6) % 7;
+      var target = null;
+      if (steps[event.key] !== undefined) {
+        target = cal.addDays(state.focus, steps[event.key]);
+      } else if (event.key === 'PageUp' || event.key === 'PageDown') {
+        var month = cal.addMonths(state.focus, event.key === 'PageUp' ? -1 : 1);
+        var length = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+        target = new Date(month.getFullYear(), month.getMonth(), Math.min(state.focus.getDate(), length));
+      } else if (event.key === 'Home') {
+        target = cal.addDays(state.focus, -weekday);
+      } else if (event.key === 'End') {
+        target = cal.addDays(state.focus, 6 - weekday);
+      }
+      if (!target) { return; }
+      event.preventDefault();
+      // The keyboard previews the second day the way the pointer does.
+      if (state.picking === 'end') { state.hover = clamp(target); }
+      focusDay(target);
+    });
+
+    function commit() {
+      var draft = cal.rangeFromDays(state.start, state.end, first.time.value, last.time.value);
+      if (draft.problem) {
+        say(draft.problem);
+        return;
+      }
+      spec.onApply(windows.range(draft.from, draft.to).value);
+    }
+
+    /** Fill from the window the page is reading, every time the picker opens. */
+    function fill(win) {
+      var now = Date.now();
+      current = win;
+      today = cal.startOfDay(new Date(now));
+      earliest = cal.addDays(today, -365);
+      var days = cal.daysOf(win, now);
+      state.start = clamp(days.startDay);
+      state.end = clamp(days.endDay);
+      first.time.value = days.startTime;
+      last.time.value = days.endTime;
+      state.picking = 'start';
+      state.hover = null;
+      state.focus = state.end;
+      state.view = monthOf(state.focus);
+      zone.textContent = windows.zoneName();
+      buildPresets(now);
+      build();
+    }
+
+    return {
+      el: root,
+      fill: fill,
+      focusTarget: function () { return cellFor(state.focus) || prev; }
     };
   }
 
@@ -937,7 +1186,6 @@
   function filterPanel(spec) {
     var controls = {};
     var row = el('div', { className: 'filters__row' });
-    var chips = el('div', { className: 'chips' });
     var i;
 
     for (i = 0; i < spec.fields.length; i++) {
@@ -945,7 +1193,7 @@
         var id = 'filter-' + field.key;
         if (field.type === 'search') {
           var searchNode = searchField({
-            id: id, key: field.key, label: field.label,
+            id: id, key: field.key, label: field.label, inline: true,
             placeholder: field.placeholder, value: spec.values[field.key] || '',
             onChange: spec.onChange
           });
@@ -994,23 +1242,30 @@
     }
 
     var reset = el('button', {
-      className: 'btn btn--ghost btn--sm', attrs: { type: 'button' },
+      className: 'btn btn--ghost btn--sm filters__reset', attrs: { type: 'button' },
       text: 'Reset', on: { click: spec.onReset }
     });
-    row.appendChild(el('div', { className: 'filters__spacer' }));
+    // Always the last thing on the row and always against its right edge,
+    // whichever line the row has wrapped it onto — see `.filters__actions`.
     row.appendChild(el('div', { className: 'filters__actions' }, [reset]));
 
+    // No chips under the controls: every select already says its value
+    // inline, so a second copy of each filter as a pill was the same
+    // information again, and the height the timeline below needed.
     var root = el('section', {
       className: 'filters',
       attrs: { 'aria-label': spec.label || 'Filters' }
-    }, [row, chips]);
+    }, [row]);
 
     function optionsFor(field, facets) {
+      if (field.options) {
+        // The label is already inside the control, so "Any status" is "All".
+        return field.options.map(function (option) {
+          return option.value === '' ? { value: '', label: 'All' } : option;
+        });
+      }
       var values = (facets && facets[field.facet || (field.key + 's')]) || [];
-      var options = [{
-        value: '',
-        label: field.allLabel || ('All ' + util.pluralLabel(field.label).toLowerCase())
-      }];
+      var options = [{ value: '', label: 'All' }];
       for (var k = 0; k < values.length; k++) {
         options.push({ value: values[k], label: util.titleCase(values[k]) });
       }
@@ -1019,7 +1274,6 @@
 
     function sync(values, facets) {
       var keys = Object.keys(controls);
-      var active = [];
       for (var k = 0; k < keys.length; k++) {
         var key = keys[k];
         var control = controls[key];
@@ -1031,42 +1285,24 @@
         } else if (control.type === 'segmented' || control.type === 'window') {
           control.control.sync(value || control.field.defaultValue);
         } else {
-          var options = control.field.options || optionsFor(control.field, facets);
+          var options = optionsFor(control.field, facets);
           var signature = options.map(function (option) { return option.value; }).join('\u001f');
           if (control.signature !== signature) {
             control.signature = signature;
             util.replace(control.holder, selectField({
-              id: 'filter-' + key, key: key, label: control.field.label,
+              id: 'filter-' + key, key: key, label: control.field.label, inline: true,
               options: options, value: value, onChange: spec.onChange
             }));
           } else {
             var select = control.holder.querySelector('select');
             if (select && select.value !== value) { select.value = value; }
           }
-        }
-        // The window selector is always set and is shown as a control, not as
-        // a chip; chips are for narrowings the user can be surprised by.
-        if (value && control.type !== 'segmented' && control.type !== 'window') {
-          active.push([key, value, (control.field && control.field.label) ||
-            (control.type === 'search' ? 'Search' : key)]);
+          // A narrowed filter reads a shade stronger than one left at "All":
+          // with the chips gone, that is how a glance finds what is applied.
+          var field = control.holder.firstChild;
+          if (field) { field.setAttribute('data-set', String(value !== '')); }
         }
       }
-
-      util.clear(chips);
-      for (var a = 0; a < active.length; a++) {
-        (function (entry) {
-          chips.appendChild(el('span', { className: 'chip' }, [
-            document.createTextNode(entry[2] + ': ' + entry[1]),
-            el('button', {
-              className: 'chip__remove',
-              attrs: { type: 'button', 'aria-label': 'Remove filter ' + entry[2] },
-              text: '\u00d7',
-              on: { click: function () { spec.onChange(entry[0], ''); } }
-            })
-          ]));
-        })(active[a]);
-      }
-      chips.hidden = active.length === 0;
     }
 
     return { el: root, sync: sync };
@@ -1264,13 +1500,23 @@
       );
     }
 
+    /* Hang from the preferred edge, then slide along the row until the
+     * whole panel is on screen: a panel nearly as wide as a phone fits from
+     * neither edge of a trigger in the middle of the row. */
     function place() {
-      var preferred = spec.align || 'start';
-      panel.dataset.align = preferred;
+      panel.dataset.align = spec.align || 'start';
+      panel.style.left = '';
+      panel.style.right = '';
       var width = document.documentElement.clientWidth || window.innerWidth;
       var rect = panel.getBoundingClientRect();
-      if (preferred === 'start' && rect.right > width - 8) { panel.dataset.align = 'end'; }
-      if (preferred === 'end' && rect.left < 8) { panel.dataset.align = 'start'; }
+      var shift = 0;
+      if (rect.right > width - 8) { shift = width - 8 - rect.right; }
+      if (rect.left + shift < 8) { shift = 8 - rect.left; }
+      if (shift) {
+        var anchor = root.getBoundingClientRect();
+        panel.style.left = Math.round(rect.left + shift - anchor.left) + 'px';
+        panel.style.right = 'auto';
+      }
     }
 
     function onDocumentMouseDown(event) {

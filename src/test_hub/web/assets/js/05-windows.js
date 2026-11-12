@@ -50,10 +50,11 @@
     };
   }
 
-  //: What the filter bar offers, shortest first.
+  //: What the filter bar offers, shortest first. A length that is not here —
+  //: `14d` from an old link — still works; the calendar button says it.
   var PRESETS = [
     lengthOf(1, 'h'), lengthOf(6, 'h'), lengthOf(24, 'h'),
-    lengthOf(7, 'd'), lengthOf(14, 'd'), lengthOf(30, 'd'), lengthOf(90, 'd')
+    lengthOf(7, 'd'), lengthOf(30, 'd'), lengthOf(90, 'd')
   ];
   var PRESET_KEYS = Object.create(null);
   for (var p = 0; p < PRESETS.length; p++) { PRESET_KEYS[PRESETS[p].key] = PRESETS[p]; }
@@ -338,32 +339,152 @@
   /** Calendar ranges the picker offers in one click, in the viewer's zone. */
   function quickRanges(now) {
     var clock = new Date(typeof now === 'number' ? now : Date.now());
-    var today = new Date(clock.getFullYear(), clock.getMonth(), clock.getDate());
+    var today = startOfDay(clock);
     // Weeks start on Monday, as ISO 8601 has them.
     var monday = addDays(today, -((today.getDay() + 6) % 7));
+    var month = new Date(today.getFullYear(), today.getMonth(), 1);
     return [
       { key: 'today', label: 'Today', from: today, to: null },
       { key: 'yesterday', label: 'Yesterday', from: addDays(today, -1), to: today },
       { key: 'week', label: 'This week', from: monday, to: null },
-      { key: 'last-week', label: 'Last week', from: addDays(monday, -7), to: monday }
+      { key: 'last-week', label: 'Last week', from: addDays(monday, -7), to: monday },
+      { key: 'month', label: 'This month', from: month, to: null },
+      { key: 'last-month', label: 'Last month', from: addMonths(month, -1), to: month }
     ];
   }
 
-  /** `2026-11-10T08:00`, what an <input type="datetime-local"> holds: local time. */
-  function toLocalInput(date) {
-    return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate()) +
-      'T' + pad2(date.getHours()) + ':' + pad2(date.getMinutes());
+  /* ----------------------------------------------------------- calendar */
+
+  /* The range picker is one month grid: click the first day, then the last.
+   * What it holds is days and optional times of day; what the URL holds is
+   * instants. These two functions are the whole translation, kept here —
+   * pure, and run under node by the tests — rather than in the component. */
+
+  function startOfDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
   }
 
-  var LOCAL_INPUT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/;
+  function addMonths(date, amount) {
+    return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+  }
 
-  /** The instant a datetime-local value means, in this browser's zone. */
-  function fromLocalInput(text) {
-    var match = LOCAL_INPUT.exec(String(text || ''));
-    if (!match) { return null; }
-    var date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]),
-      Number(match[4]), Number(match[5]), Number(match[6] || 0));
-    return isNaN(date.getTime()) ? null : date;
+  function sameDay(a, b) {
+    return !!a && !!b && a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  var CLOCK_TIME = /^(\d{2}):(\d{2})$/;
+
+  /** `day` at a `HH:MM` time of day, local; midnight when there is none. */
+  function atTime(day, time) {
+    var match = CLOCK_TIME.exec(String(time || ''));
+    if (!match) { return startOfDay(day); }
+    return new Date(day.getFullYear(), day.getMonth(), day.getDate(),
+      Number(match[1]), Number(match[2]));
+  }
+
+  function clockOf(date) {
+    return pad2(date.getHours()) + ':' + pad2(date.getMinutes());
+  }
+
+  /**
+   * The month view: 42 cells, six weeks from Monday, each a local Date or null
+   * for the days that belong to the months either side. Always six rows, so
+   * paging between months never changes the picker's height.
+   */
+  function monthGrid(view) {
+    var first = new Date(view.getFullYear(), view.getMonth(), 1);
+    var lead = (first.getDay() + 6) % 7;
+    var length = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
+    var cells = [];
+    for (var i = 0; i < 42; i++) {
+      var day = i - lead + 1;
+      cells.push(day >= 1 && day <= length
+        ? new Date(view.getFullYear(), view.getMonth(), day)
+        : null);
+    }
+    return cells;
+  }
+
+  /**
+   * Days and times to instants. With no end time the last day is included
+   * whole — and when the last day is today, the range runs on to now and keeps
+   * updating rather than ending at a midnight that has not happened yet.
+   */
+  function rangeFromDays(startDay, endDay, startTime, endTime, now) {
+    var clock = typeof now === 'number' ? now : Date.now();
+    if (!startDay) { return { from: null, to: null, problem: 'Pick the first day.' }; }
+    var first = startDay;
+    var last = endDay || startDay;
+    if (last.getTime() < first.getTime()) {
+      var swap = first;
+      first = last;
+      last = swap;
+    }
+    var from = atTime(first, startTime);
+    var to;
+    if (endTime) {
+      to = atTime(last, endTime);
+    } else if (sameDay(last, new Date(clock))) {
+      to = null;
+    } else {
+      to = addDays(startOfDay(last), 1);
+    }
+    return { from: from, to: to, problem: rangeProblem(from, to, clock) };
+  }
+
+  /** The other way: the days and times a window covers, to fill the picker. */
+  function daysOf(win, now) {
+    var clock = typeof now === 'number' ? now : Date.now();
+    var span = bounds(win, clock);
+    var from = new Date(span.start);
+    var startTime = isMidnight(from) || (win.kind === 'length' && win.length.days)
+      ? '' : clockOf(from);
+    var startDay = startOfDay(from);
+    var endDay = startOfDay(new Date(clock));
+    var endTime = '';
+    if (win.kind === 'range' && win.to) {
+      if (isMidnight(win.to)) {
+        endDay = addDays(startOfDay(win.to), -1);
+      } else {
+        endDay = startOfDay(win.to);
+        endTime = clockOf(win.to);
+      }
+      if (endDay.getTime() < startDay.getTime()) { endDay = startDay; }
+    }
+    return { startDay: startDay, endDay: endDay, startTime: startTime, endTime: endTime };
+  }
+
+  /** Monday-first weekday names, short and long, in the viewer's language. */
+  function weekdays() {
+    var names = [];
+    for (var i = 0; i < 7; i++) {
+      // 1 January 2024 was a Monday.
+      var day = new Date(2024, 0, 1 + i);
+      names.push({
+        short: formatWith(day, { weekday: 'short' }, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]),
+        long: formatWith(day, { weekday: 'long' }, String(i))
+      });
+    }
+    return names;
+  }
+
+  function monthTitle(view) {
+    return formatWith(view, { month: 'long', year: 'numeric' },
+      view.getFullYear() + '-' + pad2(view.getMonth() + 1));
+  }
+
+  /** "Tuesday, November 10, 2026" — what a screen reader says for a day. */
+  function longDate(date) {
+    return formatWith(date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' },
+      date.toDateString());
+  }
+
+  /** "Tue, Nov 10" — a picked day, in the picker's footer. */
+  function shortDate(date) {
+    var options = { weekday: 'short', month: 'short', day: 'numeric' };
+    if (date.getFullYear() !== new Date().getFullYear()) { options.year = 'numeric'; }
+    return formatWith(date, options, date.toDateString());
   }
 
   /** The viewer's time zone, by name where the browser knows it. */
@@ -400,8 +521,19 @@
     bucketLabel: bucketLabel,
     formatMoment: formatMoment,
     quickRanges: quickRanges,
-    toLocalInput: toLocalInput,
-    fromLocalInput: fromLocalInput,
-    zoneName: zoneName
+    zoneName: zoneName,
+    calendar: {
+      startOfDay: startOfDay,
+      addDays: addDays,
+      addMonths: addMonths,
+      sameDay: sameDay,
+      monthGrid: monthGrid,
+      rangeFromDays: rangeFromDays,
+      daysOf: daysOf,
+      weekdays: weekdays,
+      monthTitle: monthTitle,
+      longDate: longDate,
+      shortDate: shortDate
+    }
   };
 })(window);

@@ -148,17 +148,24 @@ fire right now.</p>
 
 <h3 id="overview-filters">Window and filters</h3>
 
-<p>A segmented control picks the window — 1, 6 or 24 hours, or 7, 14, 30 or 90 days — and
-the calendar button at its end picks a range of your own: today, yesterday, this week or
-last week in one click, or any from–to pair in your time zone, optionally running on to now
-and updating as results land. While a range is set the button shows it, and pressing a preset
-lets it go. The window rides in the URL (<code>?window=6h</code>, or
-<code>?window=2026-11-10T08:00Z..2026-11-11T18:30Z</code>), so a link carries it, and the
-analytics, suites, metrics and evidence pages read the same one. Six filters narrow it:
-project, team, component, test type, environment and branch. The dropdown values are facets
-the server computes from the data that is actually there, so you are never offered a filter
-that matches nothing. The same filter vocabulary is used on the Runs view, which is what
-lets a selection carry from one to the other.</p>
+<p>The filter bar is one compact line. A segmented control picks the window — 1, 6 or 24
+hours, or 7, 30 or 90 days — and the calendar button at its end opens a range picker: a list
+of quick ranges (today, yesterday, this week, last week, this month, last month — each one
+click) beside a single month calendar. Click the first day, then the last; the days between
+fill in, and the pointer previews the second day while you choose it. Times of day are
+optional: without them the days are whole, and a range that ends today runs on to now and
+keeps updating. Days after today cannot be picked, and the arrow keys, Page Up/Down and
+Home/End work the grid from the keyboard. While a range is set the button shows it, and
+pressing a preset lets it go. The window rides in the URL (<code>?window=6h</code>, or
+<code>?window=2026-11-10T00:00Z..2026-11-12T00:00Z</code>), so a link carries it, and the
+analytics, suites, metrics and evidence pages read the same one.</p>
+
+<p>Six filters narrow it: project, team, component, test type, environment and branch, each
+a select with its name inside it — <em>Team All</em>, <em>Team Payments</em> — so what is
+applied is read straight off the bar, and <b>Reset</b> sits at its right-hand end. The values
+are facets the server computes from the data that is actually there, so you are never
+offered a filter that matches nothing. The same filter vocabulary is used on the Runs view,
+which is what lets a selection carry from one to the other.</p>
 
 <h3 id="overview-kpis">The KPI row</h3>
 
@@ -222,9 +229,15 @@ hint counts those instead.</p>
   underneath in a sentence.</li>
   <li><b>Volume by day</b> — tests executed per day. This is the chart that tells you a
   suite stopped running before it tells you the suite started failing.</li>
-  <li><b>Pass rate trend</b> — pass rate and failure rate per day across the window.</li>
-  <li><b>Run duration</b> — p50 and p95 per day. Both, because a mean hides the shard that
-  takes eleven minutes.</li>
+  <li><b>Pass rate trend</b> — a column per day on a 0–100% axis, against a dashed line at
+  the window's overall pass rate, so a bad day is the column that stops short of the line.
+  Columns rather than a line because quiet days are common, and a line through them is a few
+  dots and dashes the eye joins anyway; an empty day is an empty slot. The newest column
+  carries its value; hover, or tab to the chart and use the arrow keys, for any day's tests,
+  failures and runs.</li>
+  <li><b>Run duration</b> — a bar from p50 to p95 per day, with the median as a dot on it:
+  the dot's height is the typical run, the bar's length how unpredictable the day was. Both,
+  because a mean hides the shard that takes eleven minutes.</li>
 </ul>
 
 <p>"Per day" is for windows longer than two days. Shorter ones are drawn by the clock — five

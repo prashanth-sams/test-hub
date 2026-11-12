@@ -23,14 +23,17 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 - **1h, 6h and 24h windows, and a custom range, on every portfolio page.** The
   Window control on the overview, analytics, suites, metrics and evidence pages
-  offers 1h · 6h · 24h · 7d · 14d · 30d · 90d, and a small calendar button at
-  its end opens a range picker: *Today*, *Yesterday*, *This week* and *Last
-  week* in one click, or any from–to pair in the viewer's time zone, optionally
-  running on to now and updating as results land. While a range is set the
-  button shows it and no preset is pressed; pressing a preset lets it go. The
-  window is one URL key, `window` — `6h`, or
-  `2026-11-10T08:00Z..2026-11-11T18:30Z` — so a link carries it; old
-  `window_days=N` links still open. Charts over a short window are drawn by the
+  offers 1h · 6h · 24h · 7d · 30d · 90d, and a small calendar button at its end
+  opens a range picker: quick ranges as a list (*Today*, *Yesterday*, *This
+  week*, *Last week*, *This month*, *Last month* — one click each) beside a
+  single month calendar where you click the first day and then the last, with
+  a preview while you choose, optional times of day, and full keyboard control
+  of the grid. A range that ends today runs on to now and keeps updating. While
+  a range is set the button shows it and no preset is pressed; pressing a
+  preset lets it go. The window is one URL key, `window` — `6h`, or
+  `2026-11-10T00:00Z..2026-11-12T00:00Z` — so a link carries it; old
+  `window_days=N` links still open (`14d` among them, shown on the calendar
+  button now that it is not a preset). Charts over a short window are drawn by the
   clock (five minutes a point for an hour, fifteen for six, an hour for a day)
   and say so in their titles, and every sentence that used to read "in the last
   30 days" names the window actually shown. See the
@@ -184,6 +187,16 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Fixed
 
+- **The Health card's spacing.** Its body — and seven other blocks — used a
+  gap class that was never a grid, so nothing in it was spaced: the count bar
+  sat on the pills above it and the counters below. `.stack--sm` is a grid now.
+  On a phone the donut no longer stretches to the screen's width; the number
+  and the donut sit side by side with the pills under both. "1 in flight" is a
+  pill with a live dot rather than a badge inside a pill.
+- **A filter no longer stays outlined after you pick a value with the mouse.**
+  The select lets go of focus; a keyboard user keeps it, and the focus ring.
+- **Analytics chips look like chips again.** The filter bar's chip styles came
+  later in the stylesheet and overrode them, monospace font and all.
 - **A dropped live stream no longer pushes the page down.** While the stream
   was away a banner appeared above every view — 66 px of amber that moved the
   filters, the KPI tiles and everything under them 82 px down — and the header
@@ -269,6 +282,21 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Changed
 
+- **A compact filter bar.** One line of controls: each select carries its name
+  inside it (*Team All*), sized to its value rather than its longest option;
+  the per-filter chips under the bar are gone; **Reset** sits at the right-hand
+  end. At 1440×900 the bar went from 169 px to 52 px, and the live timeline is
+  on screen without scrolling.
+- **New charts for the pass rate trend and run duration.** The pass rate is a
+  column per bucket against a dashed line at the window's overall rate, the
+  newest column labelled; run duration is a bar from p50 to p95 per bucket
+  with the median as a dot. Both replace lines that broke into dots and dashes
+  on sparse days, and the failure-rate line — the pass rate upside down — is
+  gone. Hover, or tab to a chart and use the arrow keys, for a bucket's tests,
+  failures and runs. One validated data hue (`--chart-series`) in both themes.
+- **Every button and option has a 0.3rem corner** — buttons, selects, inputs,
+  segmented options, the status pill, menu items and the calendar's days, from
+  one `--r-control` token.
 - The dashboard's shared overview computations are keyed by window — every
   dashboard on "6h" shares one — and a finished one too old to hand anyone is
   dropped, so a stream of one-off ranges cannot pile overviews up in memory.

@@ -855,17 +855,22 @@ def test_the_window_bar_offers_every_length_and_a_range() -> None:
         f"{amount}{unit}"
         for amount, unit in re.findall(r"lengthOf\((\d+), '([hd])'\)", presets.group(1))
     ]
-    assert offered == ["1h", "6h", "24h", "7d", "14d", "30d", "90d"]
+    assert offered == ["1h", "6h", "24h", "7d", "30d", "90d"], "no 14d: the bar stays short"
     assert re.search(r"var DEFAULT_KEY = '30d';", windows_source())
 
     components = components_source()
     assert "key: 'window', label: 'Window', type: 'window'" in components
     picker = components[components.index("function windowPicker(") :]
     picker = picker[: picker.index("\n  function ", 10)]
-    assert "icon('calendar'" in picker and "popover({" in picker
-    assert "type: 'datetime-local'" in picker
-    assert "windows.rangeProblem(" in picker, "a range is checked before it is applied"
-    assert "role: 'alert'" in picker, "the reason a range is refused is announced"
+    assert "icon('calendar'" in picker and "popover({" in picker and "rangePicker({" in picker
+    calendar = components[components.index("function rangePicker(") :]
+    calendar = calendar[: calendar.index("\n  function ", 10)]
+    assert "role: 'grid'" in calendar and "role: 'gridcell'" in calendar, "one calendar grid"
+    assert "datetime-local" not in calendar, "the two date inputs are gone"
+    assert "cal.rangeFromDays(" in calendar, "days become instants in one tested place"
+    for key in ("ArrowLeft", "PageUp", "Home", "End"):
+        assert key in calendar, f"the grid does not answer {key}"
+    assert "role: 'alert'" in calendar, "the reason a range is refused is announced"
 
 
 def test_the_windows_ceilings_are_the_apis(client: Any) -> None:
@@ -995,3 +1000,87 @@ def test_popovers_respect_reduced_motion() -> None:
         css,
     )
     assert block, "the popover animates for people who asked for no motion"
+
+
+# ------------------------------------------------------------- compact chrome
+
+
+def test_every_control_shares_one_corner() -> None:
+    """Buttons, selects, inputs and segmented options all round by 0.3rem, and
+    so does the focus ring: a ring with its own radius re-shaped a focused
+    button."""
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert re.search(r"--r-control: 0\.3rem;", css)
+    for selector in (
+        r":focus-visible \{",
+        r"\.btn \{",
+        r"\.iconbtn \{",
+        r"\.select, \.input \{",
+        r"\.segmented \{",
+        r"\.segmented button \{",
+        r"\.winpick__custom \{",
+        r"\.conn \{",
+        r"\.menu__item \{",
+        r"\.cal__num \{",
+        r"\.rangepick__preset \{",
+    ):
+        block = re.search(r"(?m)^" + selector + r"([^}]*)\}", css)
+        assert block, f"no rule for {selector}"
+        assert "border-radius: var(--r-control)" in block.group(1), f"{selector} has its own corner"
+
+
+def test_the_filter_bar_is_one_compact_line() -> None:
+    """No chips repeating each filter under the controls, labels inside the
+    selects, Reset against the right edge, and selects as wide as their value."""
+    components = components_source()
+    panel = components[components.index("function filterPanel(") :]
+    panel = panel[: panel.index("\n  function ", 10)]
+    assert "className: 'chips'" not in panel and "chip__remove" not in panel
+    assert "inline: true" in panel, "the selects are not inline"
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert ".chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top" not in css
+    actions = re.search(r"\.filters__actions \{([^}]*)\}", css)
+    assert actions and "margin-left: auto" in actions.group(1), "Reset is not pushed right"
+    select = re.search(r"\.field--inline > \.select \{([^}]*)\}", css)
+    assert select and "field-sizing: content" in select.group(1)
+
+
+def test_a_choice_made_with_the_pointer_leaves_no_outline() -> None:
+    """Regression: a select kept focus — and its border — after a mouse pick."""
+    components = components_source()
+    field = components[components.index("function selectField(") :]
+    field = field[: field.index("function searchField(")]
+    assert "pointerdown" in field and "select.blur()" in field
+    assert "removeAttribute('data-pointer')" in field, "a keyboard user would lose focus too"
+
+
+def test_a_gap_class_is_a_grid() -> None:
+    """Regression: `.stack--sm` set a gap on a block box, so the Health card's
+    count bar sat against the pills above it and the counters below."""
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    rule = re.search(r"\.stack--sm \{([^}]*)\}", css)
+    assert rule and "display: grid" in rule.group(1)
+
+
+def test_the_hero_donut_keeps_its_size() -> None:
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert re.search(r"\.hero > \.chart \{ width: 148px; \}", css)
+    overview = (WEB / "assets/js/50-view-overview.js").read_text(encoding="utf-8")
+    assert "hero__pill--live" in overview, "a badge is nested in a pill again"
+
+
+def test_pass_rate_and_duration_have_charts_of_their_own() -> None:
+    """Columns against the window's rate, and p50-p95 bars with a median dot:
+    sparse buckets drew broken lines, and the failure rate was the pass rate
+    upside down."""
+    charts = (WEB / "assets/js/20-charts.js").read_text(encoding="utf-8")
+    for kind in ("rateColumns: drawRateColumns", "rangeBars: drawRangeBars"):
+        assert kind in charts
+    assert "function hoverLayer(" in charts and "'tabindex', '0'" in charts
+    overview = (WEB / "assets/js/50-view-overview.js").read_text(encoding="utf-8")
+    trend = overview[overview.index("function trendRow(") : overview.index("function pill(")]
+    assert "kind: 'rateColumns'" in trend and "kind: 'rangeBars'" in trend
+    assert "failure_rate" not in trend, "the failure rate is drawn beside the pass rate again"
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    for token in ("--chart-series:", "--chart-series-soft:"):
+        assert css.count(token) == 2, f"{token} is not defined for both themes"

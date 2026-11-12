@@ -100,7 +100,6 @@ def test_every_preset_asks_the_api_for_itself(tmp_path: Path) -> None:
         ["6h", True, {"window_hours": 6}],
         ["24h", True, {"window_hours": 24}],
         ["7d", True, {"window_days": 7}],
-        ["14d", True, {"window_days": 14}],
         ["30d", True, {"window_days": 30}],
         ["90d", True, {"window_days": 90}],
     ]
@@ -215,19 +214,94 @@ def test_quick_ranges_are_calendar_days_where_the_viewer_is(tmp_path: Path) -> N
         ["yesterday", "2025-11-11T18:30:00.000Z", "2025-11-12T18:30:00.000Z"],
         ["week", "2025-11-09T18:30:00.000Z", None],
         ["last-week", "2025-11-02T18:30:00.000Z", "2025-11-09T18:30:00.000Z"],
+        ["month", "2025-10-31T18:30:00.000Z", None],
+        ["last-month", "2025-09-30T18:30:00.000Z", "2025-10-31T18:30:00.000Z"],
     ]
 
 
-def test_a_datetime_input_means_local_time(tmp_path: Path) -> None:
+def test_the_month_grid_is_six_mondays_long(tmp_path: Path) -> None:
+    """November 2026 starts on a Sunday: six blanks, then the 1st."""
     result = run_js(
         tmp_path,
         """
-        var instant = W.fromLocalInput('2025-11-10T08:00');
-        return [instant.toISOString(), W.toLocalInput(instant)];
+        return W.calendar.monthGrid(new Date(2026, 10, 1)).map(function (day) {
+          return day ? day.getDate() : null;
+        });
+        """,
+    )
+    assert len(result) == 42
+    assert result[:7] == [None] * 6 + [1]
+    assert result[35] == 30
+    assert result[36:] == [None] * 6
+
+
+def test_picked_days_become_instants(tmp_path: Path) -> None:
+    """New York, where 2 November 2025 is the day the clocks go back: a whole
+    day is local midnight to local midnight, whatever its length in hours."""
+    result = run_js(
+        tmp_path,
+        """
+        var C = W.calendar;
+        var now = new Date(2025, 10, 12, 10, 0).getTime();
+        function d(day) { return new Date(2025, 10, day); }
+        function iso(range) {
+          return [range.from ? range.from.toISOString() : null,
+                  range.to ? range.to.toISOString() : null, range.problem];
+        }
+        return {
+          week: iso(C.rangeFromDays(d(2), d(8), '', '', now)),
+          reversed: iso(C.rangeFromDays(d(8), d(2), '', '', now)),
+          oneDay: iso(C.rangeFromDays(d(10), null, '', '', now)),
+          toToday: iso(C.rangeFromDays(d(10), d(12), '', '', now)),
+          timed: iso(C.rangeFromDays(d(10), d(10), '09:30', '17:45', now)),
+          backwards: iso(C.rangeFromDays(d(10), d(10), '17:45', '09:30', now)),
+          nothing: iso(C.rangeFromDays(null, null, '', '', now))
+        };
         """,
         tz="America/New_York",
     )
-    assert result == ["2025-11-10T13:00:00.000Z", "2025-11-10T08:00"]
+    assert result["week"] == ["2025-11-02T04:00:00.000Z", "2025-11-09T05:00:00.000Z", None]
+    assert result["reversed"] == result["week"]
+    assert result["oneDay"] == ["2025-11-10T05:00:00.000Z", "2025-11-11T05:00:00.000Z", None]
+    # Ending today, with no end time, is "until now": it keeps updating.
+    assert result["toToday"] == ["2025-11-10T05:00:00.000Z", None, None]
+    assert result["timed"] == ["2025-11-10T14:30:00.000Z", "2025-11-10T22:45:00.000Z", None]
+    assert result["backwards"][2] == "The end has to be after the start."
+    assert result["nothing"][2] == "Pick the first day."
+
+
+def test_the_picker_opens_on_the_window_it_was_given(tmp_path: Path) -> None:
+    result = run_js(
+        tmp_path,
+        """
+        var C = W.calendar;
+        var now = new Date(2025, 10, 12, 10, 0).getTime();
+        function local(day, h, m) { return new Date(2025, 10, day, h || 0, m || 0); }
+        function days(win) {
+          var out = C.daysOf(win, now);
+          return [out.startDay.getDate(), out.endDay.getDate(), out.startTime, out.endTime];
+        }
+        function back(win) {
+          var out = C.daysOf(win, now);
+          var range = C.rangeFromDays(out.startDay, out.endDay, out.startTime, out.endTime, now);
+          return W.range(range.from, range.to).value === win.value;
+        }
+        var week = W.range(local(2), local(9));
+        var timed = W.range(local(10, 9, 30), local(10, 17, 45));
+        var open = W.range(local(10), null);
+        return {
+          week: days(week), timed: days(timed), open: days(open),
+          sixHours: days(W.parse('6h')), month: days(W.parse('30d')),
+          roundTrips: [back(week), back(timed), back(open)]
+        };
+        """,
+    )
+    assert result["week"] == [2, 8, "", ""], "a range ending at midnight ends the day before"
+    assert result["timed"] == [10, 10, "09:30", "17:45"]
+    assert result["open"] == [10, 12, "", ""]
+    assert result["sixHours"] == [12, 12, "04:00", ""]
+    assert result["month"] == [13, 12, "", ""]  # 13 October: the day-length windows start whole
+    assert result["roundTrips"] == [True, True, True]
 
 
 # ------------------------------------------------------------------ wording
