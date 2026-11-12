@@ -30,6 +30,7 @@
   var util = TestHub.util;
   var ui = TestHub.ui;
   var charts = TestHub.charts;
+  var windows = TestHub.windows;
   var el = util.el;
 
   TestHub.views = TestHub.views || {};
@@ -254,11 +255,11 @@
     }
 
     function describe(overview, summaries, details, testCount) {
-      var window = util.formatNumber(overview.total_runs) + ' ' +
-        util.pluralize(overview.total_runs, 'run') + ' in the last ' + overview.window_days + ' days';
-      if (!summaries.length) { return 'Across ' + window + ' — none of them finished.'; }
+      var scope = util.formatNumber(overview.total_runs) + ' ' +
+        util.pluralize(overview.total_runs, 'run') + ' ' + windows.during(windows.of(overview));
+      if (!summaries.length) { return 'Across ' + scope + ' — none of them finished.'; }
       var newest = summaries[0];
-      return 'Across ' + window + '. The run detail below covers the last ' +
+      return 'Across ' + scope + '. The run detail below covers the last ' +
         util.formatNumber(details.length) + ' finished ' + util.pluralize(details.length, 'run') +
         ' — ' + util.formatNumber(testCount) + ' ' + util.pluralize(testCount, 'result') +
         ', newest ' + util.timeAgo(newest.finished_at || newest.started_at) + '.';
@@ -309,7 +310,7 @@
         ui.statTile({
           value: util.formatNumber(overview.total_runs),
           label: 'Runs analysed',
-          hint: 'in the last ' + overview.window_days + ' days'
+          hint: windows.during(windows.of(overview))
         }),
         ui.statTile({
           value: util.formatDuration(totals.duration_ms),
@@ -757,7 +758,7 @@
         title: 'What history says',
         icon: 'chart',
         flush: true,
-        hint: 'Across the last ' + overview.window_days + ' days',
+        hint: windows.across(windows.of(overview)),
         body: ui.table({
           caption: 'Per-test verdicts over the window',
           columns: [

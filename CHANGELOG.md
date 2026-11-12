@@ -21,6 +21,28 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Added
 
+- **1h, 6h and 24h windows, and a custom range, on every portfolio page.** The
+  Window control on the overview, analytics, suites, metrics and evidence pages
+  offers 1h · 6h · 24h · 7d · 14d · 30d · 90d, and a small calendar button at
+  its end opens a range picker: *Today*, *Yesterday*, *This week* and *Last
+  week* in one click, or any from–to pair in the viewer's time zone, optionally
+  running on to now and updating as results land. While a range is set the
+  button shows it and no preset is pressed; pressing a preset lets it go. The
+  window is one URL key, `window` — `6h`, or
+  `2026-11-10T08:00Z..2026-11-11T18:30Z` — so a link carries it; old
+  `window_days=N` links still open. Charts over a short window are drawn by the
+  clock (five minutes a point for an hour, fifteen for six, an hour for a day)
+  and say so in their titles, and every sentence that used to read "in the last
+  30 days" names the window actually shown. See the
+  [dashboard tour](https://prashanth-sams.github.io/test-hub/docs/dashboard-tour.html#overview-filters).
+- **`window_hours`, `since` and `until` on `GET /api/v1/overview`**, beside
+  `window_days`: a window of hours, or a fixed range of at most 366 days
+  (`since` alone runs to now). Two at once — days and hours, a range and a
+  length — is a 422, as is a `since` in the future. The answer gains
+  `window_start`, `window_end` and `trend_bucket_seconds`, and a window of two
+  days or less is bucketed by the clock, with UTC datetimes in `bucket`. All
+  optional, so `SCHEMA_VERSION` does not move;
+  see [the API reference](docs/api.md#get-apiv1overview).
 - **A live test execution timeline on the overview.** A full-width chart under
   the KPI tiles with time along the bottom and *now* at the right-hand edge.
   The moment a run starts — any project, CI or not — a bar pops up at that
@@ -162,6 +184,22 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Fixed
 
+- **A dropped live stream no longer pushes the page down.** While the stream
+  was away a banner appeared above every view — 66 px of amber that moved the
+  filters, the KPI tiles and everything under them 82 px down — and the header
+  pill doubled in width. The status is now a small pill in a slot sized for its
+  longest label, so it changes and nothing else moves; clicking it opens the
+  details (the reason, the last update, the server) and **Retry now** in a
+  popover over the page.
+- **`runs_24h` is the last 24 hours whatever the overview's window is.** It was
+  folded from the window's runs, so a window shorter than a day undercounted it
+  and one in the past made it zero.
+- **Daily trend labels are no longer a day early west of Greenwich.** A UTC date
+  such as `2026-11-12` was printed in local time, which in New York is the
+  evening of the 11th.
+- **The SDK's `overview()` encodes its parameters**, so a `since` with a `+05:30`
+  offset reaches the server as one rather than with a space in it; datetimes
+  are accepted, and a naive one is refused before it is sent.
 - **"The overview did not load — the request timed out after 20 s" while tests
   were running.** Three causes, each reproduced and measured
   ([scaling](docs/scaling.md#dashboards-under-a-burst-of-results)):
@@ -231,6 +269,9 @@ one of those is listed under **Changed** or **Removed** with the migration.
 
 ### Changed
 
+- The dashboard's shared overview computations are keyed by window — every
+  dashboard on "6h" shares one — and a finished one too old to hand anyone is
+  dropped, so a stream of one-off ranges cannot pile overviews up in memory.
 - **An import costs a handful of SQL statements, not five per test.** The fold
   looked every test and attempt up with its own query — even in a run the same
   batch had just created, which cannot have any — and each lookup flushed the

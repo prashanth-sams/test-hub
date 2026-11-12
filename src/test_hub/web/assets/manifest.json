@@ -14,6 +14,7 @@
   ],
   "js": [
     "assets/js/00-util.js",
+    "assets/js/05-windows.js",
     "assets/js/10-provider.js",
     "assets/js/12-live-provider.js",
     "assets/js/20-charts.js",
@@ -35,6 +36,7 @@
   "files": [
     "assets/css/app.css",
     "assets/js/00-util.js",
+    "assets/js/05-windows.js",
     "assets/js/10-provider.js",
     "assets/js/12-live-provider.js",
     "assets/js/20-charts.js",

@@ -27,6 +27,7 @@
   var util = TestHub.util;
   var ui = TestHub.ui;
   var charts = TestHub.charts;
+  var windows = TestHub.windows;
   var el = util.el;
 
   TestHub.views = TestHub.views || {};
@@ -131,7 +132,7 @@
       }
       var idle = projects.length - entries.length;
       var text = 'Newest run per project' + (idle > 0
-        ? ' · ' + util.formatNumber(idle) + ' without a run in ' + overview.window_days + ' days'
+        ? ' · ' + util.formatNumber(idle) + ' without a run ' + windows.during(windows.of(overview))
         : '');
       if (hint.textContent !== text) { hint.textContent = text; }
     }
@@ -390,9 +391,11 @@
       // for the same corner — one number per level of detail.
       var live = overview.live_runs || [];
       var failing = (counts.failed || 0) + (counts.error || 0);
+      var win = windows.of(overview);
+      var step = windows.bucketWords(overview.trend_bucket_seconds);
       var pills = [
         pill('clock', util.formatNumber(overview.total_runs) + ' ' +
-          util.pluralize(overview.total_runs, 'run') + ' in ' + overview.window_days + ' days'),
+          util.pluralize(overview.total_runs, 'run') + ' ' + windows.briefly(win)),
         pill('grid', util.formatNumber((overview.projects || []).length) + ' ' +
           util.pluralize((overview.projects || []).length, 'project')),
         // Not the pass rate: the donut is already saying that, two inches to
@@ -409,7 +412,7 @@
       return el('div', { className: 'grid grid--2' }, [
         ui.card({
           title: 'Health',
-          hint: 'Last ' + overview.window_days + ' days',
+          hint: windows.title(win),
           body: el('div', { className: 'stack--sm' }, [
             el('div', { className: 'hero' }, [
               el('div', { className: 'hero__figure' }, [
@@ -431,16 +434,17 @@
           ])
         }),
         ui.card({
-          title: 'Volume by day',
+          title: 'Volume ' + step.by,
           hint: util.formatNumber(overview.total_runs) + ' runs',
           body: chart({
             kind: 'stackedBar',
-            title: 'Tests executed per day',
-            description: 'Failed and errored tests stacked against everything else, per day.',
+            title: 'Tests executed ' + step.per,
+            description: 'Failed and errored tests stacked against everything else, ' +
+              step.per + '.',
             height: 196,
             buckets: (overview.trend || []).map(function (point) {
               return {
-                label: util.formatDay(point.bucket),
+                label: windows.bucketLabel(point.bucket, overview.trend_bucket_seconds),
                 values: {
                   rest: Math.max(0, (point.total || 0) - (point.failed || 0)),
                   failed: point.failed || 0
@@ -458,9 +462,10 @@
     }
 
     function trendRow(overview) {
+      var step = windows.bucketWords(overview.trend_bucket_seconds);
       var points = (overview.trend || []).map(function (point) {
         return {
-          label: util.formatDay(point.bucket),
+          label: windows.bucketLabel(point.bucket, overview.trend_bucket_seconds),
           values: {
             pass_rate: typeof point.pass_rate === 'number' ? point.pass_rate : null,
             failure_rate: typeof point.failure_rate === 'number' ? point.failure_rate : null,
@@ -473,12 +478,12 @@
       return el('div', { className: 'grid grid--2' }, [
         ui.card({
           title: 'Pass rate trend',
-          hint: 'Days with no runs are gaps, not zeroes',
+          hint: step.gaps,
           body: [
             chart({
               kind: 'trend',
-              title: 'Pass rate by day',
-              description: 'Pass rate and failure rate per day over the selected window.',
+              title: 'Pass rate ' + step.by,
+              description: 'Pass rate and failure rate ' + step.per + ' over the selected window.',
               points: points,
               yMin: 0,
               yMax: 100,
@@ -507,8 +512,8 @@
           body: [
             chart({
               kind: 'trend',
-              title: 'Run duration by day',
-              description: 'Median and 95th percentile wall-clock run duration per day.',
+              title: 'Run duration ' + step.by,
+              description: 'Median and 95th percentile wall-clock run duration ' + step.per + '.',
               points: points,
               yFloor: 0,
               formatY: function (value) { return util.formatDuration(value); },

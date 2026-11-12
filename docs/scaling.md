@@ -128,7 +128,10 @@ browser does:
 - **One overview per change, not one per dashboard.** Concurrent `/overview`
   requests share a computation, and a dashboard says (`?after=`) which change it
   needs, so it can be handed one already running — never one older than that
-  change. See `test_hub.service.coalesce`.
+  change. Requests share only when they ask for the same window — every
+  dashboard on "6h" is one question, a custom range is its own — and a result
+  too old to hand anyone is dropped, so a stream of one-off ranges cannot pile
+  up overviews in memory. See `test_hub.service.coalesce`.
 - **One request per section in flight, per tab.** A change that lands mid-load
   queues exactly one more load.
 - **Background tabs give their stream back** ten seconds after they are hidden,
@@ -378,8 +381,9 @@ In order of value per hour spent, if a single Test Hub is struggling:
 1. **Stop storing raw reports** if you do not need them for parser debugging:
    `TEST_HUB_STORE_RAW_REPORTS=false`. One fewer write and one fewer file per
    import.
-2. **Poll `/overview` less often, and with a smaller `window_days`.** It is the
-   most expensive endpoint by an order of magnitude.
+2. **Poll `/overview` less often, and with a smaller window** (`window_hours`
+   for anything under a day). It is the most expensive endpoint by an order of
+   magnitude, and what it costs grows with the runs inside the window.
 3. **Publish one report per run.** Not for speed — because importing two files
    into one run id loses events; see [api.md](api.md#post-apiv1imports).
 4. **Batch live events.** One `POST /runs/{id}/events` with 200 events is one

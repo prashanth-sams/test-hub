@@ -237,10 +237,26 @@ enough to poll.</p>
 of the newest change the caller has seen. The answer includes it, and the server may
 answer every dashboard that asks for the same with one computation.</p>
 
-<p><code>window_days</code> accepts 1–365. Note <code>total_runs</code> (inside the
-window) and <code>total_runs_all_time</code>: when the first is zero and the second is
-not, every run is older than the window, and the dashboard says so rather than showing an
-empty state that looks like an empty installation.</p>
+<p>The window is one of three things: <code>window_days</code> (1–365, default 30),
+<code>window_hours</code> (1–8784 — the dashboard's 1h, 6h and 24h), or a fixed range,
+<code>since</code> and <code>until</code>, ISO 8601 with an offset and at most 366 days
+long. <code>since</code> alone runs on to now; <code>until</code> alone is the length before
+it. Asking for two at once — days and hours, or a range and a length — is a 422.</p>
+
+<div class="codeblock" data-lang="shell">
+<pre><code>curl -s "localhost:8000/api/v1/overview?window_hours=6"
+curl -s "localhost:8000/api/v1/overview?since=2026-11-11T18:00:00Z&amp;until=2026-11-12T06:30:00Z"</code></pre>
+</div>
+
+<p>The answer carries the exact bounds it covers, <code>window_start</code> and
+<code>window_end</code>, and <code>trend_bucket_seconds</code>: a window of two days or
+less is bucketed by the clock — five minutes for an hour, fifteen for six, an hour for a
+day — and anything longer by the UTC date.</p>
+
+<p>Note <code>total_runs</code> (inside the window) and <code>total_runs_all_time</code>:
+when the first is zero and the second is not, every run is older than the window, and the
+dashboard says so rather than showing an empty state that looks like an empty
+installation.</p>
 
 <p>Each entry in <code>projects</code> carries <code>last_run</code>: the project's newest
 run inside the window as a full run summary — counts, trigger, branch,

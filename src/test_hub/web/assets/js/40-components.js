@@ -34,6 +34,7 @@
     back: ['M20 12H4', 'm10 6-6 6 6 6'],
     filter: ['M3.5 5.5h17l-6.5 7.6V19l-4 2v-7.9Z'],
     clock: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z', 'M12 7.2V12l3 1.8'],
+    calendar: ['M5.5 5h13A1.5 1.5 0 0 1 20 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-12A1.5 1.5 0 0 1 5.5 5Z', 'M4 9.6h16', 'M8.4 3.2v3.6M15.6 3.2v3.6', 'M8 13.2h.01M12 13.2h.01M16 13.2h.01M8 16.6h.01M12 16.6h.01'],
     gear: ['M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z', 'M19.4 14.4a1.5 1.5 0 0 0 .3 1.7l.1.1a1.9 1.9 0 1 1-2.6 2.6l-.1-.1a1.5 1.5 0 0 0-2.6 1v.2a1.9 1.9 0 1 1-3.8 0v-.1a1.5 1.5 0 0 0-2.6-1l-.1.1a1.9 1.9 0 1 1-2.6-2.6l.1-.1a1.5 1.5 0 0 0-1-2.6h-.2a1.9 1.9 0 1 1 0-3.8h.1a1.5 1.5 0 0 0 1-2.6l-.1-.1a1.9 1.9 0 1 1 2.6-2.6l.1.1a1.5 1.5 0 0 0 1.7.3h.1a1.5 1.5 0 0 0 .9-1.4v-.2a1.9 1.9 0 1 1 3.8 0v.1a1.5 1.5 0 0 0 2.6 1l.1-.1a1.9 1.9 0 1 1 2.6 2.6l-.1.1a1.5 1.5 0 0 0-.3 1.7v.1a1.5 1.5 0 0 0 1.4.9h.2a1.9 1.9 0 1 1 0 3.8h-.1a1.5 1.5 0 0 0-1.4.9Z'],
     check: ['m5 12.8 4.4 4.4L19 7.6'],
     monitor: ['M4.5 4.8h15a1.5 1.5 0 0 1 1.5 1.5v8.4a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 14.7V6.3a1.5 1.5 0 0 1 1.5-1.5Z', 'M9 19.2h6M12 16.2v3'],
@@ -690,6 +691,222 @@
     };
   }
 
+  /* -------------------------------------------------------- window picker */
+
+  /**
+   * The Window control: the preset lengths as one segmented control, and at
+   * its end a small calendar button that opens a range picker.
+   *
+   * The presets answer "lately"; the button answers "that afternoon". While a
+   * range is set no preset is pressed and the button says the range instead,
+   * so the control always shows the window the page is reading — and pressing
+   * a preset is how a range is let go of, with nothing else to find.
+   */
+  function windowPicker(spec) {
+    var windows = TestHub.windows;
+    var uid = Math.random().toString(36).slice(2, 8);
+    var current = windows.parse(spec.value);
+
+    function choose(value) {
+      if (pop.isOpen()) { pop.close(); }
+      spec.onChange(value);
+    }
+
+    var presetButtons = [];
+    var presets = el('div', {
+      className: 'segmented',
+      attrs: { role: 'group', 'aria-label': spec.label + ' presets' }
+    });
+    for (var i = 0; i < windows.PRESETS.length; i++) {
+      (function (length) {
+        var button = el('button', {
+          attrs: { type: 'button', 'aria-pressed': 'false', title: 'Last ' + length.words },
+          dataset: { value: length.key },
+          text: length.key,
+          on: { click: function () { choose(length.key); } }
+        });
+        presetButtons.push(button);
+        presets.appendChild(button);
+      })(windows.PRESETS[i]);
+    }
+
+    var rangeText = el('span', { className: 'winpick__range' });
+    var trigger = el('button', {
+      className: 'winpick__custom',
+      attrs: { type: 'button' }
+    }, [icon('calendar', 15), rangeText]);
+
+    /* The panel: one-click calendar ranges, then a from/to pair. */
+    var quick = el('div', {
+      className: 'winpick__quick',
+      attrs: { role: 'group', 'aria-label': 'Quick ranges' }
+    });
+    var fromInput = el('input', {
+      className: 'input winpick__input',
+      attrs: { type: 'datetime-local', id: 'winpick-from-' + uid, step: '60', required: true }
+    });
+    var toInput = el('input', {
+      className: 'input winpick__input',
+      attrs: { type: 'datetime-local', id: 'winpick-to-' + uid, step: '60' }
+    });
+    var untilNow = el('input', {
+      attrs: { type: 'checkbox', id: 'winpick-now-' + uid }
+    });
+    var problem = el('p', {
+      className: 'winpick__problem',
+      attrs: { id: 'winpick-problem-' + uid, role: 'alert' }
+    });
+    problem.hidden = true;
+    var zone = el('span', { className: 'winpick__zone' });
+
+    var form = el('form', { className: 'winpick__form', attrs: { novalidate: true } }, [
+      el('div', { className: 'winpick__fields' }, [
+        el('label', { className: 'field', attrs: { for: fromInput.id } }, [
+          el('span', { className: 'field__label', text: 'From' }),
+          fromInput
+        ]),
+        el('label', { className: 'field', attrs: { for: toInput.id } }, [
+          el('span', { className: 'field__label', text: 'To' }),
+          toInput
+        ])
+      ]),
+      el('label', { className: 'winpick__now', attrs: { for: untilNow.id } }, [
+        untilNow,
+        el('span', { text: 'Until now, and keep updating' })
+      ]),
+      problem,
+      el('div', { className: 'winpick__foot' }, [
+        el('span', { className: 'winpick__zone-wrap' }, [icon('clock', 13), zone]),
+        el('div', { className: 'winpick__actions' }, [
+          el('button', {
+            className: 'btn btn--ghost btn--sm', attrs: { type: 'button' }, text: 'Cancel',
+            on: { click: function () { pop.close({ restoreFocus: true }); } }
+          }),
+          el('button', { className: 'btn btn--primary btn--sm', attrs: { type: 'submit' }, text: 'Apply' })
+        ])
+      ])
+    ]);
+
+    var pop = popover({
+      trigger: trigger,
+      label: 'Custom range',
+      className: 'winpick__panel',
+      align: 'end',
+      initialFocus: function () { return fromInput; },
+      onOpen: fill,
+      body: [
+        el('div', { className: 'popover__title', text: 'Custom range' }),
+        quick,
+        form
+      ]
+    });
+
+    function say(text, field) {
+      problem.textContent = text || '';
+      problem.hidden = !text;
+      fromInput.removeAttribute('aria-invalid');
+      toInput.removeAttribute('aria-invalid');
+      if (field) {
+        field.setAttribute('aria-invalid', 'true');
+        field.setAttribute('aria-describedby', problem.id);
+        field.focus();
+      }
+    }
+
+    function setUntilNow(on) {
+      untilNow.checked = on;
+      toInput.disabled = on;
+    }
+
+    /** Fill the panel from the window the page is reading, every time it opens. */
+    function fill() {
+      var now = Date.now();
+      var bounds = windows.bounds(current, now);
+      var latest = windows.toLocalInput(new Date(now));
+      fromInput.max = latest;
+      toInput.max = latest;
+      fromInput.value = windows.toLocalInput(new Date(bounds.start));
+      toInput.value = windows.toLocalInput(new Date(bounds.end));
+      setUntilNow(current.kind === 'range' && !current.to);
+      zone.textContent = 'Times in ' + windows.zoneName();
+      say('');
+
+      util.clear(quick);
+      var ranges = windows.quickRanges(now);
+      for (var q = 0; q < ranges.length; q++) {
+        (function (entry) {
+          var value = windows.range(entry.from, entry.to).value;
+          quick.appendChild(el('button', {
+            className: 'winpick__chip',
+            attrs: {
+              type: 'button',
+              'aria-pressed': String(current.kind === 'range' && current.value === value),
+              title: windows.label(windows.range(entry.from, entry.to))
+            },
+            text: entry.label,
+            on: { click: function () { pop.close({ restoreFocus: true }); spec.onChange(value); } }
+          }));
+        })(ranges[q]);
+      }
+    }
+
+    untilNow.addEventListener('change', function () {
+      setUntilNow(untilNow.checked);
+      say('');
+    });
+    fromInput.addEventListener('input', function () { say(''); });
+    toInput.addEventListener('input', function () { say(''); });
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var from = windows.fromLocalInput(fromInput.value);
+      var to = untilNow.checked ? null : windows.fromLocalInput(toInput.value);
+      if (!from) { say('Pick when the range starts.', fromInput); return; }
+      if (!untilNow.checked && !to) {
+        say('Pick when the range ends, or tick "Until now".', toInput);
+        return;
+      }
+      var issue = windows.rangeProblem(from, to);
+      if (issue) {
+        say(issue, issue.indexOf('end') >= 0 ? toInput : fromInput);
+        return;
+      }
+      pop.close({ restoreFocus: true });
+      spec.onChange(windows.range(from, to).value);
+    });
+
+    var group = el('div', {
+      className: 'winpick',
+      attrs: { role: 'group', 'aria-label': spec.label }
+    }, [presets, pop.el]);
+
+    function sync(value) {
+      current = windows.parse(value);
+      for (var k = 0; k < presetButtons.length; k++) {
+        var pressed = current.kind === 'length' && presetButtons[k].dataset.value === current.value;
+        presetButtons[k].setAttribute('aria-pressed', String(pressed));
+      }
+      // A preset says itself; anything else — a range, or a length typed into
+      // the URL that no button offers — is said by the calendar button.
+      var custom = !current.preset;
+      var text = custom ? windows.label(current) : '';
+      trigger.setAttribute('data-active', String(custom));
+      trigger.setAttribute('aria-label', custom ? 'Custom range: ' + text : 'Custom range');
+      trigger.setAttribute('title', custom ? text + ' — change the range' : 'Pick a custom range');
+      if (rangeText.textContent !== text) { rangeText.textContent = text; }
+      rangeText.hidden = !custom;
+    }
+    sync(spec.value);
+
+    return {
+      el: el('div', { className: 'field' }, [
+        el('span', { className: 'field__label', text: spec.label }),
+        group
+      ]),
+      sync: sync
+    };
+  }
+
   /**
    * A filter bar that owns its own DOM across re-renders.
    *
@@ -706,13 +923,8 @@
    */
   function portfolioFields() {
     return [
-      {
-        key: 'window_days', label: 'Window', type: 'segmented', defaultValue: '30',
-        options: [
-          { value: '7', label: '7d' }, { value: '14', label: '14d' },
-          { value: '30', label: '30d' }, { value: '90', label: '90d' }
-        ]
-      },
+      // 1h … 90d, and a calendar button for a range — see windowPicker.
+      { key: 'window', label: 'Window', type: 'window', defaultValue: TestHub.windows.DEFAULT_KEY },
       { key: 'project', label: 'Project' },
       { key: 'team', label: 'Team' },
       { key: 'component', label: 'Component' },
@@ -742,6 +954,19 @@
             input: searchNode.querySelector('input')
           };
           row.appendChild(searchNode);
+          return;
+        }
+        if (field.type === 'window') {
+          var picker = windowPicker({
+            label: field.label,
+            value: spec.values[field.key] || field.defaultValue,
+            onChange: function (next) { spec.onChange(field.key, next); }
+          });
+          var pickerHolder = el('div', { className: 'field-holder' }, picker.el);
+          controls[field.key] = {
+            type: 'window', holder: pickerHolder, field: field, control: picker
+          };
+          row.appendChild(pickerHolder);
           return;
         }
         if (field.type === 'segmented') {
@@ -803,7 +1028,7 @@
           if (document.activeElement !== control.input && control.input.value !== value) {
             control.input.value = value;
           }
-        } else if (control.type === 'segmented') {
+        } else if (control.type === 'segmented' || control.type === 'window') {
           control.control.sync(value || control.field.defaultValue);
         } else {
           var options = control.field.options || optionsFor(control.field, facets);
@@ -821,7 +1046,7 @@
         }
         // The window selector is always set and is shown as a control, not as
         // a chip; chips are for narrowings the user can be surprised by.
-        if (value && control.type !== 'segmented') {
+        if (value && control.type !== 'segmented' && control.type !== 'window') {
           active.push([key, value, (control.field && control.field.label) ||
             (control.type === 'search' ? 'Search' : key)]);
         }
@@ -993,6 +1218,113 @@
         document.removeEventListener('mousedown', onDocumentMouseDown);
         document.removeEventListener('focusin', onDocumentFocusIn);
       }
+    };
+  }
+
+  /* -------------------------------------------------------------- popover */
+
+  /* An anchored, non-modal dialog: a panel that opens under its trigger and
+   * floats over the page instead of pushing it down. The window picker's
+   * range form and the connection status's details both live in one, so
+   * opening either never moves a pixel of the page around it.
+   *
+   *   click / Enter / Space   toggle; on open, focus moves into the panel
+   *   Escape                  close, and focus goes back to the trigger
+   *   click outside           close, without stealing focus
+   *   focus leaving           close (Tab out, or clicking into another control)
+   *
+   * Unlike the menu's, its document listeners exist only while it is open: a
+   * view that is torn down with its popover closed leaves nothing behind, and
+   * one torn down open lets go at the next click anywhere.
+   *
+   * `align` is the edge the panel hangs from, `start` or `end`; if that would
+   * put it off screen it hangs from the other one.
+   */
+  function popover(spec) {
+    var id = 'th-popover-' + Math.random().toString(36).slice(2, 8);
+    var open = false;
+    var trigger = spec.trigger;
+
+    var panel = el('div', {
+      className: 'popover' + (spec.className ? ' ' + spec.className : ''),
+      attrs: { id: id, role: 'dialog', 'aria-label': spec.label || 'Details' },
+      dataset: { align: spec.align || 'start' }
+    }, spec.body || []);
+    panel.hidden = true;
+
+    trigger.setAttribute('aria-haspopup', 'dialog');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', id);
+
+    var root = el('div', { className: 'popover-anchor' }, [trigger, panel]);
+
+    function focusables() {
+      return panel.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea'
+      );
+    }
+
+    function place() {
+      var preferred = spec.align || 'start';
+      panel.dataset.align = preferred;
+      var width = document.documentElement.clientWidth || window.innerWidth;
+      var rect = panel.getBoundingClientRect();
+      if (preferred === 'start' && rect.right > width - 8) { panel.dataset.align = 'end'; }
+      if (preferred === 'end' && rect.left < 8) { panel.dataset.align = 'start'; }
+    }
+
+    function onDocumentMouseDown(event) {
+      if (open && !root.contains(event.target)) { setOpen(false); }
+    }
+
+    function onDocumentFocusIn(event) {
+      if (open && !root.contains(event.target)) { setOpen(false); }
+    }
+
+    function setOpen(next, options) {
+      if (open === next) { return; }
+      open = next;
+      panel.hidden = !next;
+      root.setAttribute('data-open', String(next));
+      trigger.setAttribute('aria-expanded', String(next));
+      if (next) {
+        document.addEventListener('mousedown', onDocumentMouseDown);
+        document.addEventListener('focusin', onDocumentFocusIn);
+        if (spec.onOpen) { spec.onOpen(panel); }
+        place();
+        if (!options || options.focus !== false) {
+          var target = spec.initialFocus ? spec.initialFocus() : focusables()[0];
+          if (target) { target.focus(); }
+        }
+      } else {
+        document.removeEventListener('mousedown', onDocumentMouseDown);
+        document.removeEventListener('focusin', onDocumentFocusIn);
+        if (spec.onClose) { spec.onClose(); }
+        if (options && options.restoreFocus) { trigger.focus(); }
+      }
+    }
+
+    trigger.addEventListener('click', function () { setOpen(!open); });
+    trigger.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && open) {
+        event.stopPropagation();
+        setOpen(false, { restoreFocus: true });
+      }
+    });
+    panel.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        event.stopPropagation();
+        setOpen(false, { restoreFocus: true });
+      }
+    });
+
+    return {
+      el: root,
+      panel: panel,
+      trigger: trigger,
+      open: function (options) { setOpen(true, options); },
+      close: function (options) { setOpen(false, options); },
+      isOpen: function () { return open; }
     };
   }
 
@@ -1409,6 +1741,7 @@
     icon: icon,
     railIcon: railIcon,
     menu: menu,
+    popover: popover,
     menuSection: menuSection,
     themeSwitch: themeSwitch,
     statusPill: statusPill,
@@ -1443,6 +1776,7 @@
     portfolioFields: portfolioFields,
     searchField: searchField,
     segmented: segmented,
+    windowPicker: windowPicker,
     statusBars: statusBars,
     // The live timeline (42-timeline.js) stacks the same classes in the same
     // order, so the two charts never disagree about what a colour means.

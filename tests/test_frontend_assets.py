@@ -830,3 +830,168 @@ def test_the_overview_says_which_change_it_needs() -> None:
     body = source[source.index("self.getOverview = function") :]
     body = body[: body.index("self.listRuns")]
     assert "params.after = lastEventId" in body
+
+
+# ------------------------------------------------------------------- windows
+
+
+def windows_source() -> str:
+    return (WEB / "assets" / "js" / "05-windows.js").read_text(encoding="utf-8")
+
+
+def test_the_window_module_loads_before_everything_that_reads_it() -> None:
+    names = [path.name for path in JS_FILES]
+    first = names.index("05-windows.js")
+    assert first == names.index("00-util.js") + 1
+    for reader in ("10-provider.js", "12-live-provider.js", "30-store.js", "40-components.js"):
+        assert names.index(reader) > first, f"{reader} loads before the window it reads"
+
+
+def test_the_window_bar_offers_every_length_and_a_range() -> None:
+    """1h, 6h and 24h next to the day lengths, and a calendar button for the rest."""
+    presets = re.search(r"var PRESETS = \[(.*?)\];", windows_source(), re.S)
+    assert presets, "no presets"
+    offered = [
+        f"{amount}{unit}"
+        for amount, unit in re.findall(r"lengthOf\((\d+), '([hd])'\)", presets.group(1))
+    ]
+    assert offered == ["1h", "6h", "24h", "7d", "14d", "30d", "90d"]
+    assert re.search(r"var DEFAULT_KEY = '30d';", windows_source())
+
+    components = components_source()
+    assert "key: 'window', label: 'Window', type: 'window'" in components
+    picker = components[components.index("function windowPicker(") :]
+    picker = picker[: picker.index("\n  function ", 10)]
+    assert "icon('calendar'" in picker and "popover({" in picker
+    assert "type: 'datetime-local'" in picker
+    assert "windows.rangeProblem(" in picker, "a range is checked before it is applied"
+    assert "role: 'alert'" in picker, "the reason a range is refused is announced"
+
+
+def test_the_windows_ceilings_are_the_apis(client: Any) -> None:
+    """A window the server would refuse is never sent: the browser's limits are
+    the API's, and both ends of each are pinned here."""
+    source = windows_source()
+    assert re.search(r"var MAX_DAYS = 365;", source)
+    assert re.search(r"var MAX_HOURS = 366 \* 24;", source)
+    assert re.search(r"var MAX_SPAN_MS = 366 \* DAY;", source)
+
+    def status(**params: Any) -> int:
+        return int(client.get("/api/v1/overview", params=params).status_code)
+
+    assert status(window_days=365) == 200
+    assert status(window_days=366) == 422
+    assert status(window_hours=366 * 24) == 200
+    assert status(window_hours=366 * 24 + 1) == 422
+
+
+def test_the_browser_buckets_with_the_servers_numbers() -> None:
+    """05-windows.js transcribes SqlRunRepository.trend_step; a filtered slice
+    is bucketed in the browser and must chart like the server's answer."""
+    from test_hub.storage.repositories import SqlRunRepository
+
+    source = windows_source()
+    steps = re.search(r"var CLOCK_STEPS = \[([\d, ]+)\];", source)
+    assert steps
+    assert tuple(int(step) for step in steps.group(1).split(",")) == SqlRunRepository.CLOCK_STEPS
+    buckets = re.search(r"var CLOCK_BUCKETS = (\d+);", source)
+    assert buckets and int(buckets.group(1)) == SqlRunRepository.CLOCK_TREND_BUCKETS
+    limit = re.search(r"var CLOCK_LIMIT_MS = (\d+) \* HOUR;", source)
+    assert limit
+    assert int(limit.group(1)) * 3600 == SqlRunRepository.CLOCK_TREND_LIMIT.total_seconds()
+    widest = re.search(r"var MAX_TREND_BUCKETS = (\d+);", source)
+    assert widest and int(widest.group(1)) == SqlRunRepository.MAX_TREND_BUCKETS
+
+
+def test_the_overview_is_asked_for_its_window_in_the_apis_terms() -> None:
+    """`window_hours`, `window_days`, or `since`/`until` — never the URL's own
+    spelling, which the API does not know."""
+    source = live_provider_source()
+    facets = source[source.index("function facetParams(") : source.index("function shapeProject(")]
+    assert "window" not in facets, "the facet parameters carry a window again"
+    overview = source[source.index("self.getOverview = function") : source.index("self.listRuns")]
+    assert "windows.apiParams(win)" in overview
+    narrow = source[source.index("function narrowOverview(") : source.index("self.getOverview")]
+    assert "params.since = " in narrow and "params.until = " in narrow, (
+        "a filtered overview fetches the runs inside its window, not the newest overall"
+    )
+    assert "windows.trendStep(" in narrow
+
+
+def test_old_window_links_still_open() -> None:
+    store = store_source()
+    assert "filters.window = windows.fromQuery(query).value;" in store
+    hash_with = store[store.index("function hashWith(") :]
+    hash_with = hash_with[: hash_with.index("var segments;")]
+    assert "delete query.window_days;" in hash_with, "an old link would keep two windows"
+
+
+def test_no_page_says_its_window_in_days_any_more() -> None:
+    """Regression guard: "in the last 1 days" is what a six-hour window reads
+    as through the old sentence."""
+    for path in JS_FILES:
+        if re.match(r"5\d-view-", path.name):
+            source = path.read_text(encoding="utf-8")
+            assert not re.search(r"window_days \+ ' days", source), path.name
+            # Every page with the Window control says which window it shows.
+            if "ui.portfolioFields()" in source:
+                assert "windows." in source, f"{path.name} does not word its window"
+
+
+# ---------------------------------------------------------- connection status
+
+
+def app_source() -> str:
+    return (WEB / "assets" / "js" / "90-app.js").read_text(encoding="utf-8")
+
+
+def test_a_dropped_stream_moves_nothing_on_the_page() -> None:
+    """The old banner sat above the view and pushed every page down 82px while
+    the stream was away, and the pill doubled in width. Neither may come back."""
+    assert 'id="th-banner"' not in INDEX_MARKUP
+    app = app_source()
+    assert "ui.banner(" not in app, "the status is shown in a banner again"
+
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    assert re.search(r"\.conn-slot > \* \{ grid-area: 1 / 1; \}", css)
+    assert re.search(r"\.conn-slot__sizer \{ visibility: hidden;", css)
+    assert re.search(
+        r'<span class="conn-slot" id="th-conn-slot">\s*<button class="conn"', INDEX_MARKUP
+    )
+    sizers = app[app.index("var conn = (function ()") :]
+    assert "Object.keys(STATUS_TEXT)" in sizers[: sizers.index("ui.popover(")], (
+        "every label must be laid into the slot, or the slot fits only some of them"
+    )
+
+
+def test_the_status_details_and_retry_live_in_a_popover() -> None:
+    app = app_source()
+    block = app[app.index("var conn = (function ()") : app.index("function syncStatus(")]
+    assert "trigger: connPill" in block
+    assert "provider.reconnect()" in block and "Retry now" in block
+    # Announced once per change by a live region, not by the button itself.
+    assert 'id="th-conn-announce" role="status" aria-live="polite"' in INDEX_MARKUP
+
+
+def test_a_popover_lets_go_of_the_document_when_it_closes() -> None:
+    """A filter bar is rebuilt with every view, so a popover that kept its
+    document listeners for life would leak a pair per page visited."""
+    components = components_source()
+    body = components[components.index("function popover(") :]
+    body = body[body.index("function setOpen(") :]
+    opening, closing = body.split("} else {", 1)
+    closing = closing[: closing.index("\n      }\n")]
+    for event in ("mousedown", "focusin"):
+        assert f"document.addEventListener('{event}'" in opening
+        assert f"document.removeEventListener('{event}'" in closing
+    assert "if (options && options.restoreFocus) { trigger.focus(); }" in closing
+
+
+def test_popovers_respect_reduced_motion() -> None:
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    block = re.search(
+        r"@media \(prefers-reduced-motion: reduce\) \{\s*\.menu__panel,\s*\.popover "
+        r"\{ animation: none; \}",
+        css,
+    )
+    assert block, "the popover animates for people who asked for no motion"

@@ -25,13 +25,15 @@
 
   var TestHub = window.TestHub = window.TestHub || {};
   var util = TestHub.util;
+  var windows = TestHub.windows;
 
-  //: Filter keys that survive navigation between views.
+  //: Filter keys that survive navigation between views. `window` is a length
+  //: (`6h`, `30d`) or a range (`FROM..TO`) — see 05-windows.js.
   var FILTER_KEYS = [
     'project', 'team', 'component', 'test_type', 'environment', 'branch',
-    'status', 'q', 'window_days'
+    'status', 'q', 'window'
   ];
-  var DEFAULT_WINDOW_DAYS = 30;
+  var DEFAULT_WINDOW = windows.DEFAULT_KEY;
   var DEFAULT_PAGE_SIZE = 25;
 
   /* The overview's live timeline looks back over one of these. Each is about
@@ -110,7 +112,10 @@
         var key = FILTER_KEYS[i];
         if (query[key] !== undefined && query[key] !== '') { filters[key] = query[key]; }
       }
-      if (!filters.window_days) { filters.window_days = DEFAULT_WINDOW_DAYS; }
+      // Always set, and always one the API will take: a link from before
+      // `window` existed (`window_days=7`) opens as `7d`, and a hand-edited
+      // range the server would refuse opens as the default instead.
+      filters.window = windows.fromQuery(query).value;
       return filters;
     }
 
@@ -184,6 +189,11 @@
         } else {
           query[patchKeys[i]] = value;
         }
+      }
+      // `window` replaces the old key; a link that still carries it would
+      // otherwise keep a second, contradicting window in the URL.
+      if (patch && Object.prototype.hasOwnProperty.call(patch, 'window')) {
+        delete query.window_days;
       }
       var segments;
       if (options && options.segments) {
@@ -263,8 +273,8 @@
       var filters = {};
       var keys = Object.keys(state.filters);
       for (var i = 0; i < keys.length; i++) { filters[keys[i]] = state.filters[keys[i]]; }
-      // The span is the timeline's window; the page's `window_days` is not.
-      delete filters.window_days;
+      // The span is the timeline's window; the page's `window` is not.
+      delete filters.window;
       // One slot of slack at the far end, so the bar sliding off the left edge
       // is still drawn while it goes.
       filters.since = new Date(Date.now() - span.ms - span.bin).toISOString();
@@ -291,11 +301,11 @@
       var filters = {};
       var keys = Object.keys(state.filters);
       for (var i = 0; i < keys.length; i++) { filters[keys[i]] = state.filters[keys[i]]; }
-      // The run list is paged, not windowed: `GET /runs` has no window
-      // parameter, so passing one through would be silently ignored and the URL
-      // would claim a narrowing that never happened. The overview owns
-      // `window_days`; this view does not.
-      delete filters.window_days;
+      // The run list is paged, not windowed: it is every run, newest first,
+      // and the portfolio pages' `window` does not narrow it. Passing it
+      // through would leave the URL claiming a narrowing this page never
+      // shows, so it stays behind.
+      delete filters.window;
       filters.limit = limit;
       filters.offset = (page - 1) * limit;
       filters.sort = query.sort || 'started_at';
@@ -541,7 +551,7 @@
     var store = {
       state: state,
       FILTER_KEYS: FILTER_KEYS,
-      DEFAULT_WINDOW_DAYS: DEFAULT_WINDOW_DAYS,
+      DEFAULT_WINDOW: DEFAULT_WINDOW,
       DEFAULT_PAGE_SIZE: DEFAULT_PAGE_SIZE,
       TIMELINE_SPANS: TIMELINE_SPANS,
       DEFAULT_TIMELINE_SPAN: DEFAULT_TIMELINE_SPAN,

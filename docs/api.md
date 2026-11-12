@@ -221,8 +221,9 @@ $ curl -s "$HUB/api/v1/runs?limit=1&offset=2" | jq '{total, limit, offset, retur
 ```
 
 Everything else is bounded by its own parameter instead: `GET /tests/{id}` takes
-`history` (1–200, default 30), `GET /overview` takes `window_days` (1–365,
-default 30), and `GET /runs/{id}` returns the whole run — every suite, test and
+`history` (1–200, default 30), `GET /overview` takes a window of at most 366
+days (`window_days`, `window_hours`, or a `since`/`until` range — default 30
+days), and `GET /runs/{id}` returns the whole run — every suite, test and
 attempt — with no way to page it. That last one is a deliberate altitude
 decision, not an oversight; see [Scaling](scaling.md) for where it stops being
 free.
@@ -246,7 +247,7 @@ Every list parameter accepts both repetition and a comma-separated list —
 | `tag` | list | Run tag. |
 | `search` | string, ≤ 200 chars | Substring of run name, project key, branch, commit SHA, commit message or pipeline id. Case-sensitive `LIKE`, with `%` and `_` escaped. |
 | `live` | bool | `true` restricts to runs that are queued or running. |
-| `since` / `until` | ISO 8601 timestamp **with an offset** | Runs that started at or after / at or before that instant (a run that never started is placed at when it was created). `/runs` only. A timestamp without an offset — `2026-11-10T08:00:00` — is a 422 rather than being guessed at as UTC; send `Z` or `+05:30`. This is how the overview's live timeline asks for the runs in its span. |
+| `since` / `until` | ISO 8601 timestamp **with an offset** | Runs that started at or after / at or before that instant (a run that never started is placed at when it was created). A timestamp without an offset — `2026-11-10T08:00:00` — is a 422 rather than being guessed at as UTC; send `Z` or `+05:30`. This is how the overview's live timeline asks for the runs in its span. `/overview` takes the same two names for its window — see below. |
 | `limit` / `offset` | int | Paging, `/runs` only. |
 
 Real results against the demo data set:
@@ -260,10 +261,8 @@ live=true                          total=1
 search=basket                      total=7
 ```
 
-There is **no date filter on the API**. `RunFilter` has `since` and `until`
-fields and the repository honours them, but `build_filter` does not expose them
-as query parameters, so the only time window you can ask for over HTTP is
-`GET /overview?window_days=`.
+Time is filtered with `since` and `until` on `/runs`, and with the overview's
+own window on `/overview`.
 
 Use `GET /api/v1/facets` to populate filter dropdowns with values that actually
 exist in this workspace.
@@ -735,7 +734,44 @@ different machine — see [Adapters § Identity](adapters.md#identity).
 ## `GET /api/v1/overview`
 
 The portfolio altitude: totals, trend, project health, live runs and the worst
-offenders. `?window_days=N` (1–365, default 30).
+offenders, for one window of time. Ask for it one of three ways:
+
+| Parameters | Window |
+|---|---|
+| `window_days=N` (1–365) | The last N days. The default is 30. |
+| `window_hours=N` (1–8784) | The last N hours — for windows under a day (`1`, `6`, `24`), or that are not a whole number of days. |
+| `since=…&until=…` | A fixed range, ISO 8601 with an offset, at most 366 days. `since` alone runs to now and keeps growing; `until` alone is the `window_days` or `window_hours` before it. |
+
+`window_days` with `window_hours`, or `since` with either length, is a 422 —
+each says something the other contradicts — and so is a `since` in the future,
+a `since` at or after `until`, and a range longer than 366 days:
+
+```shell
+$ curl -s "$HUB/api/v1/overview?window_days=7&window_hours=6"
+{"error":"validation_error","message":"pass window_days or window_hours, not both"}
+```
+
+The answer says exactly which window it covers — `window_start` and
+`window_end` (which is `generated_at` unless you named `until`) — and how wide
+its trend buckets are. A window of two days or less is bucketed **by the clock**,
+in the narrowest step that keeps it to 24 points — five minutes for an hour, a
+quarter of an hour for six, an hour for a day — starting on multiples of that
+step; anything longer is bucketed by the UTC date, widening past 60 points:
+
+```shell
+$ curl -s "$HUB/api/v1/overview?window_hours=6" | jq -c '{window_days, window_start,
+    window_end, trend_bucket_seconds, buckets: (.trend|length), first: .trend[0].bucket}'
+{"window_days":1,"window_start":"2026-11-12T04:04:15.061872Z","window_end":"2026-11-12T10:04:15.061872Z","trend_bucket_seconds":900,"buckets":25,"first":"2026-11-12T04:00:00Z"}
+
+$ curl -s "$HUB/api/v1/overview?since=2026-11-11T18:00:00Z&until=2026-11-12T06:30:00Z" \
+    | jq -c '{window_start, window_end, trend_bucket_seconds, buckets: (.trend|length)}'
+{"window_start":"2026-11-11T18:00:00Z","window_end":"2026-11-12T06:30:00Z","trend_bucket_seconds":3600,"buckets":13}
+```
+
+`window_days` is still in every answer: the window's length in days, rounded up,
+so a six-hour window says `1`. Each `projects[]` entry's `runs_24h` is the last
+24 hours whatever the window is — an hour's window does not undercount it and
+last week's does not make it zero.
 
 `?after=N` is for clients on the event stream: `N` is the cursor (the SSE `id:`)
 of the newest change the caller has seen, and the answer includes it and every
@@ -744,7 +780,8 @@ lands, and saying which change it needs is what lets the server answer all of
 them with one computation instead of one each. Without `after`, the answer is as
 new as the request.
 
-Keys: `schema_version`, `generated_at`, `window_days`, `counts`, `total_runs`,
+Keys: `schema_version`, `generated_at`, `window_days`, `window_start`,
+`window_end`, `trend_bucket_seconds`, `counts`, `total_runs`,
 `total_runs_all_time`, `live_runs[]`, `recent_runs[]` (20), `projects[]`,
 `trend[]`, `top_failing_tests[]`, `flakiest_tests[]`, `filters`.
 
@@ -788,8 +825,10 @@ which is why its status is `running`: a run in flight is its project's latest.
 }
 ```
 
-`trend` is one bucket per day for the window (15 entries for
-`window_days=14`, inclusive of both ends). `top_failing_tests` and
+`trend` is one bucket per day for a window of days (15 entries for
+`window_days=14`, inclusive of both ends) and one per clock step for a window
+of two days or less; `bucket` is an ISO date for the first and an ISO datetime
+in UTC (`2026-11-12T04:00:00Z`) for the second. `top_failing_tests` and
 `flakiest_tests` are full `TestDetail` objects — identity, `latest` with its
 attempts, `history`, `flake_rate`, `failure_rate`, `average_duration_ms`.
 

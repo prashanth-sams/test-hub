@@ -563,35 +563,90 @@ table.sr-only,
   font-variant-numeric: tabular-nums;
 }
 
-/* connection status pill ------------------------------------------------ */
+/* connection status ------------------------------------------------------ */
+/* A fixed slot. Every state's label is laid, hidden, into the same grid cell
+ * as the pill, so the slot is exactly as wide as the longest of them and never
+ * changes: when the stream drops, the pill grows to the left into room that
+ * was already there, and nothing else in the header — or below it — moves.
+ * The details and "Retry now" open in a popover over the page, never above it
+ * in the flow, which is what the old banner did to every view. */
+.conn-slot {
+  display: inline-grid;
+  justify-items: end;
+  align-items: center;
+}
+.conn-slot > * { grid-area: 1 / 1; }
+.conn-slot__sizer { visibility: hidden; pointer-events: none; }
+
 .conn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px 4px 8px;
+  padding: 3px 10px 3px 8px;
   border-radius: var(--r-pill);
   border: 1px solid var(--border);
   background: var(--surface-2);
+  font: inherit;
   font-size: var(--fs-xs);
   font-weight: 550;
+  line-height: 1.5;
   color: var(--text-muted);
   white-space: nowrap;
+  cursor: pointer;
+  transition: background 120ms var(--ease), border-color 120ms var(--ease), color 120ms var(--ease);
 }
+.conn:hover { border-color: var(--border-strong); color: var(--text); }
+.conn[aria-expanded="true"] { border-color: var(--border-strong); background: var(--surface-3); color: var(--text); }
 .conn__dot {
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--status-unknown);
   flex: none;
 }
-.conn[data-status="live"] { color: var(--status-passed-fg); border-color: var(--status-passed-soft); background: var(--status-passed-soft); }
-.conn[data-status="live"] .conn__dot { background: var(--status-passed); animation: pulse 2.4s var(--ease) infinite; }
-.conn[data-status="connecting"] { color: var(--status-running-fg); background: var(--status-running-soft); border-color: var(--status-running-soft); }
-.conn[data-status="connecting"] .conn__dot { background: var(--status-running); animation: pulse 1.2s var(--ease) infinite; }
+/* Live is the quiet state: a green dot is all it needs to say. The two that
+ * want attention take a tint as well — inside the slot, so the tint costs no
+ * layout either. */
+[data-status="live"] > .conn__dot { background: var(--status-passed); animation: pulse 2.4s var(--ease) infinite; }
+[data-status="connecting"] > .conn__dot { background: var(--status-running); animation: pulse 1.2s var(--ease) infinite; }
+[data-status="reconnecting"] > .conn__dot { background: var(--status-skipped); animation: pulse 1.2s var(--ease) infinite; }
+[data-status="offline"] > .conn__dot { background: var(--status-failed); }
 .conn[data-status="reconnecting"] { color: var(--status-skipped-fg); background: var(--status-skipped-soft); border-color: var(--status-skipped-soft); }
-.conn[data-status="reconnecting"] .conn__dot { background: var(--status-skipped); animation: pulse 1.2s var(--ease) infinite; }
 .conn[data-status="offline"] { color: var(--status-failed-fg); background: var(--status-failed-soft); border-color: var(--status-failed-soft); }
-.conn[data-status="offline"] .conn__dot { background: var(--status-failed); }
-.conn[data-status="static"] { color: var(--text-muted); }
-.conn[data-status="static"] .conn__dot { background: var(--text-subtle); }
+
+.connpop { width: 288px; }
+.connpop__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--text);
+}
+.connpop__text {
+  margin: var(--sp-2) 0 var(--sp-3);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.connpop__rows {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px var(--sp-3);
+  margin: 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+}
+.connpop__rows dt { color: var(--text-subtle); white-space: nowrap; }
+.connpop__rows dd {
+  margin: 0;
+  color: var(--text-muted);
+  text-align: right;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.connpop__actions { display: flex; justify-content: flex-end; margin-top: var(--sp-3); }
+.connpop__actions:empty { display: none; }
+.connpop__actions .btn { display: inline-flex; align-items: center; gap: 6px; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -767,9 +822,37 @@ table.sr-only,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .menu__panel { animation: none; }
+  .menu__panel,
+  .popover { animation: none; }
   .switch,
   .switch__thumb { transition: none; }
+}
+
+/* popover ---------------------------------------------------------------- */
+/* Floats over the page from its trigger — `ui.popover`. Absolutely placed, so
+ * opening one never moves anything around it. */
+.popover-anchor { position: relative; display: inline-flex; }
+.popover {
+  position: absolute;
+  top: calc(100% + var(--sp-2));
+  left: 0;
+  z-index: 60;
+  max-width: calc(100vw - 2 * var(--sp-4));
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  text-align: left;
+  white-space: normal;
+  animation: menu-in 120ms var(--ease);
+}
+.popover[data-align="end"] { left: auto; right: 0; }
+.popover__title {
+  margin-bottom: var(--sp-3);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--text);
 }
 
 /* ====================================================================== */
@@ -1409,6 +1492,120 @@ button.statstrip__item:hover { background: var(--surface-2); }
   color: var(--text);
   box-shadow: var(--shadow-1);
 }
+
+/* window picker ---------------------------------------------------------- */
+/* The presets, then a small calendar button the same height as their track.
+ * Idle it is part of the track's furniture; with a range set it is the
+ * pressed one — and says the range, since no preset can. */
+.winpick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+.winpick > .popover-anchor { align-items: stretch; }
+.winpick__custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.winpick__custom:hover { color: var(--text); border-color: var(--border-strong); }
+.winpick__custom[aria-expanded="true"] { color: var(--text); border-color: var(--border-strong); }
+.winpick__custom[data-active="true"] {
+  background: var(--surface);
+  border-color: var(--accent-border);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+.winpick__custom[data-active="true"] svg { color: var(--accent); }
+.winpick__custom svg { flex: none; }
+.winpick__range { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.winpick__panel { width: 320px; }
+/* Two by two rather than a row that wraps one of them onto a line of its own:
+ * the four always sit the same way, at any width the panel gets. */
+.winpick__quick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: var(--sp-3);
+}
+.winpick__chip {
+  padding: 5px 11px;
+  text-align: center;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.winpick__chip:hover { background: var(--surface-3); border-color: var(--border-strong); color: var(--text); }
+.winpick__chip[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-ink);
+}
+.winpick__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+.winpick__fields { display: grid; gap: var(--sp-3); }
+.winpick__input {
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.winpick__input:disabled { opacity: 0.5; cursor: not-allowed; }
+.winpick__input[aria-invalid="true"] { border-color: var(--status-failed); }
+.winpick__now {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.winpick__now input { margin: 0; accent-color: var(--accent); }
+.winpick__problem {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--status-failed-fg);
+}
+.winpick__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.winpick__zone-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: var(--fs-2xs);
+  color: var(--text-subtle);
+}
+.winpick__zone-wrap svg { flex: none; }
+.winpick__zone { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.winpick__actions { display: flex; flex: none; gap: var(--sp-2); }
 
 /* ====================================================================== */
 /* Tables                                                                  */

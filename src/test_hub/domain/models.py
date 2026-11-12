@@ -630,7 +630,10 @@ class TestDetail(_VersionedBase):
 class TrendPoint(_Base):
     """One bucket of a trend line."""
 
-    bucket: ShortText = Field(description="ISO date or datetime identifying the bucket.")
+    bucket: ShortText = Field(
+        description="When the bucket starts: an ISO date for daily buckets, an ISO "
+        "datetime in UTC (`2026-11-12T14:15:00Z`) for buckets shorter than a day."
+    )
     runs: int = 0
     pass_rate: float | None = None
     failure_rate: float | None = None
@@ -673,9 +676,25 @@ class OverviewSnapshot(_VersionedBase):
     """
 
     generated_at: AwareDatetime = Field(default_factory=utcnow)
-    window_days: int = 30
+    window_days: int = Field(
+        default=30,
+        description="The window's length in days, rounded up: a six-hour window is 1. "
+        "`window_start` and `window_end` are the exact bounds.",
+    )
+    window_start: AwareDatetime | None = Field(
+        default=None, description="The window's first instant."
+    )
+    window_end: AwareDatetime | None = Field(
+        default=None,
+        description="The window's last instant: `generated_at`, unless the request named `until`.",
+    )
+    trend_bucket_seconds: int | None = Field(
+        default=None,
+        description="How long each `trend` bucket is: 86400 for daily points, less for a "
+        "window of two days or under, which is bucketed by the clock instead.",
+    )
     counts: RunCounts = Field(default_factory=RunCounts)
-    total_runs: int = Field(default=0, description="Runs that started inside `window_days`.")
+    total_runs: int = Field(default=0, description="Runs that started inside the window.")
     total_runs_all_time: int = Field(
         default=0,
         description="Runs in the workspace regardless of the window. When this is non-zero "
