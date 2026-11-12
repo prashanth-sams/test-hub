@@ -193,6 +193,10 @@ one of those is listed under **Changed** or **Removed** with the migration.
   On a phone the donut no longer stretches to the screen's width; the number
   and the donut sit side by side with the pills under both. "1 in flight" is a
   pill with a live dot rather than a badge inside a pill.
+- **Chart axes no longer print two labels on top of each other.** The last
+  bucket's label was always drawn, even a slot from the one before it — on the
+  analytics page two suite names overlapped. The live timeline's clock labels
+  now fade at the ends of the axis instead of being cut mid-word as they slide.
 - **A filter no longer stays outlined after you pick a value with the mouse.**
   The select lets go of focus; a keyboard user keeps it, and the focus ring.
 - **Analytics chips look like chips again.** The filter bar's chip styles came

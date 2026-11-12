@@ -153,7 +153,7 @@
     var slot = plotWidth / buckets.length;
     var barWidth = Math.max(3, Math.min(spec.maxBarWidth || 26, slot - 4));
     var maxLabels = Math.max(2, Math.floor(plotWidth / 78));
-    var step = Math.max(1, Math.ceil(buckets.length / maxLabels));
+    var shown = labelledBuckets(buckets.length, Math.max(1, Math.ceil(buckets.length / maxLabels)));
 
     for (var b = 0; b < buckets.length; b++) {
       var bucket = buckets[b];
@@ -179,7 +179,7 @@
           fill: gridColor
         }));
       }
-      if (b % step === 0 || b === buckets.length - 1) {
+      if (shown[b]) {
         node.appendChild(svg('text', {
           x: round1(x + barWidth / 2), y: height - 8, 'text-anchor': 'middle',
           fill: axisColor, 'font-size': 11.5
@@ -198,6 +198,24 @@
     });
 
     util.replace(container, [node, dataTable(spec.title || 'Volume', headers, rows)]);
+  }
+
+  /**
+   * Which buckets get an axis label: every `every`-th, and always the last —
+   * but when the last lands closer than a step to the one before it, that one
+   * gives way, or the two print over each other.
+   */
+  function labelledBuckets(count, every) {
+    var picked = [];
+    for (var i = 0; i < count; i += every) { picked.push(i); }
+    var last = count - 1;
+    if (picked[picked.length - 1] !== last) {
+      if (picked.length > 1 && last - picked[picked.length - 1] < every) { picked.pop(); }
+      picked.push(last);
+    }
+    var set = Object.create(null);
+    for (var p = 0; p < picked.length; p++) { set[picked[p]] = true; }
+    return set;
   }
 
   /* =========================================================== hover layer */
@@ -296,9 +314,9 @@
 
   function xLabels(node, buckets, plot, height, axisColor) {
     var maxLabels = Math.max(2, Math.floor(plot.width / 78));
-    var every = Math.max(1, Math.ceil(buckets.length / maxLabels));
+    var shown = labelledBuckets(buckets.length, Math.max(1, Math.ceil(buckets.length / maxLabels)));
     for (var b = 0; b < buckets.length; b++) {
-      if (b % every !== 0 && b !== buckets.length - 1) { continue; }
+      if (!shown[b]) { continue; }
       node.appendChild(svg('text', {
         x: round1(plot.left + plot.slot * b + plot.slot / 2), y: height - 8,
         'text-anchor': 'middle', fill: axisColor, 'font-size': 11.5

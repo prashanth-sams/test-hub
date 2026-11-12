@@ -1084,3 +1084,20 @@ def test_pass_rate_and_duration_have_charts_of_their_own() -> None:
     css = CSS_FILES[0].read_text(encoding="utf-8")
     for token in ("--chart-series:", "--chart-series-soft:"):
         assert css.count(token) == 2, f"{token} is not defined for both themes"
+
+
+def test_axis_labels_never_print_over_each_other() -> None:
+    """Regression: the last bucket's label was always drawn, even one slot
+    from the label before it — two suite names printed on top of each other."""
+    charts = (WEB / "assets/js/20-charts.js").read_text(encoding="utf-8")
+    assert "function labelledBuckets(" in charts
+    assert charts.count("labelledBuckets(buckets.length") == 2, "both bucket axes pick labels"
+    assert "b === buckets.length - 1" not in charts, "a label is forced onto the end again"
+
+
+def test_the_timeline_axis_fades_at_its_ends() -> None:
+    """Its labels slide off the ends with the clock; cut mid-word they read as
+    a rendering bug, so the ends fade instead."""
+    css = CSS_FILES[0].read_text(encoding="utf-8")
+    axis = re.search(r"(?m)^\.tl__xaxis \{([^}]*)\}", css)
+    assert axis and "mask-image: linear-gradient(" in axis.group(1)

@@ -2259,11 +2259,15 @@ th[aria-sort] .table__sort { color: var(--text); }
   pointer-events: none;
 }
 
+/* The clock labels slide across this strip and off its ends; the ends fade,
+ * so a label leaving reads as leaving rather than as cut in half. */
 .tl__xaxis {
   position: relative;
   height: 16px;
   margin-left: calc(var(--tl-yaxis) + var(--tl-gap));
   overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 28px, black calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, transparent, black 28px, black calc(100% - 28px), transparent);
   font-size: var(--fs-2xs);
   color: var(--chart-axis);
   font-variant-numeric: tabular-nums;
